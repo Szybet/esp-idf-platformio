@@ -1,16 +1,18 @@
 {
-  "name": "framework-arduinoespressif32-libs",
-  "description": "Precompiled libraries for Arduino Wiring-based Framework for the Espressif ESP32 series of SoCs",
+  "name": "framework-espidf",
+  "version": "3.50102.240122",
+  "title": "Espressif IoT Development Framework",
+  "description": "Espressif IoT Development Framework. Official development framework for ESP32 chip",
   "keywords": [
     "framework",
-    "arduino",
-    "espressif",
-    "esp32"
+    "esp32",
+    "esp32s2",
+    "espressif"
   ],
-  "license": "LGPL-2.1-or-later",
+  "homepage": "https://docs.espressif.com/projects/esp-idf/en/latest/esp32/",
+  "license": "Apache-2.0",
   "repository": {
     "type": "git",
-    "url": "https://github.com/espressif/esp32-arduino-libs"
-  },
-  "version": "5.1.0+sha.bd2b9390ef"
+    "url": "https://github.com/espressif/esp-idf"
+  }
 }
