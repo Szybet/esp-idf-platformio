@@ -9,11 +9,10 @@
 
 #include <stdio.h>
 #include <string.h>
-#include <unistd.h>
 #include "esp_system.h"
 #include "esp_log.h"
 #include "esp_console.h"
-#include "driver/uart_vfs.h"
+#include "esp_vfs_dev.h"
 #include "driver/uart.h"
 #include "linenoise/linenoise.h"
 #include "argtable3/argtable3.h"
@@ -24,17 +23,6 @@
 #include "cmd_system.h"
 #include "cmd_wifi.h"
 #include "cmd_nvs.h"
-
-/*
- * We warn if a secondary serial console is enabled. A secondary serial console is always output-only and
- * hence not very useful for interactive console applications. If you encounter this warning, consider disabling
- * the secondary serial console in menuconfig unless you know what you are doing.
- */
-#if SOC_USB_SERIAL_JTAG_SUPPORTED
-#if !CONFIG_ESP_CONSOLE_SECONDARY_NONE
-#warning "A secondary serial console is not useful when using the console component. Please disable it in menuconfig."
-#endif
-#endif
 
 #ifdef CONFIG_ESP_CONSOLE_USB_CDC
 #error This example is incompatible with USB CDC console. Please try "console_usb" example instead.
@@ -91,9 +79,9 @@ static void initialize_console(void)
     setvbuf(stdin, NULL, _IONBF, 0);
 
     /* Minicom, screen, idf_monitor send CR when ENTER key is pressed */
-    uart_vfs_dev_port_set_rx_line_endings(CONFIG_ESP_CONSOLE_UART_NUM, ESP_LINE_ENDINGS_CR);
+    esp_vfs_dev_uart_port_set_rx_line_endings(CONFIG_ESP_CONSOLE_UART_NUM, ESP_LINE_ENDINGS_CR);
     /* Move the caret to the beginning of the next line on '\n' */
-    uart_vfs_dev_port_set_tx_line_endings(CONFIG_ESP_CONSOLE_UART_NUM, ESP_LINE_ENDINGS_CRLF);
+    esp_vfs_dev_uart_port_set_tx_line_endings(CONFIG_ESP_CONSOLE_UART_NUM, ESP_LINE_ENDINGS_CRLF);
 
     /* Configure UART. Note that REF_TICK is used so that the baud rate remains
      * correct while APB frequency is changing in light sleep mode.
@@ -115,7 +103,7 @@ static void initialize_console(void)
     ESP_ERROR_CHECK( uart_param_config(CONFIG_ESP_CONSOLE_UART_NUM, &uart_config) );
 
     /* Tell VFS to use UART driver */
-    uart_vfs_dev_use_driver(CONFIG_ESP_CONSOLE_UART_NUM);
+    esp_vfs_dev_uart_use_driver(CONFIG_ESP_CONSOLE_UART_NUM);
 
     /* Initialize the console */
     esp_console_config_t console_config = {
@@ -168,12 +156,7 @@ void app_main(void)
     /* Register commands */
     esp_console_register_help_command();
     register_system_common();
-#if SOC_LIGHT_SLEEP_SUPPORTED
-    register_system_light_sleep();
-#endif
-#if SOC_DEEP_SLEEP_SUPPORTED
-    register_system_deep_sleep();
-#endif
+    register_system_sleep();
 #if SOC_WIFI_SUPPORTED
     register_wifi();
 #endif

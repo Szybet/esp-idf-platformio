@@ -17,6 +17,7 @@
 #include "esp_adc/adc_cali_scheme.h"
 #include "adc_cali_interface.h"
 
+
 /**
  * This file contains Line Fitting Calibration Scheme for ESP32C2.
  *
@@ -25,9 +26,10 @@
  * 1. Rename this file to `adc_cali_line_fitting_v2.c`, as the Line Fitting Scheme on ESP32 and ESP32S2 are different to this.
  * 2. Move this file to common directory
  * 3. Still support `ADC_CALI_SCHEME_LINE_FITTING_SUPPORTED`
- * 4. Add a new internal macro `ADC_CALI_SCHEME_LINE_FITTING_V2_SUPPORTED`
+ * 4. Add a new internal maccro `ADC_CALI_SCHEME_LINE_FITTING_V2_SUPPORTED`
  * 5. Only build this file, when `ADC_CALI_SCHEME_LINE_FITTING_V2_SUPPORTED == true`
  */
+
 
 // coeff_a is actually a float number
 // it is scaled to put them into uint32_t so that the headers do not have to be changed
@@ -40,6 +42,7 @@ typedef struct {
     uint32_t coeff_a;    ///< Gradient of ADC-Voltage characteristics
     uint32_t coeff_b;    ///< Offset of ADC-Voltage characteristics
 } cali_chars_line_fitting_t;
+
 
 /* ------------------------ Interface Functions --------------------------- */
 static esp_err_t cali_raw_to_voltage(void *arg, int raw, int *voltage);
@@ -78,7 +81,7 @@ esp_err_t adc_cali_create_scheme_line_fitting(const adc_cali_line_fitting_config
     assert(ret == ESP_OK);
     chars->coeff_a = coeff_a_scaling * voltage_mv / digi_val;
     chars->coeff_b = 0;
-    ESP_LOGV(TAG, "Calib V1, Cal Voltage = %" PRId32 ", Digi out = %" PRId32 ", Coef_a = %" PRId32, voltage_mv, digi_val, chars->coeff_a);
+    ESP_LOGV(TAG, "Calib V1, Cal Voltage = %"PRId32", Digi out = %"PRId32", Coef_a = %"PRId32"\n", voltage_mv, digi_val, chars->coeff_a);
 
     *ret_handle = scheme;
 
@@ -103,6 +106,7 @@ esp_err_t adc_cali_delete_scheme_line_fitting(adc_cali_handle_t handle)
 
     return ESP_OK;
 }
+
 
 /* ------------------------ Interface Functions --------------------------- */
 static esp_err_t cali_raw_to_voltage(void *arg, int raw, int *voltage)

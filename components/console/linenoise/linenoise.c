@@ -105,14 +105,8 @@
 
 #include <unistd.h>
 #include <stdlib.h>
-#include <stdint.h>
 #include <stdio.h>
-#include "sdkconfig.h"
-#if !CONFIG_IDF_TARGET_LINUX
-// On Linux, we don't need __fbufsize (see comments below), and
-// __fbufsize not available on MacOS (which is also considered "Linux" target)
-#include <stdio_ext.h> // for __fbufsize
-#endif
+#include <stdio_ext.h>
 #include <errno.h>
 #include <string.h>
 #include <stdlib.h>
@@ -120,7 +114,6 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <sys/fcntl.h>
-#include <sys/time.h>
 #include <unistd.h>
 #include <assert.h>
 #include "linenoise.h"
@@ -222,14 +215,9 @@ bool linenoiseIsDumbMode(void) {
 }
 
 static void flushWrite(void) {
-// On Linux, we set stdout to unbuffered mode to facilitate interaction with tools.
-// Performance on Linux is not considered as critical as on chip targets. Additionally,
-// MacOS does not have __fbufsize.
-#if !CONFIG_IDF_TARGET_LINUX
     if (__fbufsize(stdout) > 0) {
         fflush(stdout);
     }
-#endif
     fsync(fileno(stdout));
 }
 
@@ -250,10 +238,7 @@ static int getCursorPosition(void) {
     /* Send the command to the TTY on the other end of the UART.
      * Let's use unistd's write function. Thus, data sent through it are raw
      * reducing the overhead compared to using fputs, fprintf, etc... */
-    int num_written = write(out_fd, get_cursor_cmd, sizeof(get_cursor_cmd));
-    if (num_written != sizeof(get_cursor_cmd)) {
-        return -1;
-    }
+    write(out_fd, get_cursor_cmd, sizeof(get_cursor_cmd));
 
     /* For USB CDC, it is required to flush the output. */
     flushWrite();
@@ -582,7 +567,7 @@ static void refreshMultiLine(struct linenoiseState *l) {
     int rows = (plen+l->len+l->cols-1)/l->cols; /* rows used by current buf. */
     int rpos = (plen+l->oldpos+l->cols)/l->cols; /* cursor relative row. */
     int rpos2; /* rpos after refresh. */
-    int col; /* column position, zero-based. */
+    int col; /* colum position, zero-based. */
     int old_rows = l->maxrows;
     int j;
     int fd = fileno(stdout);
@@ -637,7 +622,7 @@ static void refreshMultiLine(struct linenoiseState *l) {
     rpos2 = (plen+l->pos+l->cols)/l->cols; /* current cursor relative row. */
     lndebug("rpos2 %d", rpos2);
 
-    /* Go up till we reach the expected position. */
+    /* Go up till we reach the expected positon. */
     if (rows-rpos2 > 0) {
         lndebug("go-up %d", rows-rpos2);
         snprintf(seq,64,"\x1b[%dA", rows-rpos2);
@@ -798,7 +783,7 @@ void linenoiseEditBackspace(struct linenoiseState *l) {
     }
 }
 
-/* Delete the previous word, maintaining the cursor at the start of the
+/* Delete the previosu word, maintaining the cursor at the start of the
  * current word. */
 void linenoiseEditDeletePrevWord(struct linenoiseState *l) {
     size_t old_pos = l->pos;
@@ -1091,9 +1076,9 @@ int linenoiseProbe(void) {
         if (cb < 0) {
             continue;
         }
-        if (read_bytes == 0 && c != '\x1b') {
-            /* invalid response */
-            break;
+        if (read_bytes == 0 && c != ESC) {
+            /* invalid response, try again until the timeout triggers */
+            continue;
         }
         read_bytes += cb;
     }

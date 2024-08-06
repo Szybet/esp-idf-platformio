@@ -1,10 +1,9 @@
 /*
- * SPDX-FileCopyrightText: 2015-2023 Espressif Systems (Shanghai) CO LTD
+ * SPDX-FileCopyrightText: 2015-2022 Espressif Systems (Shanghai) CO LTD
  *
  * SPDX-License-Identifier: Apache-2.0
  */
 #include "nvs_page.hpp"
-#include <inttypes.h>
 #include <esp_rom_crc.h>
 #include <cstdio>
 #include <cstring>
@@ -880,7 +879,7 @@ esp_err_t Page::findItem(uint8_t nsIndex, ItemType datatype, const char* key, si
     }
 
     // For BLOB_DATA, we may need to search for all chunk indexes, so the hash list won't help
-    // mHashIndex calculates hash from nsIndex, key, chunkIdx
+    // mHashIndex caluclates hash from nsIndex, key, chunkIdx
     // We may not use mHashList if datatype is BLOB_DATA and chunkIdx is CHUNK_ANY as CHUNK_ANY is used by BLOB_INDEX
     if (nsIndex != NS_ANY && key != NULL && (datatype != ItemType::BLOB_DATA || chunkIdx != CHUNK_ANY)) {
         size_t cachedIndex = mHashList.find(start, Item(nsIndex, datatype, 0, key, chunkIdx));
@@ -1059,7 +1058,7 @@ size_t Page::getVarDataTailroom() const
     } else if (mState == PageState::FULL) {
         return 0;
     }
-    /* Skip one entry for blob data item processing the data */
+    /* Skip one entry for blob data item precessing the data */
     return ((mNextFreeEntry < (ENTRY_COUNT-1)) ? ((ENTRY_COUNT - mNextFreeEntry - 1) * ENTRY_SIZE): 0);
 }
 
@@ -1092,8 +1091,7 @@ const char* Page::pageStateToName(PageState ps)
 
 void Page::debugDump() const
 {
-    printf("state=%" PRIx32 " (%s) addr=%" PRIx32 " seq=%" PRIu32 "\nfirstUsed=%" PRIu32 " nextFree=%" PRIu32 " used=%" PRIu16 " erased=%" PRIu16 "\n",
-        static_cast<uint32_t>(mState), pageStateToName(mState), mBaseAddress, mSeqNumber, static_cast<uint32_t>(mFirstUsedEntry), static_cast<uint32_t>(mNextFreeEntry), mUsedEntryCount, mErasedEntryCount);
+    printf("state=%x (%s) addr=%x seq=%d\nfirstUsed=%d nextFree=%d used=%d erased=%d\n", (uint32_t) mState, pageStateToName(mState), mBaseAddress, mSeqNumber, static_cast<int>(mFirstUsedEntry), static_cast<int>(mNextFreeEntry), mUsedEntryCount, mErasedEntryCount);
     size_t skip = 0;
     for (size_t i = 0; i < ENTRY_COUNT; ++i) {
         printf("%3d: ", static_cast<int>(i));
@@ -1110,8 +1108,7 @@ void Page::debugDump() const
             Item item;
             readEntry(i, item);
             if (skip == 0) {
-                printf("W ns=%2" PRIu8 " type=%2" PRIu8 " span=%3" PRIu8 " key=\"%s\" chunkIdx=%" PRIu8 " len=%" PRIi32 "\n",
-                    item.nsIndex, static_cast<uint8_t>(item.datatype), item.span, item.key, item.chunkIndex, (item.span != 1)?(static_cast<int32_t>(item.varLength.dataSize)):(-1));
+                printf("W ns=%2u type=%2u span=%3u key=\"%s\" chunkIdx=%d len=%d\n", item.nsIndex, static_cast<unsigned>(item.datatype), item.span, item.key, item.chunkIndex, (item.span != 1)?((int)item.varLength.dataSize):-1);
                 if (item.span > 0 && item.span <= ENTRY_COUNT - i) {
                     skip = item.span - 1;
                 } else {

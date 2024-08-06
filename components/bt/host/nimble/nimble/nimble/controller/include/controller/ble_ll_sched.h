@@ -70,10 +70,6 @@ extern uint8_t g_ble_ll_sched_offset_ticks;
 #define BLE_LL_SCHED_TYPE_PERIODIC  (6)
 #define BLE_LL_SCHED_TYPE_SYNC      (7)
 #define BLE_LL_SCHED_TYPE_SCAN_AUX  (8)
-#define BLE_LL_SCHED_TYPE_BIG       (9)
-#if MYNEWT_VAL(BLE_LL_EXT)
-#define BLE_LL_SCHED_TYPE_EXTERNAL  (255)
-#endif
 
 /* Return values for schedule callback. */
 #define BLE_LL_SCHED_STATE_RUNNING  (0)
@@ -83,10 +79,6 @@ extern uint8_t g_ble_ll_sched_offset_ticks;
 struct ble_ll_sched_item;
 typedef int (*sched_cb_func)(struct ble_ll_sched_item *sch);
 typedef void (*sched_remove_cb_func)(struct ble_ll_sched_item *sch);
-
-typedef int (* ble_ll_sched_preempt_cb_t)(struct ble_ll_sched_item *sch,
-                                          struct ble_ll_sched_item *item);
-
 
 /*
  * Schedule item
@@ -99,9 +91,6 @@ typedef int (* ble_ll_sched_preempt_cb_t)(struct ble_ll_sched_item *sch,
 struct ble_ll_sched_item
 {
     uint8_t         sched_type;
-#if MYNEWT_VAL(BLE_LL_EXT)
-    uint8_t         sched_ext_type;
-#endif
     uint8_t         enqueued;
     uint8_t         remainder;
     uint32_t        start_time;
@@ -113,10 +102,6 @@ struct ble_ll_sched_item
 
 /* Initialize the scheduler */
 int ble_ll_sched_init(void);
-
-int ble_ll_sched_insert(struct ble_ll_sched_item *sch, uint32_t max_delay,
-                        ble_ll_sched_preempt_cb_t preempt_cb);
-void ble_ll_sched_restart(void);
 
 /* Remove item(s) from schedule */
 int ble_ll_sched_rmv_elem(struct ble_ll_sched_item *sch);
@@ -142,8 +127,13 @@ int ble_ll_sched_adv_new(struct ble_ll_sched_item *sch,
 /* Schedule periodic advertising event */
 int ble_ll_sched_periodic_adv(struct ble_ll_sched_item *sch, bool first_event);
 
-int ble_ll_sched_sync_reschedule(struct ble_ll_sched_item *sch, uint32_t ww_us);
-int ble_ll_sched_sync(struct ble_ll_sched_item *sch);
+int ble_ll_sched_sync_reschedule(struct ble_ll_sched_item *sch,
+                                 uint32_t anchor_point,
+                                 uint8_t anchor_point_usecs,
+                                 uint32_t window_widening, int8_t phy_mode);
+int ble_ll_sched_sync(struct ble_ll_sched_item *sch,
+                      uint32_t beg_cputime, uint32_t rem_usecs, uint32_t offset,
+                      int8_t phy_mode);
 
 /* Reschedule an advertising event */
 int ble_ll_sched_adv_reschedule(struct ble_ll_sched_item *sch,
@@ -168,7 +158,14 @@ int ble_ll_sched_conn_reschedule(struct ble_ll_conn_sm * connsm);
 int ble_ll_sched_next_time(uint32_t *next_event_time);
 
 #if MYNEWT_VAL(BLE_LL_CFG_FEAT_LL_EXT_ADV)
-int ble_ll_sched_scan_aux(struct ble_ll_sched_item *sch);
+struct ble_ll_scan_sm;
+struct ble_ll_aux_data;
+int ble_ll_sched_aux_scan(struct ble_mbuf_hdr *ble_hdr,
+                          struct ble_ll_scan_sm *scansm,
+                          struct ble_ll_aux_data *aux_scan);
+
+int ble_ll_sched_scan_aux(struct ble_ll_sched_item *sch, uint32_t pdu_time,
+                          uint8_t pdu_time_rem, uint32_t offset_us);
 #endif
 
 /* Stop the scheduler */
@@ -182,16 +179,8 @@ int ble_ll_sched_dtm(struct ble_ll_sched_item *sch);
 #if !MYNEWT_VAL(BLE_LL_CONN_STRICT_SCHED_FIXED)
 void ble_ll_sched_css_set_params(uint32_t slot_us, uint32_t period_slots);
 #endif
-void ble_ll_sched_css_set_enabled(uint8_t enabled);
-void ble_ll_sched_css_update_anchor(struct ble_ll_conn_sm *connsm);
 void ble_ll_sched_css_set_conn_anchor(struct ble_ll_conn_sm *connsm);
 #if MYNEWT_VAL(BLE_LL_CONN_STRICT_SCHED_FIXED)
-static inline bool
-ble_ll_sched_css_is_enabled(void)
-{
-    return true;
-}
-
 static inline uint32_t
 ble_ll_sched_css_get_slot_us(void)
 {
@@ -211,16 +200,11 @@ ble_ll_sched_css_get_conn_interval_us(void)
            ble_ll_sched_css_get_slot_us() / 1250;
 }
 #else
-bool ble_ll_sched_css_is_enabled(void);
 uint32_t ble_ll_sched_css_get_slot_us(void);
 uint32_t ble_ll_sched_css_get_period_slots(void);
 uint32_t ble_ll_sched_css_get_conn_interval_us(void);
 #endif
 #endif
-
-#if MYNEWT_VAL(BLE_LL_ISO_BROADCASTER)
-int ble_ll_sched_iso_big(struct ble_ll_sched_item *sch, int first);
-#endif /* BLE_LL_ISO_BROADCASTER */
 
 #ifdef __cplusplus
 }

@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2015-2024 Espressif Systems (Shanghai) CO LTD
+ * SPDX-FileCopyrightText: 2015-2021 Espressif Systems (Shanghai) CO LTD
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -58,9 +58,6 @@ typedef struct uncached_tag_entry_ {
     char tag[0];    // beginning of a zero-terminated string
 } uncached_tag_entry_t;
 
-#ifdef CONFIG_LOG_MASTER_LEVEL
-esp_log_level_t g_master_log_level = CONFIG_LOG_DEFAULT_LEVEL;
-#endif
 esp_log_level_t esp_log_default_level = CONFIG_LOG_DEFAULT_LEVEL;
 static SLIST_HEAD(log_tags_head, uncached_tag_entry_) s_log_tags = SLIST_HEAD_INITIALIZER(s_log_tags);
 static cached_tag_entry_t s_log_cache[TAG_CACHE_SIZE];
@@ -71,6 +68,7 @@ static vprintf_like_t s_log_print_func = &vprintf;
 #ifdef LOG_BUILTIN_CHECKS
 static uint32_t s_log_cache_misses = 0;
 #endif
+
 
 static inline bool get_cached_log_level(const char *tag, esp_log_level_t *level);
 static inline bool get_uncached_log_level(const char *tag, esp_log_level_t *level);
@@ -89,18 +87,6 @@ vprintf_like_t esp_log_set_vprintf(vprintf_like_t func)
     esp_log_impl_unlock();
     return orig_func;
 }
-
-#ifdef CONFIG_LOG_MASTER_LEVEL
-esp_log_level_t esp_log_get_level_master(void)
-{
-    return g_master_log_level;
-}
-
-void esp_log_set_level_master(esp_log_level_t level)
-{
-    g_master_log_level = level;
-}
-#endif // CONFIG_LOG_MASTER_LEVEL
 
 void esp_log_level_set(const char *tag, esp_log_level_t level)
 {
@@ -152,6 +138,7 @@ void esp_log_level_set(const char *tag, esp_log_level_t level)
     esp_log_impl_unlock();
 }
 
+
 /* Common code for getting the log level from cache, esp_log_impl_lock()
    should be called before calling this function. The function unlocks,
    as indicated in the name.
@@ -195,9 +182,9 @@ void clear_log_level_list(void)
 }
 
 void esp_log_writev(esp_log_level_t level,
-                    const char *tag,
-                    const char *format,
-                    va_list args)
+                   const char *tag,
+                   const char *format,
+                   va_list args)
 {
     if (!esp_log_impl_lock_timeout()) {
         return;

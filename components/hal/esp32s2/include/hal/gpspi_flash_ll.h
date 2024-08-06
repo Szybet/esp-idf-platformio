@@ -128,21 +128,10 @@ static inline void gpspi_flash_ll_set_buffer_data(spi_dev_t *dev, const void *bu
  * should be configured before this is called.
  *
  * @param dev Beginning address of the peripheral registers.
- * @param pe_ops Is page program/erase operation or not. (not used in gpspi)
  */
-static inline void gpspi_flash_ll_user_start(spi_dev_t *dev,  bool pe_ops)
+static inline void gpspi_flash_ll_user_start(spi_dev_t *dev)
 {
     dev->cmd.usr = 1;
-}
-
-/**
- * In user mode, it is set to indicate that program/erase operation will be triggered.
- *
- * @param dev Beginning address of the peripheral registers.
- */
-static inline void gpspi_flash_ll_set_pe_bit(spi_dev_t *dev)
-{
-    // Not supported on GPSPI
 }
 
 /**
@@ -175,12 +164,12 @@ static inline bool gpspi_flash_ll_host_idle(const spi_dev_t *dev)
 static inline void gpspi_flash_ll_read_phase(spi_dev_t *dev)
 {
     typeof (dev->user) user = {
+        .usr_command = 1,
         .usr_mosi = 0,
         .usr_miso = 1,
         .usr_addr = 1,
-        .usr_command = 1,
     };
-    dev->user.val = user.val;
+    dev->user = user;
 }
 /*------------------------------------------------------------------------------
  * Configs
@@ -209,10 +198,8 @@ static inline void gpspi_flash_ll_set_cs_pin(spi_dev_t *dev, int pin)
  */
 static inline void gpspi_flash_ll_set_read_mode(spi_dev_t *dev, esp_flash_io_mode_t read_mode)
 {
-    typeof (dev->ctrl) ctrl;
-    ctrl.val = dev->ctrl.val;
-    typeof (dev->user) user;
-    user.val = dev->user.val;
+    typeof (dev->ctrl) ctrl = dev->ctrl;
+    typeof (dev->user) user = dev->user;
 
     ctrl.val &= ~(SPI_FCMD_QUAD_M | SPI_FADDR_QUAD_M | SPI_FREAD_QUAD_M | SPI_FCMD_DUAL_M | SPI_FADDR_DUAL_M | SPI_FREAD_DUAL_M);
     user.val &= ~(SPI_FWRITE_QUAD_M | SPI_FWRITE_DUAL_M);
@@ -244,8 +231,8 @@ static inline void gpspi_flash_ll_set_read_mode(spi_dev_t *dev, esp_flash_io_mod
         abort();
     }
 
-    dev->ctrl.val = ctrl.val;
-    dev->user.val = user.val;
+    dev->ctrl = ctrl;
+    dev->user = user;
 }
 
 /**
@@ -298,7 +285,7 @@ static inline void gpspi_flash_ll_set_command(spi_dev_t *dev, uint8_t command, u
         .usr_command_value = command,
         .usr_command_bitlen = (bitlen - 1),
     };
-    dev->user2.val = user2.val;
+    dev->user2 = user2;
 }
 
 /**

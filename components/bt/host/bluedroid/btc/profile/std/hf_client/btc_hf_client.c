@@ -25,9 +25,7 @@
 #include "btc/btc_util.h"
 #include "esp_hf_client_api.h"
 #include "bta/bta_hf_client_api.h"
-#if (BT_CONTROLLER_INCLUDED == TRUE)
 #include "esp_bt.h"
-#endif
 #include <assert.h>
 
 #if BT_HF_CLIENT_BQB_INCLUDED
@@ -169,20 +167,19 @@ bt_status_t btc_hf_client_init(void)
 {
     BTC_TRACE_EVENT("%s", __FUNCTION__);
 
+    uint8_t data_path;
     btc_dm_enable_service(BTA_HFP_HS_SERVICE_ID);
 
     clear_state();
 
     hf_client_local_param.btc_hf_client_cb.initialized = true;
 
-#if (BT_CONTROLLER_INCLUDED == TRUE)
 #if BTM_SCO_HCI_INCLUDED
-    uint8_t data_path = ESP_SCO_DATA_PATH_HCI;
+    data_path = ESP_SCO_DATA_PATH_HCI;
 #else
-    uint8_t data_path = ESP_SCO_DATA_PATH_PCM;
+    data_path = ESP_SCO_DATA_PATH_PCM;
 #endif
     esp_bredr_sco_datapath_set(data_path);
-#endif
     return BT_STATUS_SUCCESS;
 }
 

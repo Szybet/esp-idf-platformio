@@ -238,7 +238,6 @@
 #undef MBEDTLS_ECP_VERIFY_ALT_SOFT_FALLBACK
 #endif
 
-#ifndef CONFIG_IDF_TARGET_LINUX
 /**
  * \def MBEDTLS_ENTROPY_HARDWARE_ALT
  *
@@ -251,7 +250,6 @@
  * Uncomment to use your own hardware entropy collector.
  */
 #define MBEDTLS_ENTROPY_HARDWARE_ALT
-#endif // !CONFIG_IDF_TARGET_LINUX
 
 /**
  * \def MBEDTLS_AES_ROM_TABLES
@@ -874,7 +872,6 @@
  */
 #define MBEDTLS_FS_IO
 
-#ifndef CONFIG_IDF_TARGET_LINUX
 /**
  * \def MBEDTLS_NO_PLATFORM_ENTROPY
  *
@@ -885,7 +882,6 @@
  * Uncomment this macro to disable the built-in platform entropy functions.
  */
 #define MBEDTLS_NO_PLATFORM_ENTROPY
-#endif // !CONFIG_IDF_TARGET_LINUX
 
 /**
  * \def MBEDTLS_PK_RSA_ALT_SUPPORT
@@ -3011,7 +3007,7 @@
 #endif
 
 /* This flag makes sure that we are not using
- * any function that is deprecated by mbedtls */
+ * any functino that is deprecated by mbedtls */
 #define MBEDTLS_DEPRECATED_REMOVED
 
 #endif /* ESP_CONFIG_H */

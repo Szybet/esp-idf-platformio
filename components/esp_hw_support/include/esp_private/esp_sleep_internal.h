@@ -48,7 +48,6 @@ void esp_sleep_enable_adc_tsens_monitor(bool enable);
 void esp_sleep_isolate_digital_gpio(void);
 #endif
 
-#if CONFIG_ESP_PHY_ENABLED
 /**
   * Register a callback to be called from the deep sleep prepare for maintain the PHY state
   *          CPU is equal to min_freq_mhz (if DFS is enabled) when running this callback,
@@ -71,7 +70,6 @@ esp_err_t esp_deep_sleep_register_phy_hook(esp_deep_sleep_cb_t new_dslp_cb);
   * @param old_dslp_cb     Callback to be unregistered
   */
 void esp_deep_sleep_deregister_phy_hook(esp_deep_sleep_cb_t old_dslp_cb);
-#endif
 
 #ifdef __cplusplus
 }

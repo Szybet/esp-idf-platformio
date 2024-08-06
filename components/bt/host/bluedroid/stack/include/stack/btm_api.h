@@ -200,28 +200,6 @@ typedef void (tBTM_SET_LOCAL_PRIVACY_CBACK) (UINT8 status);
 typedef void (tBTM_SET_RPA_TIMEOUT_CMPL_CBACK) (UINT8 status);
 
 typedef void (tBTM_ADD_DEV_TO_RESOLVING_LIST_CMPL_CBACK) (UINT8 status);
-/*******************************
-**  Device Coexist status
-********************************/
-#if (ESP_COEX_VSC_INCLUDED == TRUE)
-// coexist status for MESH
-#define BTM_COEX_BLE_ST_MESH_CONFIG        0x08
-#define BTM_COEX_BLE_ST_MESH_TRAFFIC       0x10
-#define BTM_COEX_BLE_ST_MESH_STANDBY       0x20
-// coexist status for A2DP
-#define BTM_COEX_BT_ST_A2DP_STREAMING      0x10
-#define BTM_COEX_BT_ST_A2DP_PAUSED         0x20
-
-// coexist operation
-#define BTM_COEX_OP_CLEAR                  0x00
-#define BTM_COEX_OP_SET                    0x01
-typedef UINT8 tBTM_COEX_OPERATION;
-
-typedef enum {
-    BTM_COEX_TYPE_BLE = 1,
-    BTM_COEX_TYPE_BT,
-} tBTM_COEX_TYPE;
-#endif
 
 /*****************************************************************************
 **  DEVICE DISCOVERY - Inquiry, Remote Name, Discovery, Class of Device
@@ -472,6 +450,7 @@ typedef enum {
 #define BTM_COD_MAJOR_CLASS_MASK      0x1F
 #define BTM_COD_SERVICE_CLASS_LO_B    0x00E0
 #define BTM_COD_SERVICE_CLASS_MASK    0xFFE0
+
 
 /* BTM service definitions
 ** Used for storing EIR data to bit mask
@@ -836,23 +815,6 @@ typedef struct {
     UINT8       hci_status;
 } tBTM_SET_AFH_CHANNELS_RESULTS;
 
-/* Structure returned with set page timeout event (in tBTM_CMPL_CB callback function)
-** in response to BTM_WritePageTimeout call.
-*/
-typedef struct {
-    tBTM_STATUS status;
-    UINT8       hci_status;
-} tBTM_SET_PAGE_TIMEOUT_RESULTS;
-
-/* Structure returned with get page timeout event (in tBTM_CMPL_CB callback function)
-** in response to BTM_ReadPageTimeout call.
-*/
-typedef struct {
-    tBTM_STATUS status;
-    UINT8       hci_status;
-    UINT16      page_to;
-} tBTM_GET_PAGE_TIMEOUT_RESULTS;
-
 /* Structure returned with set ACL packet types event (in tBTM_CMPL_CB callback function)
 ** in response to BTM_SetAclPktTypes call.
 */
@@ -861,15 +823,6 @@ typedef struct {
     BD_ADDR     rem_bda;
     UINT16      pkt_types;
 } tBTM_SET_ACL_PKT_TYPES_RESULTS;
-
-#if (ENC_KEY_SIZE_CTRL_MODE != ENC_KEY_SIZE_CTRL_MODE_NONE)
-/* Structure returned with set minimal encryption key size event (in tBTM_CMPL_CB callback function)
-** in response to BTM_SetMinEncKeySize call.
-*/
-typedef struct {
-    UINT8 hci_status;
-} tBTM_SET_MIN_ENC_KEY_SIZE_RESULTS;
-#endif
 
 /* Structure returned with set BLE channels event (in tBTM_CMPL_CB callback function)
 ** in response to BTM_BleSetChannels call.
@@ -1503,12 +1456,6 @@ typedef void (tBTM_RMT_NAME_CALLBACK) (BD_ADDR bd_addr, DEV_CLASS dc,
 typedef UINT8 (tBTM_AUTH_COMPLETE_CALLBACK) (BD_ADDR bd_addr, DEV_CLASS dev_class,
         tBTM_BD_NAME bd_name, int result);
 
-/* Encryption changed for the connection.  Parameters are
-**              BD Address of remote
-**              Encryption mode
-*/
-typedef void (tBTM_ENC_CHANGE_CALLBACK) (BD_ADDR bd_addr, UINT8 enc_mode);
-
 enum {
     BTM_SP_IO_REQ_EVT,      /* received IO_CAPABILITY_REQUEST event */
     BTM_SP_IO_RSP_EVT,      /* received IO_CAPABILITY_RESPONSE event */
@@ -1886,7 +1833,6 @@ typedef struct {
     tBTM_LINK_KEY_CALLBACK      *p_link_key_callback;
     tBTM_AUTH_COMPLETE_CALLBACK *p_auth_complete_callback;
     tBTM_BOND_CANCEL_CMPL_CALLBACK *p_bond_cancel_cmpl_callback;
-    tBTM_ENC_CHANGE_CALLBACK    *p_enc_change_callback;
     tBTM_SP_CALLBACK            *p_sp_callback;
 #if BLE_INCLUDED == TRUE
 #if SMP_INCLUDED == TRUE
@@ -2078,7 +2024,7 @@ BOOLEAN BTM_IsDeviceUp (void);
 **
 *******************************************************************************/
 //extern
-tBTM_STATUS BTM_SetLocalDeviceName (char *p_name, tBT_DEVICE_TYPE name_type);
+tBTM_STATUS BTM_SetLocalDeviceName (char *p_name);
 
 /*******************************************************************************
 **
@@ -2107,7 +2053,7 @@ tBTM_STATUS  BTM_SetDeviceClass (DEV_CLASS dev_class);
 **
 *******************************************************************************/
 //extern
-tBTM_STATUS BTM_ReadLocalDeviceName (char **p_name, tBT_DEVICE_TYPE name_type);
+tBTM_STATUS BTM_ReadLocalDeviceName (char **p_name);
 
 /*******************************************************************************
 **
@@ -2201,21 +2147,6 @@ tBTM_STATUS BTM_VendorSpecificCommand(UINT16 opcode,
                                       UINT8 *p_param_buf,
                                       tBTM_VSC_CMPL_CB *p_cb);
 
-/*******************************************************************************
-**
-** Function         BTM_ConfigCoexStatus
-**
-** Description      Config coexist status through vendor specific HCI command.
-**
-** Returns
-**      BTM_SUCCESS         Command sent. Does not expect command complete
-**                              event. (command cmpl callback param is NULL)
-**      BTM_NO_RESOURCES    Command not sent. No resources.
-**
-*******************************************************************************/
-#if (ESP_COEX_VSC_INCLUDED == TRUE)
-tBTM_STATUS BTM_ConfigCoexStatus(tBTM_COEX_OPERATION op, tBTM_COEX_TYPE type, UINT8 status);
-#endif
 
 /*******************************************************************************
 **
@@ -2286,21 +2217,7 @@ UINT8 BTM_SetTraceLevel (UINT8 new_level);
 **
 *******************************************************************************/
 //extern
-tBTM_STATUS BTM_WritePageTimeout(UINT16 timeout, tBTM_CMPL_CB *p_cb);
-
-/*******************************************************************************
-**
-** Function         BTM_ReadPageTimeout
-**
-** Description      Send HCI Read Page Timeout.
-**
-** Returns
-**      BTM_SUCCESS         Command sent.
-**      BTM_NO_RESOURCES    If out of resources to send the command.
-**
-*******************************************************************************/
-//extern
-tBTM_STATUS BTM_ReadPageTimeout(tBTM_CMPL_CB *p_cb);
+tBTM_STATUS BTM_WritePageTimeout(UINT16 timeout);
 
 /*******************************************************************************
 **
@@ -2315,22 +2232,6 @@ tBTM_STATUS BTM_ReadPageTimeout(tBTM_CMPL_CB *p_cb);
 *******************************************************************************/
 //extern
 tBTM_STATUS BTM_SetAclPktTypes(BD_ADDR remote_bda, UINT16 pkt_types, tBTM_CMPL_CB *p_cb);
-
-/*******************************************************************************
-**
-** Function         BTM_SetMinEncKeySize
-**
-** Description      Send HCI Set Minimum Encryption Key Size
-**
-** Returns
-**      BTM_SUCCESS         Command sent.
-**      BTM_NO_RESOURCES    If out of resources to send the command.
-**
-*******************************************************************************/
-//extern
-#if (ENC_KEY_SIZE_CTRL_MODE != ENC_KEY_SIZE_CTRL_MODE_NONE)
-tBTM_STATUS BTM_SetMinEncKeySize(UINT8 key_size, tBTM_CMPL_CB *p_cb);
-#endif
 
 /*******************************************************************************
 **

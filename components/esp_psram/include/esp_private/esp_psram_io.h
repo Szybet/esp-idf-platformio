@@ -14,6 +14,7 @@
 extern "C" {
 #endif
 
+
 /**
  * @brief get psram CS IO
  *
@@ -23,6 +24,7 @@ extern "C" {
  * @return psram CS IO or -1/0xff if psram not enabled
  */
 uint8_t esp_psram_io_get_cs_io(void);
+
 
 #ifdef __cplusplus
 }

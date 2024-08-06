@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2023-2024 Espressif Systems (Shanghai) CO LTD
+ * SPDX-FileCopyrightText: 2023 Espressif Systems (Shanghai) CO LTD
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -30,13 +30,10 @@ extern "C" {
 
 #define ADC_LL_EVENT_ADC1_ONESHOT_DONE    BIT(31)
 #define ADC_LL_EVENT_ADC2_ONESHOT_DONE    BIT(30)
-
-#define ADC_LL_THRES_ALL_INTR_ST_M  (APB_SARADC_APB_SARADC_THRES0_HIGH_INT_ST_M | \
-                                     APB_SARADC_APB_SARADC_THRES1_HIGH_INT_ST_M | \
-                                     APB_SARADC_APB_SARADC_THRES0_LOW_INT_ST_M  | \
-                                     APB_SARADC_APB_SARADC_THRES1_LOW_INT_ST_M)
-#define ADC_LL_GET_HIGH_THRES_MASK(monitor_id)    ((monitor_id == 0) ? APB_SARADC_APB_SARADC_THRES0_HIGH_INT_ST_M : APB_SARADC_APB_SARADC_THRES1_HIGH_INT_ST_M)
-#define ADC_LL_GET_LOW_THRES_MASK(monitor_id)     ((monitor_id == 0) ? APB_SARADC_APB_SARADC_THRES0_LOW_INT_ST_M : APB_SARADC_APB_SARADC_THRES1_LOW_INT_ST_M)
+#define ADC_LL_EVENT_THRES0_HIGH          BIT(29)
+#define ADC_LL_EVENT_THRES1_HIGH          BIT(28)
+#define ADC_LL_EVENT_THRES0_LOW           BIT(27)
+#define ADC_LL_EVENT_THRES1_LOW           BIT(26)
 
 /*---------------------------------------------------------------
                     Oneshot
@@ -60,7 +57,6 @@ extern "C" {
 #define ADC_LL_DEFAULT_CONV_LIMIT_EN      0
 #define ADC_LL_DEFAULT_CONV_LIMIT_NUM     10
 
-#define ADC_LL_POWER_MANAGE_SUPPORTED     1 //ESP32H2 supported to manage power mode
 /*---------------------------------------------------------------
                     PWDET (Power Detect)
 ---------------------------------------------------------------*/
@@ -411,85 +407,39 @@ static inline void adc_ll_digi_filter_enable(adc_digi_iir_filter_t idx, adc_unit
 }
 
 /**
- * Set monitor threshold of adc digital controller on specific channel.
+ * Set monitor mode of adc digital controller.
  *
- * @param monitor_id ADC digi monitor unit index.
- * @param adc_n      Which adc unit the channel belong to.
- * @param channel    Which channel of adc want to be monitored.
- * @param h_thresh   High threshold of this monitor.
- * @param l_thresh   Low threshold of this monitor.
+ * @note If the channel info is not supported, the monitor function will not be enabled.
+ * @param adc_n ADC unit.
+ * @param is_larger true:  If ADC_OUT >  threshold, Generates monitor interrupt.
+ *                  false: If ADC_OUT <  threshold, Generates monitor interrupt.
  */
-static inline void adc_ll_digi_monitor_set_thres(adc_monitor_id_t monitor_id, adc_unit_t adc_n, uint8_t channel, int32_t h_thresh, int32_t l_thresh)
+static inline void adc_ll_digi_monitor_set_mode(adc_digi_monitor_idx_t idx, adc_digi_monitor_t *cfg)
 {
-    if (monitor_id == ADC_MONITOR_0) {
-        APB_SARADC.saradc_thres0_ctrl.saradc_apb_saradc_thres0_channel = (adc_n << 3) | (channel & 0x7);
-        APB_SARADC.saradc_thres0_ctrl.saradc_apb_saradc_thres0_high = h_thresh;
-        APB_SARADC.saradc_thres0_ctrl.saradc_apb_saradc_thres0_low = l_thresh;
-    } else { // ADC_MONITOR_1
-        APB_SARADC.saradc_thres1_ctrl.saradc_apb_saradc_thres1_channel = (adc_n << 3) | (channel & 0x7);
-        APB_SARADC.saradc_thres1_ctrl.saradc_apb_saradc_thres1_high = h_thresh;
-        APB_SARADC.saradc_thres1_ctrl.saradc_apb_saradc_thres1_low = l_thresh;
+    if (idx == ADC_DIGI_MONITOR_IDX0) {
+        APB_SARADC.saradc_thres0_ctrl.saradc_apb_saradc_thres0_channel = (cfg->adc_unit << 3) | (cfg->channel & 0x7);
+        APB_SARADC.saradc_thres0_ctrl.saradc_apb_saradc_thres0_high = cfg->h_threshold;
+        APB_SARADC.saradc_thres0_ctrl.saradc_apb_saradc_thres0_low = cfg->l_threshold;
+    } else { // ADC_DIGI_MONITOR_IDX1
+        APB_SARADC.saradc_thres1_ctrl.saradc_apb_saradc_thres1_channel = (cfg->adc_unit << 3) | (cfg->channel & 0x7);
+        APB_SARADC.saradc_thres1_ctrl.saradc_apb_saradc_thres1_low = cfg->h_threshold;
+        APB_SARADC.saradc_thres1_ctrl.saradc_apb_saradc_thres1_low = cfg->l_threshold;
     }
 }
 
 /**
- * Start/Stop monitor of adc digital controller.
+ * Enable/disable monitor of adc digital controller.
  *
- * @param monitor_id ADC digi monitor unit index.
- * @param start 1 for start, 0 for stop
+ * @note If the channel info is not supported, the monitor function will not be enabled.
+ * @param adc_n ADC unit.
  */
-static inline void adc_ll_digi_monitor_user_start(adc_monitor_id_t monitor_id, bool start)
+static inline void adc_ll_digi_monitor_disable(adc_digi_monitor_idx_t idx)
 {
-    if (monitor_id == ADC_MONITOR_0) {
-        APB_SARADC.saradc_thres_ctrl.saradc_apb_saradc_thres0_en = start;
-    } else {
-        APB_SARADC.saradc_thres_ctrl.saradc_apb_saradc_thres1_en = start;
+    if (idx == ADC_DIGI_MONITOR_IDX0) {
+        APB_SARADC.saradc_thres0_ctrl.saradc_apb_saradc_thres0_channel = 0xF;
+    } else { // ADC_DIGI_MONITOR_IDX1
+        APB_SARADC.saradc_thres1_ctrl.saradc_apb_saradc_thres1_channel = 0xF;
     }
-}
-
-/**
- * Enable/disable a intr of adc digital monitor.
- *
- * @param monitor_id ADC digi monitor unit index.
- * @param mode monit mode to enable/disable intr.
- * @param enable enable or disable.
- */
-static inline void adc_ll_digi_monitor_enable_intr(adc_monitor_id_t monitor_id, adc_monitor_mode_t mode, bool enable)
-{
-    if (monitor_id == ADC_MONITOR_0) {
-        if (mode == ADC_MONITOR_MODE_HIGH) {
-            APB_SARADC.saradc_int_ena.saradc_apb_saradc_thres0_high_int_ena = enable;
-        } else {
-            APB_SARADC.saradc_int_ena.saradc_apb_saradc_thres0_low_int_ena = enable;
-        }
-    }
-    if (monitor_id == ADC_MONITOR_1) {
-        if (mode == ADC_MONITOR_MODE_HIGH) {
-            APB_SARADC.saradc_int_ena.saradc_apb_saradc_thres1_high_int_ena = enable;
-        } else {
-            APB_SARADC.saradc_int_ena.saradc_apb_saradc_thres1_low_int_ena = enable;
-        }
-    }
-}
-
-/**
- * Clear intr raw for adc digi monitors.
- */
-__attribute__((always_inline))
-static inline void adc_ll_digi_monitor_clear_intr(void)
-{
-    APB_SARADC.saradc_int_clr.val |= ADC_LL_THRES_ALL_INTR_ST_M;
-}
-
-/**
- * Get the address of digi monitor intr statue register.
- *
- * @return address of register.
- */
-__attribute__((always_inline))
-static inline volatile const void *adc_ll_digi_monitor_get_intr_status_addr(void)
-{
-    return &APB_SARADC.saradc_int_st.val;
 }
 
 /**
@@ -556,32 +506,13 @@ static inline uint32_t adc_ll_pwdet_get_cct(void)
 /*---------------------------------------------------------------
                     Common setting
 ---------------------------------------------------------------*/
-
-/**
- * @brief Enable the ADC clock
- * @param enable true to enable, false to disable
- */
-static inline void adc_ll_enable_bus_clock(bool enable)
-{
-    PCR.saradc_conf.saradc_reg_clk_en = enable;
-}
-
-/**
- * @brief Reset ADC module
- */
-static inline void adc_ll_reset_register(void)
-{
-    PCR.saradc_conf.saradc_reg_rst_en = 1;
-    PCR.saradc_conf.saradc_reg_rst_en = 0;
-}
 /**
  * Set ADC module power management.
  *
  * @param manage Set ADC power status.
  */
-static inline void adc_ll_set_power_manage(adc_unit_t adc_n, adc_ll_power_t manage)
+static inline void adc_ll_set_power_manage(adc_ll_power_t manage)
 {
-    (void) adc_n;
     /* Bit1  0:Fsm  1: SW mode
        Bit0  0:SW mode power down  1: SW mode power on */
     if (manage == ADC_LL_POWER_SW_ON) {

@@ -84,9 +84,6 @@ typedef enum {
 #if SOC_PM_SUPPORT_TOP_PD
     ESP_PD_DOMAIN_TOP,             //!< SoC TOP
 #endif
-#if SOC_PM_SUPPORT_CNNT_PD
-    ESP_PD_DOMAIN_CNNT,            //!< Hight-speed connect peripherals power domain
-#endif
     ESP_PD_DOMAIN_MAX              //!< Number of domains
 } esp_sleep_pd_domain_t;
 
@@ -135,8 +132,6 @@ enum {
     ESP_ERR_SLEEP_REJECT = ESP_ERR_INVALID_STATE,
     ESP_ERR_SLEEP_TOO_SHORT_SLEEP_DURATION = ESP_ERR_INVALID_ARG,
 };
-
-#define ESP_SLEEP_POWER_DOWN_CPU (CONFIG_PM_POWER_DOWN_CPU_IN_LIGHT_SLEEP || (SOC_CPU_IN_TOP_DOMAIN && CONFIG_PM_POWER_DOWN_PERIPHERAL_IN_LIGHT_SLEEP))
 
 /**
  * @brief Disable wakeup source
@@ -293,7 +288,7 @@ esp_err_t esp_sleep_enable_ext0_wakeup(gpio_num_t gpio_num, int level);
  *                      - ESP_EXT1_WAKEUP_ANY_HIGH: wake up when any of the selected GPIOs is high
  * @return
  *      - ESP_OK on success
- *      - ESP_ERR_INVALID_ARG if io_mask is zero,,
+ *      - ESP_ERR_INVALID_ARG if io_mask is zero,
  *        or mode is invalid
  */
 esp_err_t esp_sleep_enable_ext1_wakeup(uint64_t io_mask, esp_sleep_ext1_wakeup_mode_t level_mode);
@@ -344,7 +339,7 @@ esp_err_t esp_sleep_enable_ext1_wakeup(uint64_t io_mask, esp_sleep_ext1_wakeup_m
  *      - ESP_OK on success
  *      - ESP_ERR_INVALID_ARG if any of the selected GPIOs is not an RTC GPIO,
  *        or mode is invalid
- *      - ESP_ERR_NOT_ALLOWED when wakeup level will become different between
+ *      - ESP_ERR_NOT_SUPPORTED when wakeup level will become different between
  *        ext1 IOs if !SOC_PM_SUPPORT_EXT1_WAKEUP_MODE_PER_PIN
  */
 esp_err_t esp_sleep_enable_ext1_wakeup_io(uint64_t io_mask, esp_sleep_ext1_wakeup_mode_t level_mode);
@@ -405,8 +400,7 @@ esp_err_t esp_sleep_disable_ext1_wakeup_io(uint64_t io_mask);
  *      - ESP_ERR_INVALID_ARG if any of the selected GPIOs is not an RTC GPIO,
  *        or mode is invalid
  */
-esp_err_t esp_sleep_enable_ext1_wakeup_with_level_mask(uint64_t io_mask, uint64_t level_mask)
-__attribute__((deprecated("please use 'esp_sleep_enable_ext1_wakeup_io' and 'esp_sleep_disable_ext1_wakeup_io' instead")));
+esp_err_t esp_sleep_enable_ext1_wakeup_with_level_mask(uint64_t io_mask, uint64_t level_mask);
 
 #endif // SOC_PM_SUPPORT_EXT1_WAKEUP_MODE_PER_PIN
 #endif // SOC_PM_SUPPORT_EXT1_WAKEUP
@@ -600,11 +594,6 @@ esp_err_t esp_light_sleep_start(void);
  * Call to this function is equivalent to a call to esp_deep_sleep_enable_timer_wakeup
  * followed by a call to esp_deep_sleep_start.
  *
- * @note In general, the function does not return, but if the sleep is rejected,
- * then it returns from it.
- *
- * The reason for the rejection can be such as a short sleep time.
- *
  * @param time_in_us  deep-sleep time, unit: microsecond
  *
  * @return
@@ -718,7 +707,7 @@ void esp_default_wake_deep_sleep(void);
  */
 void esp_deep_sleep_disable_rom_logging(void);
 
-#if ESP_SLEEP_POWER_DOWN_CPU
+#ifdef SOC_PM_SUPPORT_CPU_PD
 
 #if SOC_PM_CPU_RETENTION_BY_RTCCNTL
 /**
@@ -757,7 +746,7 @@ esp_err_t esp_sleep_cpu_retention_init(void);
  * Release system retention memory.
  */
 esp_err_t esp_sleep_cpu_retention_deinit(void);
-#endif // ESP_SLEEP_POWER_DOWN_CPU
+#endif
 
 /**
  * @brief Configure to isolate all GPIO pins in sleep state

@@ -7,7 +7,6 @@
 #pragma once
 
 #include <stdint.h>
-#include <stdbool.h>
 #include "soc/soc.h"
 #include "soc/regi2c_defs.h"
 

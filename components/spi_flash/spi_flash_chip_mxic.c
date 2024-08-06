@@ -43,7 +43,7 @@ esp_err_t spi_flash_chip_mxic_detect_size(esp_flash_t *chip, uint32_t *size)
         mem_density -= 0x20;
     }
 
-    *size = 1 << mem_density;
+    *size = (mem_density <= 31) ? (1U << mem_density) : 0;
     return ESP_OK;
 }
 

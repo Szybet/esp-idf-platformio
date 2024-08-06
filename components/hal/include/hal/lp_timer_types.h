@@ -16,7 +16,6 @@ extern "C" {
 /**
  * @brief The structure of the counter value in lower power timer
  */
-#if SOC_LP_TIMER_SUPPORTED
 typedef struct {
     union {
         struct {
@@ -27,7 +26,6 @@ typedef struct {
         uint64_t val; /*!< counter value */
     };
 } lp_timer_counter_value_t;
-#endif
 
 #ifdef __cplusplus
 }

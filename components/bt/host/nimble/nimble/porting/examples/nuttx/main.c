@@ -22,12 +22,9 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <stdio.h>
+
+
 #include <pthread.h>
-#include <unistd.h>
-#include <sys/boardctl.h>
-
-#include "netutils/netinit.h"
-
 #include "nimble/nimble_npl.h"
 #include "nimble/nimble_port.h"
 
@@ -74,18 +71,6 @@ int main(int argc, char *argv[])
         ble_hci_sock_set_device(atoi(argv[1]));
     }
 
-#ifndef CONFIG_NSH_ARCHINIT
-    /* Perform architecture-specific initialization */
-
-    boardctl(BOARDIOC_INIT, 0);
-#endif
-
-#ifndef CONFIG_NSH_NETINIT
-    /* Bring up the network */
-
-    netinit_bringup();
-#endif
-
     printf("port init\n");
 
     ret = nimble_port_init();
@@ -116,8 +101,8 @@ int main(int argc, char *argv[])
 
     printf("hci_sock task init\n");
     ret = ble_npl_task_init(&s_task_hci, "hci_sock", ble_hci_sock_task,
-                            NULL, TASK_DEFAULT_PRIORITY, BLE_NPL_TIME_FOREVER,
-                            TASK_DEFAULT_STACK, TASK_DEFAULT_STACK_SIZE);
+                      NULL, TASK_DEFAULT_PRIORITY, BLE_NPL_TIME_FOREVER,
+                      TASK_DEFAULT_STACK, TASK_DEFAULT_STACK_SIZE);
 
     if (ret != 0)
       {
@@ -127,8 +112,8 @@ int main(int argc, char *argv[])
     /* Create task which handles default event queue for host stack. */
     printf("ble_host task init\n");
     ret = ble_npl_task_init(&s_task_host, "ble_host", ble_host_task,
-                            NULL, TASK_DEFAULT_PRIORITY, BLE_NPL_TIME_FOREVER,
-                            TASK_DEFAULT_STACK, TASK_DEFAULT_STACK_SIZE);
+                      NULL, TASK_DEFAULT_PRIORITY, BLE_NPL_TIME_FOREVER,
+                      TASK_DEFAULT_STACK, TASK_DEFAULT_STACK_SIZE);
 
 
     if (ret != 0)

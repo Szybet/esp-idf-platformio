@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2022-2024 Espressif Systems (Shanghai) CO LTD
+ * SPDX-FileCopyrightText: 2022-2023 Espressif Systems (Shanghai) CO LTD
  *
  * SPDX-License-Identifier: Unlicense OR CC0-1.0
  */
@@ -104,24 +104,6 @@
 #define HSPI_PIN_NUM_HD     FSPI_PIN_NUM_HD
 #define HSPI_PIN_NUM_WP     FSPI_PIN_NUM_WP
 #define HSPI_PIN_NUM_CS     FSPI_PIN_NUM_CS
-
-#elif CONFIG_IDF_TARGET_ESP32P4
-
-// Normal IOMUX pins
-#define FSPI_PIN_NUM_MOSI   8
-#define FSPI_PIN_NUM_MISO   10
-#define FSPI_PIN_NUM_CLK    9
-#define FSPI_PIN_NUM_HD     6
-#define FSPI_PIN_NUM_WP     11
-#define FSPI_PIN_NUM_CS     7
-
-// Just use the same pins for HSPI
-#define HSPI_PIN_NUM_MOSI   FSPI_PIN_NUM_MOSI
-#define HSPI_PIN_NUM_MISO   FSPI_PIN_NUM_MISO
-#define HSPI_PIN_NUM_CLK    FSPI_PIN_NUM_CLK
-#define HSPI_PIN_NUM_HD     FSPI_PIN_NUM_HD
-#define HSPI_PIN_NUM_WP     FSPI_PIN_NUM_WP
-#define HSPI_PIN_NUM_CS     FSPI_PIN_NUM_CS
 #endif
 
 #define TEST_CONFIG_NUM (sizeof(config_list)/sizeof(flashtest_config_t))
@@ -144,19 +126,6 @@ typedef void (*flash_test_func_t)(const esp_partition_t *part);
 #define IDF_LOG_PERFORMANCE(item, value_fmt, value, ...) \
     printf("[Performance][%s]: " value_fmt "\n", item, value, ##__VA_ARGS__)
 
-#define LOG_DATA(bus, suffix, chip) IDF_LOG_PERFORMANCE("FLASH_SPEED_BYTE_PER_SEC_"#bus#suffix, "%ld, flash_chip: %s", speed_##suffix, chip)
-#define LOG_ERASE(bus, var, chip) IDF_LOG_PERFORMANCE("FLASH_SPEED_BYTE_PER_SEC_"#bus"ERASE", "%ld, flash_chip: %s", var, chip)
-
-// Erase time may vary a lot, can increase threshold if this fails with a reasonable speed
-#define LOG_PERFORMANCE(bus, chip) do {\
-            LOG_DATA(bus, WR_4B, chip); \
-            LOG_DATA(bus, RD_4B, chip); \
-            LOG_DATA(bus, WR_2KB, chip); \
-            LOG_DATA(bus, RD_2KB, chip); \
-            LOG_ERASE(bus, erase_1, chip); \
-            LOG_ERASE(bus, erase_2, chip); \
-        } while (0)
-
 
 #if defined(CONFIG_SPIRAM)
 //SPI1 CS1 occupied by PSRAM
@@ -176,7 +145,6 @@ typedef void (*flash_test_func_t)(const esp_partition_t *part);
 
 #if BYPASS_MULTIPLE_CHIP
 #define TEST_CASE_MULTI_FLASH   TEST_CASE_MULTI_FLASH_IGNORE
-#define TEST_CASE_MULTI_FLASH_LONG   TEST_CASE_MULTI_FLASH_IGNORE
 #else
 #if CONFIG_FREERTOS_SMP // IDF-5260
 #define TEST_CASE_MULTI_FLASH(STR, FUNC_TO_RUN) \

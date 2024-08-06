@@ -166,7 +166,7 @@ void BTA_DisableTestMode(void)
 ** Returns          void
 **
 *******************************************************************************/
-void BTA_DmSetDeviceName(const char *p_name, tBT_DEVICE_TYPE name_type)
+void BTA_DmSetDeviceName(const char *p_name)
 {
 
     tBTA_DM_API_SET_NAME    *p_msg;
@@ -176,7 +176,6 @@ void BTA_DmSetDeviceName(const char *p_name, tBT_DEVICE_TYPE name_type)
         /* truncate the name if needed */
         BCM_STRNCPY_S((char *)p_msg->name, p_name, BD_NAME_LEN);
         p_msg->name[BD_NAME_LEN] = '\0';
-        p_msg->name_type = name_type;
 
         bta_sys_sendmsg(p_msg);
     }
@@ -192,42 +191,16 @@ void BTA_DmSetDeviceName(const char *p_name, tBT_DEVICE_TYPE name_type)
 ** Returns          void
 **
 *******************************************************************************/
-void BTA_DmGetDeviceName(tBTA_GET_DEV_NAME_CBACK *p_cback, tBT_DEVICE_TYPE name_type)
+void BTA_DmGetDeviceName(tBTA_GET_DEV_NAME_CBACK *p_cback)
 {
     tBTA_DM_API_GET_NAME *p_msg;
 
     if ((p_msg = (tBTA_DM_API_GET_NAME *) osi_malloc(sizeof(tBTA_DM_API_GET_NAME))) != NULL) {
         p_msg->hdr.event = BTA_DM_API_GET_NAME_EVT;
         p_msg->p_cback = p_cback;
-        p_msg->name_type = name_type;
         bta_sys_sendmsg(p_msg);
     }
 }
-
-/*******************************************************************************
-**
-** Function         BTA_DmCfgCoexStatus
-**
-** Description      This function configures the coexist status
-**
-**
-** Returns          void
-**
-*******************************************************************************/
-#if (ESP_COEX_VSC_INCLUDED == TRUE)
-void BTA_DmCfgCoexStatus(UINT8 op, UINT8 type, UINT8 status)
-{
-    tBTA_DM_API_CFG_COEX_STATUS *p_msg;
-
-    if ((p_msg = (tBTA_DM_API_CFG_COEX_STATUS *) osi_malloc(sizeof(tBTA_DM_API_CFG_COEX_STATUS))) != NULL) {
-        p_msg->hdr.event = BTA_DM_API_CFG_COEX_ST_EVT;
-        p_msg->op = op;
-        p_msg->type = type;
-        p_msg->status = status;
-        bta_sys_sendmsg(p_msg);
-    }
-}
-#endif
 
 void BTA_DmsendVendorHciCmd(UINT16 opcode, UINT8 param_len, UINT8 *p_param_buf, tBTA_SEND_VENDOR_HCI_CMPL_CBACK p_vendor_cmd_complete_cback)
 {
@@ -316,51 +289,6 @@ void BTA_DmSetAfhChannels(const uint8_t *channels, tBTA_CMPL_CB  *set_afh_cb)
 
 /*******************************************************************************
 **
-** Function         BTA_DmSetPageTimeout
-**
-** Description      This function sets the Bluetooth page timeout.
-**
-**
-** Returns          void
-**
-*******************************************************************************/
-void BTA_DmSetPageTimeout(UINT16 page_to, tBTM_CMPL_CB *p_cb)
-{
-    tBTA_DM_API_PAGE_TO_SET *p_msg;
-
-    if ((p_msg = (tBTA_DM_API_PAGE_TO_SET *) osi_malloc(sizeof(tBTA_DM_API_PAGE_TO_SET))) != NULL) {
-        p_msg->hdr.event = BTA_DM_API_PAGE_TO_SET_EVT;
-        p_msg->page_to = page_to;
-        p_msg->set_page_to_cb = p_cb;
-
-        bta_sys_sendmsg(p_msg);
-    }
-}
-
-/*******************************************************************************
-**
-** Function         BTA_DmGetPageTimeout
-**
-** Description      This function gets the Bluetooth page timeout.
-**
-**
-** Returns          void
-**
-*******************************************************************************/
-void BTA_DmGetPageTimeout(tBTM_CMPL_CB *p_cb)
-{
-    tBTA_DM_API_PAGE_TO_GET *p_msg;
-
-    if ((p_msg = (tBTA_DM_API_PAGE_TO_GET *) osi_malloc(sizeof(tBTA_DM_API_PAGE_TO_GET))) != NULL) {
-        p_msg->hdr.event = BTA_DM_API_PAGE_TO_GET_EVT;
-        p_msg->get_page_to_cb = p_cb;
-
-        bta_sys_sendmsg(p_msg);
-    }
-}
-
-/*******************************************************************************
-**
 ** Function         BTA_DmSetAclPktTypes
 **
 ** Description      This function sets the packet types used for ACL traffic.
@@ -382,31 +310,6 @@ void BTA_DmSetAclPktTypes(BD_ADDR remote_addr, UINT16 pkt_types, tBTM_CMPL_CB *p
         bta_sys_sendmsg(p_msg);
     }
 }
-
-/*******************************************************************************
-**
-** Function         BTA_DmSetMinEncKeySize
-**
-** Description      This function sets the minimal size of encryption key.
-**
-**
-** Returns          void
-**
-*******************************************************************************/
-#if (ENC_KEY_SIZE_CTRL_MODE != ENC_KEY_SIZE_CTRL_MODE_NONE)
-void BTA_DmSetMinEncKeySize(UINT8 key_size, tBTM_CMPL_CB *p_cb)
-{
-    tBTA_DM_API_SET_MIN_ENC_KEY_SIZE *p_msg;
-
-    if ((p_msg = (tBTA_DM_API_SET_MIN_ENC_KEY_SIZE *) osi_malloc(sizeof(tBTA_DM_API_SET_MIN_ENC_KEY_SIZE))) != NULL) {
-        p_msg->hdr.event = BTA_DM_API_SET_MIN_ENC_KEY_SIZE_EVT;
-        p_msg->key_size = key_size;
-        p_msg->set_min_enc_key_size_cb = p_cb;
-
-        bta_sys_sendmsg(p_msg);
-    }
-}
-#endif
 #endif /// CLASSIC_BT_INCLUDED == TRUE
 
 #if (SDP_INCLUDED == TRUE)
@@ -893,7 +796,7 @@ void BTA_DmSecureConnectionCreateOobData(void)
 ** Returns          void
 **
 *******************************************************************************/
-#if (CLASSIC_BT_INCLUDED == TRUE)
+#if (SMP_INCLUDED == TRUE)
 void BTA_DmConfirm(BD_ADDR bd_addr, BOOLEAN accept)
 {
     tBTA_DM_API_CONFIRM    *p_msg;
@@ -916,6 +819,7 @@ void BTA_DmConfirm(BD_ADDR bd_addr, BOOLEAN accept)
 ** Returns          void
 **
 *******************************************************************************/
+#if (BT_SSP_INCLUDED == TRUE)
 void BTA_DmPasskeyReqReply(BOOLEAN accept, BD_ADDR bd_addr, UINT32 passkey)
 {
     tBTA_DM_API_KEY_REQ    *p_msg;
@@ -927,7 +831,8 @@ void BTA_DmPasskeyReqReply(BOOLEAN accept, BD_ADDR bd_addr, UINT32 passkey)
         bta_sys_sendmsg(p_msg);
     }
 }
-#endif ///CLASSIC_BT_INCLUDED == TRUE
+#endif ///BT_SSP_INCLUDED == TRUE
+#endif  ///SMP_INCLUDED == TRUE
 /*******************************************************************************
 **
 ** Function         BTA_DmAddDevice

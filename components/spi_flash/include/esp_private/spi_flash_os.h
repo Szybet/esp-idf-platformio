@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2019-2024 Espressif Systems (Shanghai) CO LTD
+ * SPDX-FileCopyrightText: 2019-2022 Espressif Systems (Shanghai) CO LTD
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -56,11 +56,6 @@ esp_err_t spi_flash_init_chip_state(void);
 void esp_mspi_pin_init(void);
 
 /**
- * @brief Reserve MSPI IOs
- */
-void esp_mspi_pin_reserve(void);
-
-/**
  * @brief Get the number of the GPIO corresponding to the given MSPI io
  *
  * @param[in] io  MSPI io
@@ -88,9 +83,9 @@ esp_err_t esp_flash_init_main(esp_flash_t *chip);
 void spi_timing_get_flash_timing_param(spi_flash_hal_timing_config_t *out_timing_config);
 
 /**
- * @brief Get the knowledge if the Flash timing is tuned or not
+ * @brief Get the knowledge if the MSPI timing is tuned or not
  */
-bool spi_flash_timing_is_tuned(void);
+bool spi_timing_is_tuned(void);
 
 /**
  * @brief Set Flash chip specifically required MSPI register settings here
@@ -258,7 +253,16 @@ extern const spi_flash_guard_funcs_t g_flash_guard_no_os_ops;
  */
 void spi_flash_rom_impl_init(void);
 
-
+#if SOC_MEMSPI_CLOCK_IS_INDEPENDENT
+/**
+ * @brief This functions is used to change spi flash clock source between PLL and others, which is used after system wake up from a low power mode or
+ * enter low-power mode like sleep.
+ * @param clk_src mspi(flash) clock source.
+ *
+ * @note Only called in startup. User should not call this function.
+ */
+void spi_flash_set_clock_src(soc_periph_mspi_clk_src_t clk_src);
+#endif
 
 #ifdef __cplusplus
 }

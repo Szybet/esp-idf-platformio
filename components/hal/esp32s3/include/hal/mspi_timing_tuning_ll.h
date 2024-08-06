@@ -35,8 +35,6 @@ extern "C" {
 #define MSPI_TIMING_LL_FLASH_FAST_MODE_MASK           (SPI_MEM_FASTRD_MODE)
 #define MSPI_TIMING_LL_FLASH_SLOW_MODE_MASK           0
 
-#define MSPI_TIMING_LL_CORE_CLOCK_MHZ_DEFAULT         80
-
 typedef enum {
     MSPI_TIMING_LL_FLASH_OPI_MODE = BIT(0),
     MSPI_TIMING_LL_FLASH_QIO_MODE = BIT(1),
@@ -135,34 +133,15 @@ static inline void mspi_timing_ll_enable_flash_variable_dummy(uint8_t spi_num, b
 }
 
 /**
- * Set MSPI core clock
+ * Set MSPI core clock divider
  *
- * @param spi_num       SPI0 / SPI1
- * @param core_clk_mhz  core clock mhz
+ * @param spi_num  SPI0 / SPI1
+ * @param val      Divider value
  */
 __attribute__((always_inline))
-static inline void mspi_timing_ll_set_core_clock(uint8_t spi_num, uint32_t core_clk_mhz)
+static inline void mspi_timing_ll_set_core_clock_divider(uint8_t spi_num, uint32_t val)
 {
-    uint32_t reg_val = 0;
-
-    switch (core_clk_mhz) {
-        case 80:
-            reg_val = 0;
-            break;
-        case 120:
-            reg_val = 1;
-            break;
-        case 160:
-            reg_val = 2;
-            break;
-        case 240:
-            reg_val = 3;
-            break;
-        default:
-            HAL_ASSERT(false);
-    }
-
-    REG_SET_FIELD(SPI_MEM_CORE_CLK_SEL_REG(spi_num), SPI_MEM_CORE_CLK_SEL, reg_val);
+    REG_SET_FIELD(SPI_MEM_CORE_CLK_SEL_REG(spi_num), SPI_MEM_CORE_CLK_SEL, val);
 }
 
 /**
@@ -259,7 +238,7 @@ static inline mspi_timing_ll_flash_mode_t mspi_timing_ll_get_flash_mode(uint8_t 
             return MSPI_TIMING_LL_FLASH_SLOW_MODE;
         default:
             HAL_ASSERT(false);
-            return (mspi_timing_ll_flash_mode_t)0;
+            return 0;
     }
 
 }

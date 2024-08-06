@@ -8,9 +8,10 @@
 
 #include "sdkconfig.h"
 #include <sys/select.h>
+#include "esp_err.h"
 #include "esp_ieee802154_types.h"
-#include "driver/uart.h"
-#include "soc/gpio_num.h"
+#include "hal/gpio_types.h"
+#include "hal/uart_types.h"
 
 #ifdef __cplusplus
 extern "C" {

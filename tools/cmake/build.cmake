@@ -23,7 +23,7 @@ endfunction()
 #        also added to the internal list of build properties if it isn't there already.
 #
 # @param[in] property the property to set the value of
-# @param[in] value value of the property
+# @param[out] value value of the property
 #
 # @param[in, optional] APPEND (option) append the value to the current value of the
 #                     property instead of replacing it
@@ -93,9 +93,7 @@ function(__build_set_default_build_specifications)
     unset(c_compile_options)
     unset(cxx_compile_options)
 
-    list(APPEND compile_definitions "_GLIBCXX_USE_POSIX_SEMAPHORE"  # These two lines enable libstd++ to use
-                                    "_GLIBCXX_HAVE_POSIX_SEMAPHORE" # posix-semaphores from components/pthread
-                                    "_GNU_SOURCE")
+    list(APPEND compile_definitions "_GNU_SOURCE")
 
     list(APPEND compile_options     "-ffunction-sections"
                                     "-fdata-sections"
@@ -129,7 +127,7 @@ function(__build_set_lang_version)
     if(NOT IDF_TARGET STREQUAL "linux")
         # Building for chip targets: we use a known version of the toolchain.
         # Use latest supported versions.
-        # Please update docs/en/api-guides/c.rst, docs/en/api-guides/cplusplus.rst and
+        # Please update docs/en/api-guides/cplusplus.rst and
         # tools/test_apps/system/cxx_build_test/main/test_cxx_standard.cpp when changing this.
         set(c_std gnu17)
         set(cxx_std gnu++2b)
@@ -468,8 +466,6 @@ macro(idf_build_process target)
 
     idf_build_set_property(BOOTLOADER_BUILD "${BOOTLOADER_BUILD}")
 
-    idf_build_set_property(IDF_TOOLCHAIN "${IDF_TOOLCHAIN}")
-
     # Check build target is specified. Since this target corresponds to a component
     # name, the target component is automatically added to the list of common component
     # requirements.
@@ -516,17 +512,9 @@ macro(idf_build_process target)
         set(local_components_list_file ${build_dir}/local_components_list.temp.yml)
 
         set(__contents "components:\n")
-        idf_build_get_property(build_component_targets BUILD_COMPONENT_TARGETS)
-        foreach(__build_component_target ${build_component_targets})
-            __component_get_property(__component_name ${__build_component_target} COMPONENT_NAME)
-            __component_get_property(__component_dir ${__build_component_target} COMPONENT_DIR)
-
-            # Exclude components could be passed with -DEXCLUDE_COMPONENTS
-            # after the call to __component_add finished in the last run.
-            # Need to check if the component is excluded again
-            if(NOT __component_name IN_LIST EXCLUDE_COMPONENTS)
-                set(__contents "${__contents}  - name: \"${__component_name}\"\n    path: \"${__component_dir}\"\n")
-            endif()
+        foreach(__component_name ${components})
+            idf_component_get_property(__component_dir ${__component_name} COMPONENT_DIR)
+            set(__contents "${__contents}  - name: \"${__component_name}\"\n    path: \"${__component_dir}\"\n")
         endforeach()
 
         file(WRITE ${local_components_list_file} "${__contents}")

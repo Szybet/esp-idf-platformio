@@ -35,10 +35,6 @@
 
 #include "soc/rtc_periph.h"
 
-#if CONFIG_ESP_PHY_INIT_DATA_IN_PARTITION
-#include "esp_partition.h"
-#endif
-
 #if __has_include("soc/syscon_reg.h")
 #include "soc/syscon_reg.h"
 #endif
@@ -64,12 +60,10 @@ static _lock_t s_phy_access_lock;
 
 #if SOC_PM_SUPPORT_MODEM_PD || SOC_PM_SUPPORT_WIFI_PD
 #if !SOC_PMU_SUPPORTED
-#if !CONFIG_IDF_TARGET_ESP32C5 // TODO: [ESP32C5] IDF-8667
 static DRAM_ATTR struct {
     int     count;  /* power on count of wifi and bt power domain */
     _lock_t lock;
 } s_wifi_bt_pd_controller = { .count = 0 };
-#endif
 #endif // !SOC_PMU_SUPPORTED
 #endif // SOC_PM_SUPPORT_MODEM_PD || SOC_PM_SUPPORT_WIFI_PD
 
@@ -283,12 +277,6 @@ void esp_phy_enable(esp_phy_modem_t modem)
 #if !CONFIG_IDF_TARGET_ESP32
         phy_track_pll_init();
 #endif
-
-    if (phy_ant_need_update()) {
-        phy_ant_update();
-        phy_ant_clr_update_flag();
-    }
-
     }
     phy_set_modem_flag(modem);
 #if !CONFIG_IDF_TARGET_ESP32
@@ -339,7 +327,6 @@ void IRAM_ATTR esp_wifi_bt_power_domain_on(void)
 {
 #if SOC_PM_SUPPORT_MODEM_PD || SOC_PM_SUPPORT_WIFI_PD
 #if !SOC_PMU_SUPPORTED
-#if !CONFIG_IDF_TARGET_ESP32C5 // TODO: [ESP32C5] IDF-8667
     _lock_acquire(&s_wifi_bt_pd_controller.lock);
     if (s_wifi_bt_pd_controller.count++ == 0) {
         CLEAR_PERI_REG_MASK(RTC_CNTL_DIG_PWC_REG, RTC_CNTL_WIFI_FORCE_PD);
@@ -357,7 +344,6 @@ void IRAM_ATTR esp_wifi_bt_power_domain_on(void)
         wifi_bt_common_module_disable();
     }
     _lock_release(&s_wifi_bt_pd_controller.lock);
-#endif
 #endif // !SOC_PMU_SUPPORTED
 #endif // SOC_PM_SUPPORT_MODEM_PD || SOC_PM_SUPPORT_WIFI_PD
 }
@@ -366,14 +352,12 @@ void esp_wifi_bt_power_domain_off(void)
 {
 #if SOC_PM_SUPPORT_MODEM_PD || SOC_PM_SUPPORT_WIFI_PD
 #if !SOC_PMU_SUPPORTED
-#if !CONFIG_IDF_TARGET_ESP32C5 // TODO: [ESP32C5] IDF-8667
     _lock_acquire(&s_wifi_bt_pd_controller.lock);
     if (--s_wifi_bt_pd_controller.count == 0) {
         SET_PERI_REG_MASK(RTC_CNTL_DIG_ISO_REG, RTC_CNTL_WIFI_FORCE_ISO);
         SET_PERI_REG_MASK(RTC_CNTL_DIG_PWC_REG, RTC_CNTL_WIFI_FORCE_PD);
     }
     _lock_release(&s_wifi_bt_pd_controller.lock);
-#endif
 #endif // !SOC_PMU_SUPPORTED
 #endif // SOC_PM_SUPPORT_MODEM_PD || SOC_PM_SUPPORT_WIFI_PD
 }
@@ -531,12 +515,13 @@ IRAM_ATTR void esp_mac_bb_power_down(void)
 
 // PHY init data handling functions
 #if CONFIG_ESP_PHY_INIT_DATA_IN_PARTITION
+#include "esp_partition.h"
 
 const esp_phy_init_data_t* esp_phy_get_init_data(void)
 {
 #if CONFIG_ESP_PHY_MULTIPLE_INIT_DATA_BIN_EMBED
-    size_t init_data_store_length = PHY_INIT_MAGIC_LEN +
-            sizeof(esp_phy_init_data_t) + PHY_INIT_MAGIC_LEN;
+    size_t init_data_store_length = sizeof(phy_init_magic_pre) +
+            sizeof(esp_phy_init_data_t) + sizeof(phy_init_magic_post);
     uint8_t* init_data_store = (uint8_t*) malloc(init_data_store_length);
     if (init_data_store == NULL) {
         ESP_LOGE(TAG, "failed to allocate memory for updated country code PHY init data");
@@ -552,8 +537,8 @@ const esp_phy_init_data_t* esp_phy_get_init_data(void)
         return NULL;
     }
     ESP_LOGD(TAG, "loading PHY init data from partition at offset 0x%" PRIx32 "", partition->address);
-    size_t init_data_store_length = PHY_INIT_MAGIC_LEN +
-            sizeof(esp_phy_init_data_t) + PHY_INIT_MAGIC_LEN;
+    size_t init_data_store_length = sizeof(phy_init_magic_pre) +
+            sizeof(esp_phy_init_data_t) + sizeof(phy_init_magic_post);
     uint8_t* init_data_store = (uint8_t*) malloc(init_data_store_length);
     if (init_data_store == NULL) {
         ESP_LOGE(TAG, "failed to allocate memory for PHY init data");
@@ -568,9 +553,9 @@ const esp_phy_init_data_t* esp_phy_get_init_data(void)
     }
 #endif
     // verify data
-    if (memcmp(init_data_store, PHY_INIT_MAGIC, PHY_INIT_MAGIC_LEN) != 0 ||
-        memcmp(init_data_store + init_data_store_length - PHY_INIT_MAGIC_LEN,
-                PHY_INIT_MAGIC, PHY_INIT_MAGIC_LEN) != 0) {
+    if (memcmp(init_data_store, PHY_INIT_MAGIC, sizeof(phy_init_magic_pre)) != 0 ||
+        memcmp(init_data_store + init_data_store_length - sizeof(phy_init_magic_post),
+                PHY_INIT_MAGIC, sizeof(phy_init_magic_post)) != 0) {
 #if CONFIG_ESP_PHY_MULTIPLE_INIT_DATA_BIN_EMBED
         ESP_LOGE(TAG, "failed to validate embedded PHY init data");
         free(init_data_store);
@@ -584,15 +569,15 @@ const esp_phy_init_data_t* esp_phy_get_init_data(void)
         ESP_LOGE(TAG, "failed to validate PHY data partition, restoring default data into flash...");
 
         memcpy(init_data_store,
-               PHY_INIT_MAGIC, PHY_INIT_MAGIC_LEN);
-        memcpy(init_data_store + PHY_INIT_MAGIC_LEN,
+               PHY_INIT_MAGIC, sizeof(phy_init_magic_pre));
+        memcpy(init_data_store + sizeof(phy_init_magic_pre),
                &phy_init_data, sizeof(phy_init_data));
-        memcpy(init_data_store + PHY_INIT_MAGIC_LEN + sizeof(phy_init_data),
-               PHY_INIT_MAGIC, PHY_INIT_MAGIC_LEN);
+        memcpy(init_data_store + sizeof(phy_init_magic_pre) + sizeof(phy_init_data),
+               PHY_INIT_MAGIC, sizeof(phy_init_magic_post));
 
-        assert(memcmp(init_data_store, PHY_INIT_MAGIC, PHY_INIT_MAGIC_LEN) == 0);
-        assert(memcmp(init_data_store + init_data_store_length - PHY_INIT_MAGIC_LEN,
-                      PHY_INIT_MAGIC, PHY_INIT_MAGIC_LEN) == 0);
+        assert(memcmp(init_data_store, PHY_INIT_MAGIC, sizeof(phy_init_magic_pre)) == 0);
+        assert(memcmp(init_data_store + init_data_store_length - sizeof(phy_init_magic_post),
+                      PHY_INIT_MAGIC, sizeof(phy_init_magic_post)) == 0);
 
         // write default data
         err = esp_partition_write(partition, 0, init_data_store, init_data_store_length);
@@ -605,7 +590,7 @@ const esp_phy_init_data_t* esp_phy_get_init_data(void)
 #endif // CONFIG_ESP_PHY_MULTIPLE_INIT_DATA_BIN_EMBED
     }
 #if CONFIG_ESP_PHY_MULTIPLE_INIT_DATA_BIN
-    if ((*(init_data_store + (PHY_INIT_MAGIC_LEN + PHY_SUPPORT_MULTIPLE_BIN_OFFSET)))) {
+    if ((*(init_data_store + (sizeof(phy_init_magic_pre) + PHY_SUPPORT_MULTIPLE_BIN_OFFSET)))) {
         s_multiple_phy_init_data_bin = true;
         ESP_LOGI(TAG, "Support multiple PHY init data bins");
     } else {
@@ -613,12 +598,12 @@ const esp_phy_init_data_t* esp_phy_get_init_data(void)
     }
 #endif
     ESP_LOGD(TAG, "PHY data partition validated");
-    return (const esp_phy_init_data_t*) (init_data_store + PHY_INIT_MAGIC_LEN);
+    return (const esp_phy_init_data_t*) (init_data_store + sizeof(phy_init_magic_pre));
 }
 
 void esp_phy_release_init_data(const esp_phy_init_data_t* init_data)
 {
-    free((uint8_t*) init_data - PHY_INIT_MAGIC_LEN);
+    free((uint8_t*) init_data - sizeof(phy_init_magic_pre));
 }
 
 #else // CONFIG_ESP_PHY_INIT_DATA_IN_PARTITION
@@ -718,7 +703,7 @@ static esp_err_t load_cal_data_from_nvs_handle(nvs_handle_t handle,
         return err;
     }
     uint32_t cal_format_version = phy_get_rf_cal_version() & (~BIT(16));
-    ESP_LOGV(TAG, "phy_get_rf_cal_version: %" PRId32, cal_format_version);
+    ESP_LOGV(TAG, "phy_get_rf_cal_version: %" PRId32 "\n", cal_format_version);
     if (cal_data_version != cal_format_version) {
         ESP_LOGD(TAG, "%s: expected calibration data format %" PRId32 ", found %" PRId32 "",
                 __func__, cal_format_version, cal_data_version);
@@ -763,7 +748,7 @@ static esp_err_t store_cal_data_to_nvs_handle(nvs_handle_t handle,
 
     err = nvs_set_blob(handle, PHY_CAL_DATA_KEY, cal_data, sizeof(*cal_data));
     if (err != ESP_OK) {
-        ESP_LOGE(TAG, "%s: store calibration data failed(0x%x)", __func__, err);
+        ESP_LOGE(TAG, "%s: store calibration data failed(0x%x)\n", __func__, err);
         return err;
     }
 
@@ -771,21 +756,21 @@ static esp_err_t store_cal_data_to_nvs_handle(nvs_handle_t handle,
     ESP_ERROR_CHECK(esp_efuse_mac_get_default(sta_mac));
     err = nvs_set_blob(handle, PHY_CAL_MAC_KEY, sta_mac, sizeof(sta_mac));
     if (err != ESP_OK) {
-        ESP_LOGE(TAG, "%s: store calibration mac failed(0x%x)", __func__, err);
+        ESP_LOGE(TAG, "%s: store calibration mac failed(0x%x)\n", __func__, err);
         return err;
     }
 
     uint32_t cal_format_version = phy_get_rf_cal_version() & (~BIT(16));
-    ESP_LOGV(TAG, "phy_get_rf_cal_version: %" PRId32 "", cal_format_version);
+    ESP_LOGV(TAG, "phy_get_rf_cal_version: %" PRId32 "\n", cal_format_version);
     err = nvs_set_u32(handle, PHY_CAL_VERSION_KEY, cal_format_version);
     if (err != ESP_OK) {
-        ESP_LOGE(TAG, "%s: store calibration version failed(0x%x)", __func__, err);
+        ESP_LOGE(TAG, "%s: store calibration version failed(0x%x)\n", __func__, err);
         return err;
     }
 
     err = nvs_commit(handle);
     if (err != ESP_OK) {
-        ESP_LOGE(TAG, "%s: store calibration nvs commit failed(0x%x)", __func__, err);
+        ESP_LOGE(TAG, "%s: store calibration nvs commit failed(0x%x)\n", __func__, err);
     }
 
     return err;
@@ -893,13 +878,10 @@ void esp_phy_load_cal_and_init(void)
 #else
     esp_phy_release_init_data(init_data);
 #endif
-#if !CONFIG_IDF_TARGET_ESP32C5 // TODO: [ESP32C5] IDF-8638
+
     ESP_ERROR_CHECK(esp_deep_sleep_register_phy_hook(&phy_close_rf));
-#endif
 #if !CONFIG_IDF_TARGET_ESP32
-#if !CONFIG_IDF_TARGET_ESP32C5 // TODO: [ESP32C5] IDF-8638
     ESP_ERROR_CHECK(esp_deep_sleep_register_phy_hook(&phy_xpd_tsens));
-#endif
 #endif
 
     free(cal_data); // PHY maintains a copy of calibration data, so we can free this
@@ -927,7 +909,7 @@ static uint8_t phy_find_bin_type_according_country(const char* country)
     {
         if (!memcmp(country, s_country_code_map_type_table[i].cc, sizeof(s_phy_current_country))) {
             phy_init_data_type = s_country_code_map_type_table[i].type;
-            ESP_LOGD(TAG, "Current country is %c%c, PHY init data type is %s", s_country_code_map_type_table[i].cc[0],
+            ESP_LOGD(TAG, "Current country is %c%c, PHY init data type is %s\n", s_country_code_map_type_table[i].cc[0],
                     s_country_code_map_type_table[i].cc[1], s_phy_type[s_country_code_map_type_table[i].type]);
             break;
         }
@@ -949,7 +931,7 @@ static esp_err_t phy_find_bin_data_according_type(uint8_t* out_init_data_store,
       int i = 0;
       for (i = 0; i < init_data_control_info->number; i++) {
           if (init_data_type == *(init_data_multiple + (i * sizeof(esp_phy_init_data_t)) + PHY_INIT_DATA_TYPE_OFFSET)) {
-              memcpy(out_init_data_store + PHY_INIT_MAGIC_LEN,
+              memcpy(out_init_data_store + sizeof(phy_init_magic_pre),
                       init_data_multiple + (i * sizeof(esp_phy_init_data_t)), sizeof(esp_phy_init_data_t));
               break;
           }
@@ -1049,8 +1031,8 @@ esp_err_t esp_phy_update_init_data(phy_init_data_type_t init_data_type)
 #if CONFIG_ESP_PHY_MULTIPLE_INIT_DATA_BIN_EMBED
     esp_err_t err = ESP_OK;
     const esp_partition_t* partition = NULL;
-    size_t init_data_store_length = PHY_INIT_MAGIC_LEN +
-        sizeof(esp_phy_init_data_t) + PHY_INIT_MAGIC_LEN;
+    size_t init_data_store_length = sizeof(phy_init_magic_pre) +
+        sizeof(esp_phy_init_data_t) + sizeof(phy_init_magic_post);
     uint8_t* init_data_store = (uint8_t*) malloc(init_data_store_length);
     if (init_data_store == NULL) {
         ESP_LOGE(TAG, "failed to allocate memory for updated country code PHY init data");
@@ -1065,8 +1047,8 @@ esp_err_t esp_phy_update_init_data(phy_init_data_type_t init_data_type)
         ESP_LOGE(TAG, "Updated country code PHY data partition not found");
         return ESP_FAIL;
     }
-    size_t init_data_store_length = PHY_INIT_MAGIC_LEN +
-        sizeof(esp_phy_init_data_t) + PHY_INIT_MAGIC_LEN;
+    size_t init_data_store_length = sizeof(phy_init_magic_pre) +
+        sizeof(esp_phy_init_data_t) + sizeof(phy_init_magic_post);
     uint8_t* init_data_store = (uint8_t*) malloc(init_data_store_length);
     if (init_data_store == NULL) {
         ESP_LOGE(TAG, "failed to allocate memory for updated country code PHY init data");
@@ -1080,9 +1062,9 @@ esp_err_t esp_phy_update_init_data(phy_init_data_type_t init_data_type)
         return ESP_FAIL;
     }
 #endif
-    if (memcmp(init_data_store, PHY_INIT_MAGIC, PHY_INIT_MAGIC_LEN) != 0 ||
-            memcmp(init_data_store + init_data_store_length - PHY_INIT_MAGIC_LEN,
-                PHY_INIT_MAGIC, PHY_INIT_MAGIC_LEN) != 0) {
+    if (memcmp(init_data_store, PHY_INIT_MAGIC, sizeof(phy_init_magic_pre)) != 0 ||
+            memcmp(init_data_store + init_data_store_length - sizeof(phy_init_magic_post),
+                PHY_INIT_MAGIC, sizeof(phy_init_magic_post)) != 0) {
         free(init_data_store);
         ESP_LOGE(TAG, "failed to validate updated country code PHY data partition");
         return ESP_FAIL;
@@ -1104,7 +1086,7 @@ esp_err_t esp_phy_update_init_data(phy_init_data_type_t init_data_type)
     }
 
     if (s_current_apply_phy_init_data != s_phy_init_data_type) {
-        err = esp_phy_apply_phy_init_data(init_data_store + PHY_INIT_MAGIC_LEN);
+        err = esp_phy_apply_phy_init_data(init_data_store + sizeof(phy_init_magic_pre));
         if (err != ESP_OK) {
             ESP_LOGE(TAG, "PHY init data failed to load");
             free(init_data_store);

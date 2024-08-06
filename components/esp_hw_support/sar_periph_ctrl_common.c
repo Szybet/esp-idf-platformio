@@ -27,12 +27,6 @@ static const char *TAG_TSENS = "temperature_sensor";
 
 #define INT_NOT_USED 999999
 
-#if !SOC_RCC_IS_INDEPENDENT
-#define TSENS_RCC_ATOMIC() PERIPH_RCC_ATOMIC()
-#else
-#define TSENS_RCC_ATOMIC()
-#endif
-
 static int s_record_min = INT_NOT_USED;
 static int s_record_max = INT_NOT_USED;
 static int s_temperature_sensor_power_cnt;
@@ -44,14 +38,11 @@ void temperature_sensor_power_acquire(void)
     portENTER_CRITICAL(&rtc_spinlock);
     s_temperature_sensor_power_cnt++;
     if (s_temperature_sensor_power_cnt == 1) {
-        regi2c_saradc_enable();
-#if !SOC_TSENS_IS_INDEPENDENT_FROM_ADC
         adc_apb_periph_claim();
-#endif
-        TSENS_RCC_ATOMIC() {
-            temperature_sensor_ll_bus_clk_enable(true);
-            temperature_sensor_ll_reset_module();
-        }
+        periph_module_enable(PERIPH_TEMPSENSOR_MODULE);
+        periph_module_reset(PERIPH_TEMPSENSOR_MODULE);
+        regi2c_saradc_enable();
+        temperature_sensor_ll_clk_enable(true);
         temperature_sensor_ll_enable(true);
     }
     portEXIT_CRITICAL(&rtc_spinlock);
@@ -67,14 +58,11 @@ void temperature_sensor_power_release(void)
         ESP_LOGE(TAG_TSENS, "%s called, but s_temperature_sensor_power_cnt == 0", __func__);
         abort();
     } else if (s_temperature_sensor_power_cnt == 0) {
+        temperature_sensor_ll_clk_enable(false);
         temperature_sensor_ll_enable(false);
-        TSENS_RCC_ATOMIC() {
-            temperature_sensor_ll_bus_clk_enable(false);
-        }
-#if !SOC_TSENS_IS_INDEPENDENT_FROM_ADC
-        adc_apb_periph_free();
-#endif
         regi2c_saradc_disable();
+        periph_module_disable(PERIPH_TEMPSENSOR_MODULE);
+        adc_apb_periph_free();
     }
     portEXIT_CRITICAL(&rtc_spinlock);
 }

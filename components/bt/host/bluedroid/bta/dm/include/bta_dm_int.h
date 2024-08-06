@@ -54,18 +54,10 @@ enum {
     BTA_DM_API_DISABLE_EVT,
     BTA_DM_API_SET_NAME_EVT,
     BTA_DM_API_GET_NAME_EVT,
-#if (ESP_COEX_VSC_INCLUDED == TRUE)
-    BTA_DM_API_CFG_COEX_ST_EVT,
-#endif
     BTA_DM_API_SEND_VENDOR_HCI_CMD_EVT,
 #if (CLASSIC_BT_INCLUDED == TRUE)
     BTA_DM_API_CONFIG_EIR_EVT,
-    BTA_DM_API_PAGE_TO_SET_EVT,
-    BTA_DM_API_PAGE_TO_GET_EVT,
     BTA_DM_API_SET_ACL_PKT_TYPES_EVT,
-#if (ENC_KEY_SIZE_CTRL_MODE != ENC_KEY_SIZE_CTRL_MODE_NONE)
-    BTA_DM_API_SET_MIN_ENC_KEY_SIZE_EVT,
-#endif
 #endif
     BTA_DM_API_SET_AFH_CHANNELS_EVT,
 #if (SDP_INCLUDED == TRUE)
@@ -93,13 +85,13 @@ enum {
     BTA_DM_API_QOS_SET_EVT,
 #endif /* #if (BTA_DM_QOS_INCLUDED == TRUE) */
 #if (SMP_INCLUDED == TRUE)
-#if (CLASSIC_BT_INCLUDED == TRUE)
     /* simple pairing events */
     BTA_DM_API_CONFIRM_EVT,
+#if (BT_SSP_INCLUDED == TRUE)
     BTA_DM_API_KEY_REQ_EVT,
-#endif /* (CLASSIC_BT_INCLUDED == TRUE) */
+#endif ///BT_SSP_INCLUDED == TRUE
     BTA_DM_API_SET_ENCRYPTION_EVT,
-#endif /* (SMP_INCLUDED == TRUE) */
+#endif  ///SMP_INCLUDED == TRUE
 #if (BTM_OOB_INCLUDED == TRUE && SMP_INCLUDED == TRUE)
     BTA_DM_API_LOC_OOB_EVT,
     BTA_DM_API_OOB_REPLY_EVT,
@@ -256,23 +248,12 @@ typedef struct {
 typedef struct {
     BT_HDR              hdr;
     BD_NAME             name; /* max 248 bytes name, plus must be Null terminated */
-    tBT_DEVICE_TYPE     name_type; /* name for BLE, name for BT or name for BTDM */
 } tBTA_DM_API_SET_NAME;
 
 typedef struct {
-    BT_HDR                  hdr;
+    BT_HDR              hdr;
     tBTA_GET_DEV_NAME_CBACK *p_cback;
-    tBT_DEVICE_TYPE         name_type;
 } tBTA_DM_API_GET_NAME;
-
-#if (ESP_COEX_VSC_INCLUDED == TRUE)
-typedef struct {
-    BT_HDR hdr;
-    UINT8  op;
-    UINT8  type;
-    UINT8  status;
-} tBTA_DM_API_CFG_COEX_STATUS;
-#endif
 
 typedef struct {
     BT_HDR    hdr;
@@ -304,19 +285,6 @@ typedef struct {
     tBTA_CMPL_CB        *set_afh_cb;
 }tBTA_DM_API_SET_AFH_CHANNELS;
 
-/* data type for BTA_DM_API_PAGE_TO_SET_EVT */
-typedef struct {
-    BT_HDR              hdr;
-    UINT16              page_to;
-    tBTM_CMPL_CB        *set_page_to_cb;
-} tBTA_DM_API_PAGE_TO_SET;
-
-/* data type for BTA_DM_API_PAGE_TO_GET_EVT */
-typedef struct {
-    BT_HDR              hdr;
-    tBTM_CMPL_CB        *get_page_to_cb;
-} tBTA_DM_API_PAGE_TO_GET;
-
 /* data type for BTA_DM_API_SET_ACL_PKT_TYPES_EVT */
 typedef struct {
     BT_HDR              hdr;
@@ -324,15 +292,6 @@ typedef struct {
     UINT16              pkt_types;
     tBTM_CMPL_CB        *set_acl_pkt_types_cb;
 } tBTA_DM_API_SET_ACL_PKT_TYPES;
-
-#if (ENC_KEY_SIZE_CTRL_MODE != ENC_KEY_SIZE_CTRL_MODE_NONE)
-/* data type for BTA_DM_API_SET_MIN_ENC_KEY_SIZE_EVT */
-typedef struct {
-    BT_HDR              hdr;
-    UINT8               key_size;
-    tBTM_CMPL_CB        *set_min_enc_key_size_cb;
-} tBTA_DM_API_SET_MIN_ENC_KEY_SIZE;
-#endif
 
 /* data type for BTA_DM_API_GET_REMOTE_NAME_EVT */
 typedef struct {
@@ -1207,19 +1166,11 @@ typedef union {
 
     tBTA_DM_API_SET_NAME set_name;
     tBTA_DM_API_GET_NAME get_name;
-#if (ESP_COEX_VSC_INCLUDED == TRUE)
-    tBTA_DM_API_CFG_COEX_STATUS cfg_coex_status;
-#endif
     tBTA_DM_API_SEND_VENDOR_HCI_CMD vendor_hci_cmd;
     tBTA_DM_API_CONFIG_EIR config_eir;
 
     tBTA_DM_API_SET_AFH_CHANNELS set_afh_channels;
-    tBTA_DM_API_PAGE_TO_SET set_page_timeout;
-    tBTA_DM_API_PAGE_TO_GET get_page_timeout;
     tBTA_DM_API_SET_ACL_PKT_TYPES set_acl_pkt_types;
-#if (ENC_KEY_SIZE_CTRL_MODE != ENC_KEY_SIZE_CTRL_MODE_NONE)
-    tBTA_DM_API_SET_MIN_ENC_KEY_SIZE set_min_enc_key_size;
-#endif
 #if (SDP_INCLUDED == TRUE)
     tBTA_DM_API_GET_REMOTE_NAME  get_rmt_name;
 #endif
@@ -1728,18 +1679,10 @@ extern void bta_dm_enable (tBTA_DM_MSG *p_data);
 extern void bta_dm_disable (tBTA_DM_MSG *p_data);
 extern void bta_dm_set_dev_name (tBTA_DM_MSG *p_data);
 extern void bta_dm_get_dev_name (tBTA_DM_MSG *p_data);
-#if (ESP_COEX_VSC_INCLUDED == TRUE)
-extern void bta_dm_cfg_coex_status(tBTA_DM_MSG *p_data);
-#endif
 extern void bta_dm_send_vendor_hci(tBTA_DM_MSG *p_data);
 #if (CLASSIC_BT_INCLUDED == TRUE)
 extern void bta_dm_config_eir (tBTA_DM_MSG *p_data);
-extern void bta_dm_set_page_timeout (tBTA_DM_MSG *p_data);
-extern void bta_dm_get_page_timeout (tBTA_DM_MSG *p_data);
 extern void bta_dm_set_acl_pkt_types (tBTA_DM_MSG *p_data);
-#if (ENC_KEY_SIZE_CTRL_MODE != ENC_KEY_SIZE_CTRL_MODE_NONE)
-extern void bta_dm_set_min_enc_key_size (tBTA_DM_MSG *p_data);
-#endif
 #endif
 extern void bta_dm_set_afh_channels (tBTA_DM_MSG *p_data);
 extern void bta_dm_read_rmt_name(tBTA_DM_MSG *p_data);
@@ -1797,6 +1740,9 @@ extern void bta_dm_ble_set_scan_rsp_raw (tBTA_DM_MSG *p_data);
 extern void bta_dm_ble_broadcast (tBTA_DM_MSG *p_data);
 extern void bta_dm_ble_set_data_length(tBTA_DM_MSG *p_data);
 extern void bta_dm_ble_update_duplicate_exceptional_list(tBTA_DM_MSG *p_data);
+#if SMP_INCLUDED == TRUE
+extern void bta_dm_co_security_param_init(void);
+#endif
 #if BLE_ANDROID_CONTROLLER_SCAN_FILTER == TRUE
 extern void bta_dm_cfg_filter_cond (tBTA_DM_MSG *p_data);
 extern void bta_dm_scan_filter_param_setup (tBTA_DM_MSG *p_data);

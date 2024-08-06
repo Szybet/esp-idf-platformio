@@ -1,5 +1,5 @@
-set(requires lightbulb_driver)
 
-idf_component_register(SRC_DIRS
-                    INCLUDE_DIRS
-                    REQUIRES ${requires})
+# requirements can't depend on config
+set(COMPONENT_REQUIRES example_nvs driver lightbulb_driver)
+
+register_component()

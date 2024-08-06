@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2021-2023 Espressif Systems (Shanghai) CO LTD
+ * SPDX-FileCopyrightText: 2021-2024 Espressif Systems (Shanghai) CO LTD
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -20,9 +20,8 @@
 #include "esp_vfs_dev.h"
 #include "common/logging.hpp"
 #include "driver/uart.h"
-#include "driver/uart_vfs.h"
 #include "utils/uart.h"
-#include "driver/usb_serial_jtag_vfs.h"
+#include "esp_vfs_usb_serial_jtag.h"
 #include "driver/usb_serial_jtag.h"
 
 static int s_uart_port;
@@ -62,6 +61,16 @@ otError otPlatUartSend(const uint8_t *buf, uint16_t buf_length)
 
 esp_err_t esp_openthread_uart_init_port(const esp_openthread_uart_config_t *config)
 {
+#ifndef CONFIG_ESP_CONSOLE_UART
+    // If UART console is used, UART vfs devices should be registered during startup.
+    // Otherwise we need to register them here.
+    DIR *uart_dir = opendir("/dev/uart");
+    if (!uart_dir) {
+        esp_vfs_dev_uart_register();
+    } else {
+        closedir(uart_dir);
+    }
+#endif
     ESP_RETURN_ON_ERROR(uart_param_config(config->port, &config->uart_config), OT_PLAT_LOG_TAG,
                         "uart_param_config failed");
     ESP_RETURN_ON_ERROR(
@@ -69,7 +78,7 @@ esp_err_t esp_openthread_uart_init_port(const esp_openthread_uart_config_t *conf
         OT_PLAT_LOG_TAG, "uart_set_pin failed");
     ESP_RETURN_ON_ERROR(uart_driver_install(config->port, ESP_OPENTHREAD_UART_BUFFER_SIZE, 0, 0, NULL, 0),
                         OT_PLAT_LOG_TAG, "uart_driver_install failed");
-    uart_vfs_dev_use_driver(config->port);
+    esp_vfs_dev_uart_use_driver(config->port);
     return ESP_OK;
 }
 
@@ -81,17 +90,16 @@ esp_err_t esp_openthread_host_cli_usb_init(const esp_openthread_platform_config_
     setvbuf(stdin, NULL, _IONBF, 0);
 
     /* Minicom, screen, idf_monitor send CR when ENTER key is pressed */
-    usb_serial_jtag_vfs_set_rx_line_endings(ESP_LINE_ENDINGS_CR);
+    esp_vfs_dev_usb_serial_jtag_set_rx_line_endings(ESP_LINE_ENDINGS_CR);
     /* Move the caret to the beginning of the next line on '\n' */
-    usb_serial_jtag_vfs_set_tx_line_endings(ESP_LINE_ENDINGS_CRLF);
+    esp_vfs_dev_usb_serial_jtag_set_tx_line_endings(ESP_LINE_ENDINGS_CRLF);
 
     /* Enable non-blocking mode on stdin and stdout */
     fcntl(fileno(stdout), F_SETFL, O_NONBLOCK);
     fcntl(fileno(stdin), F_SETFL, O_NONBLOCK);
 
     ret = usb_serial_jtag_driver_install((usb_serial_jtag_driver_config_t *)&config->host_config.host_usb_config);
-    usb_serial_jtag_vfs_use_driver();
-    uart_vfs_dev_register();
+    esp_vfs_usb_serial_jtag_use_driver();
     return ret;
 }
 #endif
@@ -114,8 +122,8 @@ esp_err_t esp_openthread_host_rcp_uart_init(const esp_openthread_platform_config
     ESP_RETURN_ON_ERROR(esp_openthread_uart_init_port(&config->host_config.host_uart_config), OT_PLAT_LOG_TAG,
                         "esp_openthread_uart_init_port failed");
 
-    uart_vfs_dev_port_set_rx_line_endings(s_uart_port, ESP_LINE_ENDINGS_LF);
-    uart_vfs_dev_port_set_tx_line_endings(s_uart_port, ESP_LINE_ENDINGS_LF);
+    esp_vfs_dev_uart_port_set_rx_line_endings(s_uart_port, ESP_LINE_ENDINGS_LF);
+    esp_vfs_dev_uart_port_set_tx_line_endings(s_uart_port, ESP_LINE_ENDINGS_LF);
     snprintf(uart_path, sizeof(uart_path), "/dev/uart/%d", s_uart_port);
     s_uart_fd = open(uart_path, O_RDWR | O_NONBLOCK);
     ESP_RETURN_ON_FALSE(s_uart_fd >= 0, ESP_FAIL, OT_PLAT_LOG_TAG, "open uart_path failed");

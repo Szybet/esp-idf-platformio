@@ -4,11 +4,6 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-/*
- * This file contains the implementation for some the functions in
- * idf_additions.h
- */
-
 #include "sdkconfig.h"
 #include <stdint.h>
 #include "freertos/FreeRTOS.h"
@@ -22,11 +17,18 @@
 #include "freertos/idf_additions.h"
 #include "esp_heap_caps.h"
 
-/* -------------------------------------------- Creation With Memory Caps ------------------------------------------- */
+/*
+ * This file contains the implementation for some the functions in
+ * idf_additions.h
+ */
 
-/* ---------------------------------- Tasks --------------------------------- */
+/* -----------------------------------------------------------------------------
+ * Creation With Memory Caps
+ * -------------------------------------------------------------------------- */
 
 #if ( configSUPPORT_STATIC_ALLOCATION == 1 )
+
+/* ---------------------------------- Tasks --------------------------------- */
 
     BaseType_t xTaskCreatePinnedToCoreWithCaps( TaskFunction_t pvTaskCode,
                                                 const char * const pcName,
@@ -76,11 +78,6 @@ err:
         return pdFAIL;
     }
 
-#endif /* if ( configSUPPORT_STATIC_ALLOCATION == 1 ) */
-/*----------------------------------------------------------*/
-
-#if ( configSUPPORT_STATIC_ALLOCATION == 1 )
-
     void vTaskDeleteWithCaps( TaskHandle_t xTaskToDelete )
     {
         BaseType_t xResult;
@@ -98,12 +95,7 @@ err:
         vPortFree( pxTaskBuffer );
     }
 
-#endif /* if ( configSUPPORT_STATIC_ALLOCATION == 1 ) */
-/*----------------------------------------------------------*/
-
 /* ---------------------------------- Queue --------------------------------- */
-
-#if ( configSUPPORT_STATIC_ALLOCATION == 1 )
 
     QueueHandle_t xQueueCreateWithCaps( UBaseType_t uxQueueLength,
                                         UBaseType_t uxItemSize,
@@ -146,11 +138,6 @@ err:
         return NULL;
     }
 
-#endif /* if ( configSUPPORT_STATIC_ALLOCATION == 1 ) */
-/*----------------------------------------------------------*/
-
-#if ( configSUPPORT_STATIC_ALLOCATION == 1 )
-
     void vQueueDeleteWithCaps( QueueHandle_t xQueue )
     {
         BaseType_t xResult;
@@ -169,12 +156,7 @@ err:
         heap_caps_free( pucQueueStorageBuffer );
     }
 
-#endif /* if ( configSUPPORT_STATIC_ALLOCATION == 1 ) */
-/*----------------------------------------------------------*/
-
 /* -------------------------------- Semaphore ------------------------------- */
-
-#if ( configSUPPORT_STATIC_ALLOCATION == 1 )
 
     SemaphoreHandle_t xSemaphoreCreateGenericWithCaps( UBaseType_t uxMaxCount,
                                                        UBaseType_t uxInitialCount,
@@ -218,11 +200,6 @@ err:
         return xSemaphore;
     }
 
-#endif /* if ( configSUPPORT_STATIC_ALLOCATION == 1 ) */
-/*----------------------------------------------------------*/
-
-#if ( configSUPPORT_STATIC_ALLOCATION == 1 )
-
     void vSemaphoreDeleteWithCaps( SemaphoreHandle_t xSemaphore )
     {
         BaseType_t xResult;
@@ -240,12 +217,7 @@ err:
         heap_caps_free( pxSemaphoreBuffer );
     }
 
-#endif /* if ( configSUPPORT_STATIC_ALLOCATION == 1 ) */
-/*----------------------------------------------------------*/
-
 /* ------------------------- Stream & Message Buffers ----------------------- */
-
-#if ( configSUPPORT_STATIC_ALLOCATION == 1 )
 
     StreamBufferHandle_t xStreamBufferGenericCreateWithCaps( size_t xBufferSizeBytes,
                                                              size_t xTriggerLevelBytes,
@@ -289,11 +261,6 @@ err:
         return NULL;
     }
 
-#endif /* if ( configSUPPORT_STATIC_ALLOCATION == 1 ) */
-/*----------------------------------------------------------*/
-
-#if ( configSUPPORT_STATIC_ALLOCATION == 1 )
-
     void vStreamBufferGenericDeleteWithCaps( StreamBufferHandle_t xStreamBuffer,
                                              BaseType_t xIsMessageBuffer )
     {
@@ -329,12 +296,7 @@ err:
         heap_caps_free( pucStreamBufferStorageArea );
     }
 
-#endif /* if ( configSUPPORT_STATIC_ALLOCATION == 1 ) */
-/*----------------------------------------------------------*/
-
 /* ------------------------------ Event Groups ------------------------------ */
-
-#if ( configSUPPORT_STATIC_ALLOCATION == 1 )
 
     EventGroupHandle_t xEventGroupCreateWithCaps( UBaseType_t uxMemoryCaps )
     {
@@ -360,11 +322,6 @@ err:
         return xEventGroup;
     }
 
-#endif /* if ( configSUPPORT_STATIC_ALLOCATION == 1 ) */
-/*----------------------------------------------------------*/
-
-#if ( configSUPPORT_STATIC_ALLOCATION == 1 )
-
     void vEventGroupDeleteWithCaps( EventGroupHandle_t xEventGroup )
     {
         BaseType_t xResult;
@@ -383,4 +340,3 @@ err:
     }
 
 #endif /* if ( configSUPPORT_STATIC_ALLOCATION == 1 ) */
-/*----------------------------------------------------------*/

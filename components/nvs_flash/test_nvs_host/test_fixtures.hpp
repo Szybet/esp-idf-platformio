@@ -1,8 +1,16 @@
-/*
- * SPDX-FileCopyrightText: 2015-2023 Espressif Systems (Shanghai) CO LTD
- *
- * SPDX-License-Identifier: Apache-2.0
- */
+// Copyright 2015-2016 Espressif Systems (Shanghai) PTE LTD
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 #include "nvs_partition.hpp"
 #include "nvs_encrypted_partition.hpp"
 #include "spi_flash_emulation.h"
@@ -19,7 +27,6 @@ public:
         assert(partition_name);
         assert(flash_emu);
         assert(size);
-        readonly = false;
     }
 
     const char *get_partition_name() override
@@ -94,11 +101,6 @@ public:
         return size;
     }
 
-    bool get_readonly() override
-    {
-        return readonly;
-    }
-
 private:
     const char *partition_name;
 
@@ -107,8 +109,6 @@ private:
     uint32_t address;
 
     uint32_t size;
-
-    bool readonly;
 };
 
 struct PartitionEmulationFixture {

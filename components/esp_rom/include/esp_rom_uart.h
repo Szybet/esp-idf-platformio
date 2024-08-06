@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2010-2024 Espressif Systems (Shanghai) CO LTD
+ * SPDX-FileCopyrightText: 2010-2023 Espressif Systems (Shanghai) CO LTD
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -11,7 +11,6 @@ extern "C" {
 #endif
 
 #include <stdint.h>
-#include "hal/uart_ll.h"
 
 #define ESP_ROM_CDC_ACM_WORK_BUF_MIN 128
 
@@ -24,31 +23,25 @@ typedef enum {
 /**
  * @brief Wait for UART TX FIFO is empty and all data has been sent out.
  *
- * @param serial_num The serial number defined in ROM, including UART_x, USB_OTG, USB_SERIAL_JTAG..
+ * @param uart_no UART port number
  */
-void esp_rom_output_tx_wait_idle(uint8_t serial_num);
-
-void esp_rom_uart_tx_wait_idle(uint8_t serial_num) __attribute__((deprecated("Please use esp_rom_output_tx_wait_idle instead")));
+void esp_rom_uart_tx_wait_idle(uint8_t uart_no);
 
 /**
  * @brief Set clock source and baud rate for UART.
  *
- * @param serial_num UART port number
+ * @param uart_no UART port number
  * @param clock_hz Source clock (in Hz)
  * @param baud_rate Baud rate to set
- *
- * @note Only for HP UART
  */
-#define esp_rom_uart_set_clock_baudrate(serial_num, clock_hz, baud_rate) uart_ll_set_baudrate(UART_LL_GET_HW(serial_num), baud_rate, clock_hz)
+void esp_rom_uart_set_clock_baudrate(uint8_t uart_no, uint32_t clock_hz, uint32_t baud_rate);
 
 /**
  * @brief Wait until UART TX FIFO is empty (i.e. flush TX FIFO)
  *
- * @param serial_num UART port number
+ * @param uart_no UART port number
  */
-void esp_rom_output_flush_tx(uint8_t serial_num);
-
-void esp_rom_uart_flush_tx(uint8_t serial_num) __attribute__((deprecated("Please use esp_rom_output_flush_tx instead")));
+void esp_rom_uart_flush_tx(uint8_t uart_no);
 
 /**
  * @brief Transmit one character to the console channel.
@@ -58,9 +51,7 @@ void esp_rom_uart_flush_tx(uint8_t serial_num) __attribute__((deprecated("Please
  *      - 0 on success
  *      - 1 on failure
  */
-int esp_rom_output_tx_one_char(uint8_t c);
-
-int esp_rom_uart_tx_one_char(uint8_t c) __attribute__((deprecated("Please use esp_rom_output_tx_one_char instead")));
+int esp_rom_uart_tx_one_char(uint8_t c);
 
 /**
  * @brief Transmit one character to the console channel.
@@ -68,9 +59,7 @@ int esp_rom_uart_tx_one_char(uint8_t c) __attribute__((deprecated("Please use es
  *
  * @param c Character to send
  */
-void esp_rom_output_putc(char c);
-
-void esp_rom_uart_putc(char c) __attribute__((deprecated("Please use esp_rom_output_putc instead")));
+void esp_rom_uart_putc(char c);
 
 /**
  * @brief Get one character from the console channel.
@@ -80,9 +69,7 @@ void esp_rom_uart_putc(char c) __attribute__((deprecated("Please use esp_rom_out
  *      - 0 on success
  *      - 1 on failure or no data available
  */
-int esp_rom_output_rx_one_char(uint8_t *c);
-
-int esp_rom_uart_rx_one_char(uint8_t *c) __attribute__((deprecated("Please use esp_rom_output_rx_one_char instead")));
+int esp_rom_uart_rx_one_char(uint8_t *c);
 
 /**
  * @brief Get one line of string from console channel (line ending won't be stored in the buffer).
@@ -91,9 +78,7 @@ int esp_rom_uart_rx_one_char(uint8_t *c) __attribute__((deprecated("Please use e
  * @param max_len Maximum length of the buffer (including the NULL delimiter)
  * @return always return 0 when on success or wait in a loop for rx data
  */
-int esp_rom_output_rx_string(uint8_t *str, uint8_t max_len);
-
-int esp_rom_uart_rx_string(uint8_t *str, uint8_t max_len) __attribute__((deprecated("Please use esp_rom_output_rx_string instead")));
+int esp_rom_uart_rx_string(uint8_t *str, uint8_t max_len);
 
 /**
  * @brief Set the UART port used by ets_printf.
@@ -101,11 +86,9 @@ int esp_rom_uart_rx_string(uint8_t *str, uint8_t max_len) __attribute__((depreca
  * @note USB-CDC port is also treated as "UART" port in the ROM code.
  *       Use ESP_ROM_USB_SERIAL_DEVICE_NUM or ESP_ROM_USB_OTG_NUM to identify USB_SERIAL_JTAG and USB_OTG, respectively.
  *
- * @param serial_num UART port number
+ * @param uart_no UART port number
  */
-void esp_rom_output_set_as_console(uint8_t serial_num);
-
-void esp_rom_uart_set_as_console(uint8_t serial_num) __attribute__((deprecated("Please use esp_rom_output_set_as_console instead")));
+void esp_rom_uart_set_as_console(uint8_t uart_no);
 
 /**
  * @brief Switch the UART port that will use a buffer for TX and RX.
@@ -113,11 +96,9 @@ void esp_rom_uart_set_as_console(uint8_t serial_num) __attribute__((deprecated("
  * @note USB-CDC port is also treated as "UART" port in the ROM code.
  *       Use ESP_ROM_USB_SERIAL_DEVICE_NUM or ESP_ROM_USB_OTG_NUM to identify USB_SERIAL_JTAG and USB_OTG, respectively.
  *
- * @param serial_num UART port number
+ * @param uart_no UART port number
  */
-void esp_rom_output_switch_buffer(uint8_t serial_num);
-
-void esp_rom_uart_switch_buffer(uint8_t serial_num) __attribute__((deprecated("Please use esp_rom_output_switch_buffer instead")));
+void esp_rom_uart_switch_buffer(uint8_t uart_no);
 
 /**
  * @brief Initialize the USB ACM UART
@@ -126,9 +107,7 @@ void esp_rom_uart_switch_buffer(uint8_t serial_num) __attribute__((deprecated("P
  * @param cdc_acm_work_mem Pointer to the work memroy used for CDC-ACM
  * @param cdc_acm_work_mem_len Length of work memory
  */
-void esp_rom_output_usb_acm_init(void *cdc_acm_work_mem, int cdc_acm_work_mem_len);
-
-void esp_rom_uart_usb_acm_init(uint8_t serial_num) __attribute__((deprecated("Please use esp_rom_output_usb_acm_init instead")));
+void esp_rom_uart_usb_acm_init(void *cdc_acm_work_mem, int cdc_acm_work_mem_len);
 
 #ifdef __cplusplus
 }

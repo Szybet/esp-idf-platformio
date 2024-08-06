@@ -14,9 +14,11 @@ menu "Core dump"
 
         config ESP_COREDUMP_ENABLE_TO_FLASH
             bool "Flash"
+            select FREERTOS_ENABLE_TASK_SNAPSHOT
             select ESP_COREDUMP_ENABLE
         config ESP_COREDUMP_ENABLE_TO_UART
             bool "UART"
+            select FREERTOS_ENABLE_TASK_SNAPSHOT
             select ESP_COREDUMP_ENABLE
         config ESP_COREDUMP_ENABLE_TO_NONE
             bool "None"
@@ -84,16 +86,6 @@ menu "Core dump"
             Config delay (in ms) before printing core dump to UART.
             Delay can be interrupted by pressing Enter key.
 
-    config ESP_COREDUMP_FLASH_NO_OVERWRITE
-        bool "Don't overwrite existing core dump"
-        depends on ESP_COREDUMP_ENABLE_TO_FLASH
-        default n
-        help
-            Don't overwrite an existing core dump already present in flash.
-            Enable this option to only keep the first of multiple core dumps.
-
-            If enabled, the core dump partition must be erased before the first
-            core dump can be written.
 
     config ESP_COREDUMP_USE_STACK_SIZE
         bool

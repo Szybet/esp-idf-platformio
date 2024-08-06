@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2022-2024 Espressif Systems (Shanghai) CO LTD
+ * SPDX-FileCopyrightText: 2022-2023 Espressif Systems (Shanghai) CO LTD
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -8,11 +8,10 @@
 
 #include <stdint.h>
 #include <stdbool.h>
-#include "hal/assert.h"
 #include "soc/periph_defs.h"
 #include "soc/pcr_reg.h"
 #include "soc/soc.h"
-#include "soc/soc_caps.h"
+#include "soc/lpperi_reg.h"
 #include "esp_attr.h"
 
 #ifdef __cplusplus
@@ -78,8 +77,11 @@ static inline uint32_t periph_ll_get_clk_en_mask(periph_module_t periph)
             return PCR_TSENS_CLK_EN;
         case PERIPH_SDIO_SLAVE_MODULE:
             return PCR_SDIO_SLAVE_CLK_EN;
-        case PERIPH_ASSIST_DEBUG_MODULE:
-            return PCR_ASSIST_CLK_EN;
+        case PERIPH_REGDMA_MODULE:
+            return PCR_REGDMA_CLK_EN;
+        //TODO: LP_PERIPH modules are added temporarily and will be moved to a separate API (IDF-7374).
+        case PERIPH_LP_I2C0_MODULE:
+            return LPPERI_LP_EXT_I2C_CK_EN;
         default:
             return 0;
     }
@@ -159,14 +161,17 @@ static inline uint32_t periph_ll_get_rst_en_mask(periph_module_t periph, bool en
             return PCR_DS_RST_EN;
         case PERIPH_SDIO_SLAVE_MODULE:
             return PCR_SDIO_SLAVE_RST_EN;
-        case PERIPH_ASSIST_DEBUG_MODULE:
-            return PCR_ASSIST_RST_EN;
+        case PERIPH_REGDMA_MODULE:
+            return PCR_REGDMA_RST_EN;
+        //TODO: LP_PERIPH modules are added temporarily and will be moved to a separate API (IDF-7374).
+        case PERIPH_LP_I2C0_MODULE:
+            return LPPERI_LP_EXT_I2C_RESET_EN;
         default:
             return 0;
     }
 }
 
-static inline uint32_t periph_ll_get_clk_en_reg(periph_module_t periph)
+static uint32_t periph_ll_get_clk_en_reg(periph_module_t periph)
 {
     switch (periph) {
         case PERIPH_SARADC_MODULE:
@@ -225,14 +230,17 @@ static inline uint32_t periph_ll_get_clk_en_reg(periph_module_t periph)
             return PCR_TSENS_CLK_CONF_REG;
         case PERIPH_SDIO_SLAVE_MODULE:
             return PCR_SDIO_SLAVE_CONF_REG;
-        case PERIPH_ASSIST_DEBUG_MODULE:
-            return PCR_ASSIST_CONF_REG;
+        case PERIPH_REGDMA_MODULE:
+            return PCR_REGDMA_CONF_REG;
+        //TODO: LP_PERIPH modules are added temporarily and will be moved to a separate API (IDF-7374).
+        case PERIPH_LP_I2C0_MODULE:
+            return LPPERI_CLK_EN_REG;
     default:
         return 0;
     }
 }
 
-static inline uint32_t periph_ll_get_rst_en_reg(periph_module_t periph)
+static uint32_t periph_ll_get_rst_en_reg(periph_module_t periph)
 {
     switch (periph) {
         case PERIPH_SARADC_MODULE:
@@ -291,8 +299,11 @@ static inline uint32_t periph_ll_get_rst_en_reg(periph_module_t periph)
             return PCR_TSENS_CLK_CONF_REG;
         case PERIPH_SDIO_SLAVE_MODULE:
             return PCR_SDIO_SLAVE_CONF_REG;
-        case PERIPH_ASSIST_DEBUG_MODULE:
-            return PCR_ASSIST_CONF_REG;
+        case PERIPH_REGDMA_MODULE:
+            return PCR_REGDMA_CONF_REG;
+        //TODO: LP_PERIPH modules are added temporarily and will be moved to a separate API (IDF-7374).
+        case PERIPH_LP_I2C0_MODULE:
+            return LPPERI_RESET_EN_REG;
     default:
         return 0;
     }

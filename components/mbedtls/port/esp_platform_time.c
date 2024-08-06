@@ -8,7 +8,7 @@
 #include "mbedtls/platform_time.h"
 
 #ifdef MBEDTLS_PLATFORM_MS_TIME_ALT
-mbedtls_ms_time_t mbedtls_ms_time(void)
+mbedtls_ms_time_t mbedtls_ms_time()
 {
     int ret;
     struct timespec tv = {};

@@ -62,7 +62,7 @@ class PanicTestDut(IdfDut):
 
     @property
     def is_multi_core(self) -> bool:
-        return self.target in ['esp32', 'esp32s3', 'esp32p4']
+        return self.target in ['esp32', 'esp32s3']
 
     def run_test_func(self, test_func_name: str) -> None:
         self.expect_exact('Enter test name:')
@@ -102,15 +102,11 @@ class PanicTestDut(IdfDut):
         """Expect method for the register dump"""
         self.expect(r'Core\s+%d register dump:' % core)
 
-    def expect_cpu_reset(self) -> None:
-        # no digital system reset for panic handling restarts (see IDF-7255)
-        self.expect(r'.*rst:.*(RTC_SW_CPU_RST|SW_CPU_RESET|SW_CPU)')
-
     def expect_elf_sha256(self) -> None:
         """Expect method for ELF SHA256 line"""
         elf_sha256 = sha256(self.app.elf_file)
         elf_sha256_len = int(
-            self.app.sdkconfig.get('CONFIG_APP_RETRIEVE_LEN_ELF_SHA', '9')
+            self.app.sdkconfig.get('CONFIG_APP_RETRIEVE_LEN_ELF_SHA', '16')
         )
         self.expect_exact('ELF file SHA256: ' + elf_sha256[0:elf_sha256_len])
 
@@ -140,7 +136,6 @@ class PanicTestDut(IdfDut):
         espcoredump_args = [
             sys.executable,
             espcoredump_script,
-            '-b115200',
             'info_corefile',
             '--core',
             coredump_file_name,
@@ -196,20 +191,20 @@ class PanicTestDut(IdfDut):
         Runs GDB and connects it to the "serial" port of the DUT.
         After this, the DUT expect methods can no longer be used to capture output.
         """
-        gdb_args = ['--nx', '--quiet', '--interpreter=mi2']
         if self.is_xtensa:
             gdb_path = f'xtensa-{self.target}-elf-gdb'
         else:
             gdb_path = 'riscv32-esp-elf-gdb'
         try:
             from pygdbmi.constants import GdbTimeoutError
-            gdb_command = [gdb_path] + gdb_args
+            default_gdb_args = ['--nx', '--quiet', '--interpreter=mi2']
+            gdb_command = [gdb_path] + default_gdb_args
             self.gdbmi = GdbController(command=gdb_command)
             pygdbmi_logger = attach_logger()
         except ImportError:
             # fallback for pygdbmi<0.10.0.0.
             from pygdbmi.gdbcontroller import GdbTimeoutError
-            self.gdbmi = GdbController(gdb_path=gdb_path, gdb_args=gdb_args)
+            self.gdbmi = GdbController(gdb_path=gdb_path)
             pygdbmi_logger = self.gdbmi.logger
 
         # pygdbmi logs to console by default, make it log to a file instead

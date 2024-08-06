@@ -15,7 +15,7 @@ const esp_app_desc_t *esp_ota_get_app_description(void)
     return esp_app_get_description();
 }
 
-int esp_ota_get_app_elf_sha256(char* dst, size_t size)
+int IRAM_ATTR esp_ota_get_app_elf_sha256(char* dst, size_t size)
 {
    return esp_app_get_elf_sha256(dst, size);
 }

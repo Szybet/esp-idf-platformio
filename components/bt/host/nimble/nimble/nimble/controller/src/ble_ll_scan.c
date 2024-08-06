@@ -41,7 +41,6 @@
 #include "controller/ble_ll_trace.h"
 #include "controller/ble_ll_sync.h"
 #include "ble_ll_conn_priv.h"
-#include "ble_ll_priv.h"
 
 #if MYNEWT_VAL(BLE_LL_ROLE_OBSERVER)
 
@@ -362,6 +361,11 @@ ble_ll_scan_get_ext_adv_report(struct ext_adv_report *copy_from)
 
     return hci_ev;
 }
+
+void
+ble_ll_scan_end_adv_evt(struct ble_ll_aux_data *aux_data)
+{
+}
 #endif
 
 void
@@ -437,7 +441,7 @@ ble_ll_scan_add_scan_rsp_adv(uint8_t *addr, uint8_t txadd,
 
     /* XXX: for now, if we dont have room, just leave */
     num_advs = g_ble_ll_scan_num_rsp_advs;
-    if (num_advs >= MYNEWT_VAL(BLE_LL_NUM_SCAN_RSP_ADVS)) {
+    if (num_advs == MYNEWT_VAL(BLE_LL_NUM_SCAN_RSP_ADVS)) {
         return;
     }
 
@@ -697,14 +701,6 @@ ble_ll_scan_send_adv_report(uint8_t pdu_type,
     }
     if (BLE_MBUF_HDR_TARGETA_RESOLVED(hdr)) {
         inita_type += 2;
-    } else {
-#if MYNEWT_VAL(BLE_LL_CFG_FEAT_LL_EXT_ADV)
-        if (scansm->ext_scanning) {
-            if (ble_ll_is_rpa(inita, inita_type)) {
-                inita_type = 0xfe;
-            }
-        }
-#endif
     }
 #endif
 
@@ -712,7 +708,7 @@ ble_ll_scan_send_adv_report(uint8_t pdu_type,
     if (scansm->ext_scanning) {
         rc = ble_ll_hci_send_legacy_ext_adv_report(evtype,
                                                    adva, adva_type,
-                                                   hdr->rxinfo.rssi - ble_ll_rx_gain(),
+                                                   hdr->rxinfo.rssi,
                                                    adv_data_len, om,
                                                    inita, inita_type);
 goto done;
@@ -721,12 +717,11 @@ goto done;
 
     if (subev == BLE_HCI_LE_SUBEV_DIRECT_ADV_RPT) {
         rc = ble_ll_hci_send_dir_adv_report(adva, adva_type, inita, inita_type,
-                                            hdr->rxinfo.rssi - ble_ll_rx_gain());
+                                            hdr->rxinfo.rssi);
         goto done;
     }
 
-    rc = ble_ll_hci_send_adv_report(evtype, adva, adva_type,
-                                    hdr->rxinfo.rssi - ble_ll_rx_gain(),
+    rc = ble_ll_hci_send_adv_report(evtype, adva, adva_type, hdr->rxinfo.rssi,
                                     adv_data_len, om);
 done:
     if (!rc && scansm->scan_filt_dups) {
@@ -784,13 +779,6 @@ ble_ll_scan_start(struct ble_ll_scan_sm *scansm)
     phy_mode = ble_ll_phy_to_phy_mode(phy, BLE_HCI_LE_PHY_CODED_ANY);
     ble_phy_mode_set(phy_mode, phy_mode);
 #endif
-
-    /* if scan is not passive we need to set tx power as we may end up sending
-     * package
-     */
-    if (scansm->scanp->scan_type != BLE_SCAN_TYPE_PASSIVE) {
-        ble_ll_tx_power_set(g_ble_ll_tx_power);
-    }
 
     rc = ble_phy_rx_set_start_time(ble_ll_tmr_get() +
                                    g_ble_ll_sched_offset_ticks, 0);
@@ -892,6 +880,10 @@ ble_ll_scan_sm_stop(int chk_disable)
 
     OS_ENTER_CRITICAL(sr);
 
+#if MYNEWT_VAL(BLE_LL_ROLE_CENTRAL)
+    scansm->connsm = NULL;
+#endif
+
     /* Disable scanning state machine */
     scansm->scan_enabled = 0;
     scansm->restart_timer_needed = 0;
@@ -901,10 +893,6 @@ ble_ll_scan_sm_stop(int chk_disable)
         ble_ll_sched_rmv_elem_type(BLE_LL_SCHED_TYPE_SCAN_AUX, ble_ll_scan_aux_sched_remove);
         scansm->ext_scanning = 0;
     }
-#endif
-
-#if MYNEWT_VAL(BLE_LL_ROLE_CENTRAL)
-    scansm->connsm = NULL;
 #endif
 
     /* Update backoff if we failed to receive scan response */
@@ -1122,11 +1110,6 @@ ble_ll_scan_event_proc(struct ble_npl_event *ev)
         start_scan = false;
         break;
 #endif
-#if MYNEWT_VAL(BLE_LL_EXT)
-    case BLE_LL_STATE_EXTERNAL:
-        start_scan = false;
-        break;
-#endif
     case BLE_LL_STATE_SCANNING:
         /* Must disable PHY since we will move to a new channel */
         ble_phy_disable();
@@ -1134,11 +1117,6 @@ ble_ll_scan_event_proc(struct ble_npl_event *ev)
             ble_ll_state_set(BLE_LL_STATE_STANDBY);
         }
         break;
-#if MYNEWT_VAL(BLE_LL_ISO_BROADCASTER)
-    case BLE_LL_STATE_BIG:
-        start_scan = false;
-        break;
-#endif
     case BLE_LL_STATE_STANDBY:
         break;
     default:
@@ -1289,17 +1267,17 @@ ble_ll_scan_rx_filter(uint8_t own_addr_type, uint8_t scan_filt_policy,
 
     switch (ble_ll_addr_subtype(addrd->adva, addrd->adva_type)) {
     case BLE_LL_ADDR_SUBTYPE_RPA:
-        if (addrd->rpa_index >= 0) {
-            addrd->adva_resolved = 1;
-
-            /* Use resolved identity address as advertiser address */
-            rl = &g_ble_ll_resolv_list[addrd->rpa_index];
-            addrd->adv_addr = rl->rl_identity_addr;
-            addrd->adv_addr_type = rl->rl_addr_type;
+        if (addrd->rpa_index < 0) {
             break;
         }
 
-        /* fall-through */
+        addrd->adva_resolved = 1;
+
+        /* Use resolved identity address as advertiser address */
+        rl = &g_ble_ll_resolv_list[addrd->rpa_index];
+        addrd->adv_addr = rl->rl_identity_addr;
+        addrd->adv_addr_type = rl->rl_addr_type;
+        break;
     case BLE_LL_ADDR_SUBTYPE_IDENTITY:
         /* If AdvA is an identity address, we need to check if that device was
          * added to RL in order to use proper privacy mode.
@@ -1347,8 +1325,7 @@ ble_ll_scan_rx_filter(uint8_t own_addr_type, uint8_t scan_filt_policy,
             }
 
             /* Ignore if not directed to us */
-            if ((addrd->targeta_type != (own_addr_type & 0x01)) ||
-                !ble_ll_is_our_devaddr(addrd->targeta, addrd->targeta_type)) {
+            if (!ble_ll_is_our_devaddr(addrd->targeta, addrd->targeta_type)) {
                 return -1;
             }
             break;
@@ -1362,8 +1339,7 @@ ble_ll_scan_rx_filter(uint8_t own_addr_type, uint8_t scan_filt_policy,
 #else
     /* Ignore if not directed to us */
     if (addrd->targeta &&
-        ((addrd->targeta_type != (own_addr_type & 0x01)) ||
-         !ble_ll_is_our_devaddr(addrd->targeta, addrd->targeta_type))) {
+        !ble_ll_is_our_devaddr(addrd->targeta, addrd->targeta_type)) {
         return -1;
     }
 
@@ -1549,8 +1525,10 @@ ble_ll_scan_send_scan_req(uint8_t pdu_type, uint8_t *rxbuf,
     BLE_LL_ASSERT(scansm->scan_rsp_pending == 0);
 
     /* We want to send a request. See if backoff allows us */
-    if (ble_ll_scan_backoff_kick() != 0) {
-        return false;
+    if (scansm->backoff_count > 0) {
+        if (--scansm->backoff_count != 0) {
+            return false;
+        }
     }
 
 #if MYNEWT_VAL(BLE_LL_CFG_FEAT_LL_PRIVACY)
@@ -1696,7 +1674,7 @@ ble_ll_scan_chk_resume(void)
         OS_ENTER_CRITICAL(sr);
         if (scansm->restart_timer_needed) {
             scansm->restart_timer_needed = 0;
-            ble_ll_event_add(&scansm->scan_sched_ev);
+            ble_ll_event_send(&scansm->scan_sched_ev);
             STATS_INC(ble_ll_stats, scan_timer_restarted);
             OS_EXIT_CRITICAL(sr);
             return;
@@ -1726,13 +1704,13 @@ ble_ll_scan_timer_cb(void *arg)
     struct ble_ll_scan_sm *scansm;
 
     scansm = (struct ble_ll_scan_sm *)arg;
-    ble_ll_event_add(&scansm->scan_sched_ev);
+    ble_ll_event_send(&scansm->scan_sched_ev);
 }
 
 void
 ble_ll_scan_interrupted(struct ble_ll_scan_sm *scansm)
 {
-    ble_ll_event_add(&scansm->scan_interrupted_ev);
+    ble_ll_event_send(&scansm->scan_interrupted_ev);
 }
 
 /**
@@ -2321,27 +2299,6 @@ ble_ll_scan_set_enable(uint8_t enable, uint8_t filter_dups, uint16_t period,
     scansm = &g_ble_ll_scan_sm;
 
 #if MYNEWT_VAL(BLE_LL_CFG_FEAT_LL_EXT_ADV)
-    if (ext) {
-        /*
-         * If Enable is set to 0x01 and the Host has not issued the
-         * HCI_LE_Set_Extended_Scan_Parameters command, the Controller shall
-         * either use vendor-specified parameters or return the error code
-         * Command Disallowed (0x0C)
-         *
-         * To keep things simple for devices without public address we
-         * reject in such case.
-         */
-        for (i = 0; i < BLE_LL_SCAN_PHY_NUMBER; i++) {
-            if (g_ble_ll_scan_params.scan_phys[i].configured) {
-                break;
-            }
-        }
-
-        if (i == BLE_LL_SCAN_PHY_NUMBER) {
-            return BLE_ERR_CMD_DISALLOWED;
-        }
-    }
-
     /* we can do that here since value will never change until reset */
     scansm->ext_scanning = ext;
 

@@ -45,9 +45,6 @@ void example_wifi_shutdown(void);
 esp_err_t example_wifi_connect(void);
 void example_ethernet_shutdown(void);
 esp_err_t example_ethernet_connect(void);
-esp_err_t example_ppp_connect(void);
-void example_ppp_start(void);
-void example_ppp_shutdown(void);
 
 
 

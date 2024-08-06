@@ -18,7 +18,6 @@
 #include "ap/comeback_token.h"
 #include "crypto/random.h"
 #include "esp_wpa3_i.h"
-#include "esp_hostap.h"
 
 #ifdef CONFIG_SAE
 

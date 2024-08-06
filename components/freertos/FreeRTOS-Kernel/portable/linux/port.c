@@ -1,12 +1,11 @@
 /*
- * FreeRTOS Kernel V10.5.1 (ESP-IDF SMP modified)
- * Copyright (C) 2020 Cambridge Consultants Ltd.
- *
- * SPDX-FileCopyrightText: 2020 Cambridge Consultants Ltd
+ * SPDX-FileCopyrightText: 2020 Amazon.com, Inc. or its affiliates
  *
  * SPDX-License-Identifier: MIT
- *
- * SPDX-FileContributor: 2023 Espressif Systems (Shanghai) CO LTD
+ */
+/*
+ * FreeRTOS Kernel V10.4.3
+ * Copyright (C) 2020 Amazon.com, Inc. or its affiliates.  All Rights Reserved.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy of
  * this software and associated documentation files (the "Software"), to deal in
@@ -99,10 +98,10 @@ static pthread_once_t hSigSetupThread = PTHREAD_ONCE_INIT;
 static sigset_t xAllSignals;
 static sigset_t xSchedulerOriginalSignalMask;
 static pthread_t hMainThread = ( pthread_t )NULL;
-static volatile BaseType_t uxCriticalNesting;
+static volatile portBASE_TYPE uxCriticalNesting;
 /*-----------------------------------------------------------*/
 
-static BaseType_t xSchedulerEnd = pdFALSE;
+static portBASE_TYPE xSchedulerEnd = pdFALSE;
 /*-----------------------------------------------------------*/
 
 static void prvSetupSignalsAndSchedulerPolicy( void );
@@ -125,10 +124,9 @@ static void prvFatalError( const char *pcCall, int iErrno )
 /*
  * See header file for description.
  */
-StackType_t *pxPortInitialiseStack( StackType_t *pxTopOfStack,
-                                    StackType_t *pxEndOfStack,
-                                    TaskFunction_t pxCode,
-                                    void *pvParameters )
+portSTACK_TYPE *pxPortInitialiseStack( portSTACK_TYPE *pxTopOfStack,
+                                       portSTACK_TYPE *pxEndOfStack,
+                                       TaskFunction_t pxCode, void *pvParameters )
 {
     Thread_t *thread;
     pthread_attr_t xThreadAttributes;
@@ -141,7 +139,7 @@ StackType_t *pxPortInitialiseStack( StackType_t *pxTopOfStack,
      * Store the additional thread data at the start of the stack.
      */
     thread = (Thread_t *)(pxTopOfStack + 1) - 1;
-    pxTopOfStack = (StackType_t *)thread - 1;
+    pxTopOfStack = (portSTACK_TYPE *)thread - 1;
     ulStackSize = (pxTopOfStack + 1 - pxEndOfStack) * sizeof(*pxTopOfStack);
 
     thread->pxCode = pxCode;
@@ -180,7 +178,7 @@ void vPortStartFirstTask( void )
 /*
  * See header file for description.
  */
-BaseType_t xPortStartScheduler( void )
+portBASE_TYPE xPortStartScheduler( void )
 {
     int iSignal;
     sigset_t xSignals;
@@ -308,7 +306,7 @@ void vPortEnableInterrupts( void )
 }
 /*-----------------------------------------------------------*/
 
-BaseType_t xPortSetInterruptMask( void )
+portBASE_TYPE xPortSetInterruptMask( void )
 {
     /* Interrupts are always disabled inside ISRs (signals
        handlers). */
@@ -316,7 +314,7 @@ BaseType_t xPortSetInterruptMask( void )
 }
 /*-----------------------------------------------------------*/
 
-void vPortClearInterruptMask( BaseType_t xMask )
+void vPortClearInterruptMask( portBASE_TYPE xMask )
 {
 }
 /*-----------------------------------------------------------*/

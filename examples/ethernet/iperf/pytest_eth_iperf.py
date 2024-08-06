@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: 2022-2024 Espressif Systems (Shanghai) CO LTD
+# SPDX-FileCopyrightText: 2022-2023 Espressif Systems (Shanghai) CO LTD
 # SPDX-License-Identifier: Unlicense OR CC0-1.0
 """
 Test case for iperf example.
@@ -8,6 +8,8 @@ This test case might have problem running on Windows:
 - use `sudo killall iperf` to force kill iperf, didn't implement windows version
 
 """
+from __future__ import division, unicode_literals
+
 import os
 import subprocess
 
@@ -17,7 +19,7 @@ from idf_iperf_test_util import IperfUtility
 from pytest_embedded import Dut
 
 try:
-    from typing import Any, Callable, Tuple, Optional
+    from typing import Any, Callable, Tuple
 except ImportError:
     # Only used for type annotations
     pass
@@ -49,11 +51,12 @@ class IperfTestUtilityEth(IperfUtility.IperfTestUtility):
         return dut_ip, rssi
 
 
+@pytest.mark.esp32
+@pytest.mark.ethernet_router
 def test_esp_eth_iperf(
     dut: Dut,
     log_performance: Callable[[str, object], None],
     check_performance: Callable[[str, float, str], None],
-    spi_eth: Optional[bool] = False
 ) -> None:
     """
     steps: |
@@ -80,11 +83,7 @@ def test_esp_eth_iperf(
     test_utility.run_test('tcp', 'tx', 0, NO_BANDWIDTH_LIMIT)
     test_utility.run_test('tcp', 'rx', 0, NO_BANDWIDTH_LIMIT)
     test_utility.run_test('udp', 'tx', 0, 80)
-    # Limit speed to 10Mbps for SPI Ethernet PHYs
-    if spi_eth:
-        test_utility.run_test('udp', 'rx', 0, 10)
-    else:
-        test_utility.run_test('udp', 'rx', 0, NO_BANDWIDTH_LIMIT)
+    test_utility.run_test('udp', 'rx', 0, NO_BANDWIDTH_LIMIT)
 
     # 4. log performance and compare with pass standard
     for throughput_type in test_result:
@@ -93,115 +92,6 @@ def test_esp_eth_iperf(
 
     # do check after logging, otherwise test will exit immediately if check fail, some performance can't be logged.
     for throughput_type in test_result:
-        if spi_eth:
-            check_performance('{}_eth_throughput_spi_eth'.format(throughput_type),
-                              test_result[throughput_type].get_best_throughput(),
-                              dut.target)
-        else:
-            check_performance('{}_eth_throughput'.format(throughput_type),
-                              test_result[throughput_type].get_best_throughput(),
-                              dut.target)
-
-
-@pytest.mark.esp32
-@pytest.mark.ethernet_router
-@pytest.mark.parametrize('config', [
-    'default_ip101',
-], indirect=True)
-def test_esp_eth_iperf_ip101(
-    dut: Dut,
-    log_performance: Callable[[str, object], None],
-    check_performance: Callable[[str, float, str], None],
-) -> None:
-    test_esp_eth_iperf(dut, log_performance, check_performance)
-
-
-@pytest.mark.esp32
-@pytest.mark.eth_lan8720
-@pytest.mark.parametrize('config', [
-    'default_lan8720',
-], indirect=True)
-def test_esp_eth_iperf_lan8720(
-    dut: Dut,
-    log_performance: Callable[[str, object], None],
-    check_performance: Callable[[str, float, str], None],
-) -> None:
-    test_esp_eth_iperf(dut, log_performance, check_performance)
-
-
-@pytest.mark.esp32
-@pytest.mark.eth_rtl8201
-@pytest.mark.parametrize('config', [
-    'default_rtl8201',
-], indirect=True)
-def test_esp_eth_iperf_rtl8201(
-    dut: Dut,
-    log_performance: Callable[[str, object], None],
-    check_performance: Callable[[str, float, str], None],
-) -> None:
-    test_esp_eth_iperf(dut, log_performance, check_performance)
-
-
-@pytest.mark.esp32
-@pytest.mark.eth_dp83848
-@pytest.mark.parametrize('config', [
-    'default_dp83848',
-], indirect=True)
-def test_esp_eth_iperf_dp83848(
-    dut: Dut,
-    log_performance: Callable[[str, object], None],
-    check_performance: Callable[[str, float, str], None],
-) -> None:
-    test_esp_eth_iperf(dut, log_performance, check_performance)
-
-
-@pytest.mark.esp32
-@pytest.mark.eth_ksz8041
-@pytest.mark.parametrize('config', [
-    'default_ksz8041',
-], indirect=True)
-def test_esp_eth_iperf_ksz8041(
-    dut: Dut,
-    log_performance: Callable[[str, object], None],
-    check_performance: Callable[[str, float, str], None],
-) -> None:
-    test_esp_eth_iperf(dut, log_performance, check_performance)
-
-
-@pytest.mark.esp32
-@pytest.mark.eth_dm9051
-@pytest.mark.parametrize('config', [
-    'default_dm9051',
-], indirect=True)
-def test_esp_eth_iperf_dm9051(
-    dut: Dut,
-    log_performance: Callable[[str, object], None],
-    check_performance: Callable[[str, float, str], None],
-) -> None:
-    test_esp_eth_iperf(dut, log_performance, check_performance, spi_eth=True)
-
-
-@pytest.mark.esp32
-@pytest.mark.eth_w5500
-@pytest.mark.parametrize('config', [
-    'default_w5500',
-], indirect=True)
-def test_esp_eth_iperf_w5500(
-    dut: Dut,
-    log_performance: Callable[[str, object], None],
-    check_performance: Callable[[str, float, str], None],
-) -> None:
-    test_esp_eth_iperf(dut, log_performance, check_performance, spi_eth=True)
-
-
-@pytest.mark.esp32
-@pytest.mark.eth_ksz8851snl
-@pytest.mark.parametrize('config', [
-    'default_ksz8851snl',
-], indirect=True)
-def test_esp_eth_iperf_ksz8851snl(
-    dut: Dut,
-    log_performance: Callable[[str, object], None],
-    check_performance: Callable[[str, float, str], None],
-) -> None:
-    test_esp_eth_iperf(dut, log_performance, check_performance, spi_eth=True)
+        check_performance('{}_throughput'.format(throughput_type + '_eth'),
+                          test_result[throughput_type].get_best_throughput(),
+                          dut.target)

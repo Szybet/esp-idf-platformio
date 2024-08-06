@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2019-2023 Espressif Systems (Shanghai) CO LTD
+ * SPDX-FileCopyrightText: 2019-2024 Espressif Systems (Shanghai) CO LTD
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -70,9 +70,7 @@ typedef struct esp_tls_pki_t {
 #endif
 } esp_tls_pki_t;
 
-static esp_err_t set_server_config(esp_tls_cfg_server_t *cfg, esp_tls_t *tls);
-
-esp_err_t esp_create_mbedtls_handle(const char *hostname, size_t hostlen, const void *cfg, esp_tls_t *tls, void *server_params)
+esp_err_t esp_create_mbedtls_handle(const char *hostname, size_t hostlen, const void *cfg, esp_tls_t *tls)
 {
     assert(cfg != NULL);
     assert(tls != NULL);
@@ -82,7 +80,7 @@ esp_err_t esp_create_mbedtls_handle(const char *hostname, size_t hostlen, const 
 #ifdef CONFIG_MBEDTLS_SSL_PROTO_TLS1_3
     psa_status_t status = psa_crypto_init();
     if (status != PSA_SUCCESS) {
-        ESP_LOGE(TAG, "Failed to initialize PSA crypto, returned %d", (int) status);
+        ESP_LOGE(TAG, "Failed to initialize PSA crypto, returned %d\n", (int) status);
         return esp_ret;
     }
 #endif // CONFIG_MBEDTLS_SSL_PROTO_TLS1_3
@@ -129,16 +127,16 @@ esp_err_t esp_create_mbedtls_handle(const char *hostname, size_t hostlen, const 
             goto exit;
         }
     } else if (tls->role == ESP_TLS_SERVER) {
-        if (server_params == NULL) {
-            /* Server params cannot be NULL when TLS role is server */
-            return ESP_ERR_INVALID_ARG;
-        }
-        esp_tls_server_params_t *input_server_params = server_params;
-        esp_ret = input_server_params->set_server_cfg((esp_tls_cfg_server_t *) cfg, tls);
+#ifdef CONFIG_ESP_TLS_SERVER
+        esp_ret = set_server_config((esp_tls_cfg_server_t *) cfg, tls);
         if (esp_ret != 0) {
             ESP_LOGE(TAG, "Failed to set server configurations, returned [0x%04X] (%s)", esp_ret, esp_err_to_name(esp_ret));
             goto exit;
         }
+#else
+            ESP_LOGE(TAG, "ESP_TLS_SERVER Not enabled in Kconfig");
+            goto exit;
+#endif
     }
 
 #ifdef CONFIG_MBEDTLS_DEBUG
@@ -231,7 +229,7 @@ int esp_mbedtls_handshake(esp_tls_t *tls, const esp_tls_cfg_t *cfg)
             mbedtls_print_error_msg(ret);
             ESP_INT_EVENT_TRACKER_CAPTURE(tls->error_handle, ESP_TLS_ERR_TYPE_MBEDTLS, -ret);
             ESP_INT_EVENT_TRACKER_CAPTURE(tls->error_handle, ESP_TLS_ERR_TYPE_ESP, ESP_ERR_MBEDTLS_SSL_HANDSHAKE_FAILED);
-            if (cfg->crt_bundle_attach != NULL || cfg->cacert_buf != NULL || cfg->use_global_ca_store == true) {
+            if (cfg->cacert_buf != NULL || cfg->use_global_ca_store == true) {
                 /* This is to check whether handshake failed due to invalid certificate*/
                 esp_mbedtls_verify_certificate(tls);
             }
@@ -355,6 +353,10 @@ void esp_mbedtls_cleanup(esp_tls_t *tls)
         mbedtls_x509_crt_free(tls->cacert_ptr);
     }
     tls->cacert_ptr = NULL;
+#ifdef CONFIG_ESP_TLS_SERVER
+    mbedtls_x509_crt_free(&tls->servercert);
+    mbedtls_pk_free(&tls->serverkey);
+#endif
     mbedtls_x509_crt_free(&tls->cacert);
     mbedtls_x509_crt_free(&tls->clientcert);
     mbedtls_pk_free(&tls->clientkey);
@@ -424,13 +426,15 @@ static esp_err_t set_pki_context(esp_tls_t *tls, const esp_tls_pki_t *pki)
 #endif
 #ifdef CONFIG_MBEDTLS_HARDWARE_ECDSA_SIGN
         if (tls->use_ecdsa_peripheral) {
-            esp_ecdsa_pk_conf_t conf = {
-                .grp_id = MBEDTLS_ECP_DP_SECP256R1,
-                .efuse_block = tls->ecdsa_efuse_blk,
-            };
-            ret = esp_ecdsa_set_pk_context(pki->pk_key, &conf);
+            ret = esp_ecdsa_privkey_load_pk_context(pki->pk_key, tls->ecdsa_efuse_blk);
             if (ret != ESP_OK) {
                 ESP_LOGE(TAG, "Failed to initialize pk context for ecdsa peripheral with the key stored in efuse block %d", tls->ecdsa_efuse_blk);
+                return ret;
+            }
+            mbedtls_ecp_keypair *keypair = mbedtls_pk_ec(*pki->pk_key);
+            ret = mbedtls_ecp_group_load(&keypair->MBEDTLS_PRIVATE(grp), MBEDTLS_ECP_DP_SECP256R1);
+            if (ret != 0) {
+                ESP_LOGE(TAG, "Failed to set up an ECP group context with the key stored in efuse block %d", tls->ecdsa_efuse_blk);
                 return ret;
             }
         } else
@@ -476,6 +480,7 @@ static esp_err_t set_global_ca_store(esp_tls_t *tls)
     return ESP_OK;
 }
 
+#ifdef CONFIG_ESP_TLS_SERVER
 #ifdef CONFIG_ESP_TLS_SERVER_SESSION_TICKETS
 int esp_mbedtls_server_session_ticket_write(void *p_ticket, const mbedtls_ssl_session *session, unsigned char *start, const unsigned char *end, size_t *tlen, uint32_t *lifetime)
 {
@@ -544,7 +549,7 @@ void esp_mbedtls_server_session_ticket_ctx_free(esp_tls_server_session_ticket_ct
 }
 #endif
 
-static esp_err_t set_server_config(esp_tls_cfg_server_t *cfg, esp_tls_t *tls)
+esp_err_t set_server_config(esp_tls_cfg_server_t *cfg, esp_tls_t *tls)
 {
     assert(cfg != NULL);
     assert(tls != NULL);
@@ -676,6 +681,7 @@ static esp_err_t set_server_config(esp_tls_cfg_server_t *cfg, esp_tls_t *tls)
 
     return ESP_OK;
 }
+#endif /* ! CONFIG_ESP_TLS_SERVER */
 
 esp_err_t set_client_config(const char *hostname, size_t hostlen, esp_tls_cfg_t *cfg, esp_tls_t *tls)
 {
@@ -891,14 +897,10 @@ esp_err_t set_client_config(const char *hostname, size_t hostlen, esp_tls_cfg_t 
         ESP_LOGE(TAG, "You have to provide both clientcert_buf and clientkey_buf for mutual authentication");
         return ESP_ERR_INVALID_STATE;
     }
-
-    if (cfg->ciphersuites_list != NULL && cfg->ciphersuites_list[0] != 0) {
-        ESP_LOGD(TAG, "Set the ciphersuites list");
-        mbedtls_ssl_conf_ciphersuites(&tls->conf, cfg->ciphersuites_list);
-    }
     return ESP_OK;
 }
 
+#ifdef CONFIG_ESP_TLS_SERVER
 /**
  * @brief      Create TLS/SSL server session
  */
@@ -909,9 +911,7 @@ int esp_mbedtls_server_session_create(esp_tls_cfg_server_t *cfg, int sockfd, esp
     }
     tls->role = ESP_TLS_SERVER;
     tls->sockfd = sockfd;
-    esp_tls_server_params_t server_params = {};
-    server_params.set_server_cfg = &set_server_config;
-    esp_err_t esp_ret = esp_create_mbedtls_handle(NULL, 0, cfg, tls, &server_params);
+    esp_err_t esp_ret = esp_create_mbedtls_handle(NULL, 0, cfg, tls);
     if (esp_ret != ESP_OK) {
         ESP_LOGE(TAG, "create_ssl_handle failed, returned [0x%04X] (%s)", esp_ret, esp_err_to_name(esp_ret));
         ESP_INT_EVENT_TRACKER_CAPTURE(tls->error_handle, ESP_TLS_ERR_TYPE_ESP, esp_ret);
@@ -926,8 +926,6 @@ int esp_mbedtls_server_session_create(esp_tls_cfg_server_t *cfg, int sockfd, esp
         if (ret != ESP_TLS_ERR_SSL_WANT_READ && ret != ESP_TLS_ERR_SSL_WANT_WRITE) {
             ESP_LOGE(TAG, "mbedtls_ssl_handshake returned -0x%04X", -ret);
             mbedtls_print_error_msg(ret);
-            ESP_INT_EVENT_TRACKER_CAPTURE(tls->error_handle, ESP_TLS_ERR_TYPE_MBEDTLS, -ret);
-            ESP_INT_EVENT_TRACKER_CAPTURE(tls->error_handle, ESP_TLS_ERR_TYPE_ESP, ESP_ERR_MBEDTLS_SSL_HANDSHAKE_FAILED);
             tls->conn_state = ESP_TLS_FAIL;
             return ret;
         }
@@ -945,6 +943,7 @@ void esp_mbedtls_server_session_delete(esp_tls_t *tls)
         free(tls);
     }
 };
+#endif /* ! CONFIG_ESP_TLS_SERVER */
 
 esp_err_t esp_mbedtls_init_global_ca_store(void)
 {
@@ -1003,11 +1002,6 @@ void esp_mbedtls_free_global_ca_store(void)
         free(global_cacert);
         global_cacert = NULL;
     }
-}
-
-const int *esp_mbedtls_get_ciphersuites_list(void)
-{
-    return mbedtls_ssl_list_ciphersuites();
 }
 
 #ifdef CONFIG_ESP_TLS_USE_SECURE_ELEMENT

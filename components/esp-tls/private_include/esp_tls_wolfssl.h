@@ -11,7 +11,7 @@
 /**
  * Internal Callback for creating ssl handle for wolfssl
  */
-int esp_create_wolfssl_handle(const char *hostname, size_t hostlen, const void *cfg, esp_tls_t *tls, void *server_params);
+int esp_create_wolfssl_handle(const char *hostname, size_t hostlen, const void *cfg, esp_tls_t *tls);
 
 /**
  * Internal Callback for wolfssl_handshake
@@ -76,6 +76,7 @@ static inline void esp_wolfssl_net_init(esp_tls_t *tls)
 {
 }
 
+#ifdef CONFIG_ESP_TLS_SERVER
 
 /**
  * Function to Create ESP-TLS Server session with wolfssl Stack
@@ -86,3 +87,5 @@ int esp_wolfssl_server_session_create(esp_tls_cfg_server_t *cfg, int sockfd, esp
  * Delete Server Session
  */
 void esp_wolfssl_server_session_delete(esp_tls_t *tls);
+
+#endif

@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2015-2024 Espressif Systems (Shanghai) CO LTD
+ * SPDX-FileCopyrightText: 2015-2021 Espressif Systems (Shanghai) CO LTD
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -14,17 +14,15 @@
 #include "bootloader_random.h"
 #include "bootloader_clock.h"
 #include "bootloader_common.h"
+#include "esp_flash_encrypt.h"
 #include "esp_cpu.h"
 #include "soc/rtc.h"
 #include "hal/wdt_hal.h"
 #include "hal/efuse_hal.h"
-#include "esp_bootloader_desc.h"
 
 static const char *TAG = "boot";
 
-#if !CONFIG_APP_BUILD_TYPE_RAM
 esp_image_header_t WORD_ALIGNED_ATTR bootloader_image_hdr;
-#endif
 
 void bootloader_clear_bss_section(void)
 {
@@ -94,15 +92,12 @@ void bootloader_enable_random(void)
 
 void bootloader_print_banner(void)
 {
-    if (CONFIG_BOOTLOADER_LOG_LEVEL >= ESP_LOG_INFO) {
-        const esp_bootloader_desc_t *desc = esp_bootloader_get_description();
-        ESP_EARLY_LOGI(TAG, "ESP-IDF %s 2nd stage bootloader", desc->idf_ver);
-#ifdef CONFIG_BOOTLOADER_COMPILE_TIME_DATE
-        ESP_EARLY_LOGI(TAG, "compile time %s", desc->date_time);
+    ESP_EARLY_LOGI(TAG, "ESP-IDF %s 2nd stage bootloader", IDF_VER);
+#ifndef CONFIG_APP_REPRODUCIBLE_BUILD
+    ESP_EARLY_LOGI(TAG, "compile time " __DATE__ " " __TIME__);
 #endif
-    }
 
-#if CONFIG_ESP_SYSTEM_SINGLE_CORE_MODE
+#if CONFIG_FREERTOS_UNICORE
 #if (SOC_CPU_CORES_NUM > 1)
     ESP_EARLY_LOGW(TAG, "Unicore bootloader");
 #endif

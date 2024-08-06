@@ -1,20 +1,14 @@
 #!/usr/bin/env python
 #
 # Based on cally.py (https://github.com/chaudron/cally/), Copyright 2018, Eelco Chaudron
-# SPDX-FileCopyrightText: 2020-2024 Espressif Systems (Shanghai) CO LTD
+# SPDX-FileCopyrightText: 2020-2022 Espressif Systems (Shanghai) CO LTD
 # SPDX-License-Identifier: Apache-2.0
+
 import argparse
-import fnmatch
 import os
 import re
 from functools import partial
-from typing import BinaryIO
-from typing import Callable
-from typing import Dict
-from typing import Generator
-from typing import List
-from typing import Optional
-from typing import Tuple
+from typing import BinaryIO, Callable, Dict, Generator, List, Optional, Tuple
 
 import elftools
 from elftools.elf import elffile
@@ -31,6 +25,7 @@ class RtlFunction(object):
         self.name = name
         self.rtl_filename = rtl_filename
         self.tu_filename = tu_filename
+        self.calls: List[str] = list()
         self.refs: List[str] = list()
         self.sym = None
 
@@ -101,14 +96,8 @@ class Reference(object):
 
 
 class IgnorePair():
-    """
-    A pair of symbol names which should be ignored when checking references.
-    """
     def __init__(self, pair: str) -> None:
-        try:
-            self.source, self.dest = pair.split('/')
-        except ValueError:
-            raise ValueError(f'Invalid ignore pair: {pair}. Must be in the form "source/dest".')
+        self.symbol, self.function_call = pair.split('/')
 
 
 class ElfInfo(object):
@@ -175,7 +164,7 @@ class ElfInfo(object):
         return None
 
 
-def load_rtl_file(rtl_filename: str, tu_filename: str, functions: List[RtlFunction]) -> None:
+def load_rtl_file(rtl_filename: str, tu_filename: str, functions: List[RtlFunction], ignore_pairs: List[IgnorePair]) -> None:
     last_function: Optional[RtlFunction] = None
     for line in open(rtl_filename):
         # Find function definition
@@ -187,14 +176,32 @@ def load_rtl_file(rtl_filename: str, tu_filename: str, functions: List[RtlFuncti
             continue
 
         if last_function:
-            # Find direct calls and indirect references
-            for regex in [CALL_REGEX, SYMBOL_REF_REGEX]:
-                match = re.match(regex, line)
-                if match:
-                    target = match.group('target')
-                    if target not in last_function.refs:
-                        last_function.refs.append(target)
-                    continue
+            # Find direct function calls
+            match = re.match(CALL_REGEX, line)
+            if match:
+                target = match.group('target')
+
+                # if target matches on of the IgnorePair function_call attributes, remove
+                # the last occurrence of the associated symbol from the last_function.refs list.
+                call_matching_pairs = [pair for pair in ignore_pairs if pair.function_call == target]
+                if call_matching_pairs and last_function and last_function.refs:
+                    for pair in call_matching_pairs:
+                        ignored_symbols = [ref for ref in last_function.refs if pair.symbol in ref]
+                        if ignored_symbols:
+                            last_ref = ignored_symbols.pop()
+                            last_function.refs = [ref for ref in last_function.refs if last_ref != ref]
+
+                if target not in last_function.calls:
+                    last_function.calls.append(target)
+                continue
+
+            # Find symbol references
+            match = re.match(SYMBOL_REF_REGEX, line)
+            if match:
+                target = match.group('target')
+                if target not in last_function.refs:
+                    last_function.refs.append(target)
+                continue
 
 
 def rtl_filename_matches_sym_filename(rtl_filename: str, symbol_filename: str) -> bool:
@@ -210,18 +217,6 @@ def rtl_filename_matches_sym_filename(rtl_filename: str, symbol_filename: str) -
     # which object file was used as the source of each symbol. Names of the object files and RTL files
     # should be much easier to match.
     return os.path.basename(rtl_filename).startswith(symbol_filename)
-
-
-def filter_ignore_pairs(function: RtlFunction, ignore_pairs: List[IgnorePair]) -> None:
-    """
-    Given a function S0 and a list of ignore pairs (S, T),
-    remove all references to T for which S==S0.
-    """
-    for ignore_pair in ignore_pairs:
-        if fnmatch.fnmatch(function.name, ignore_pair.source):
-            for ref in function.refs:
-                if fnmatch.fnmatch(ref, ignore_pair.dest):
-                    function.refs.remove(ref)
 
 
 class SymbolNotFound(RuntimeError):
@@ -303,7 +298,7 @@ def match_rtl_funcs_to_symbols(rtl_functions: List[RtlFunction], elfinfo: ElfInf
         if sym_from not in symbols:
             symbols.append(sym_from)
 
-        for target_rtl_func_name in source_rtl_func.refs:
+        for target_rtl_func_name in source_rtl_func.calls + source_rtl_func.refs:
             if '*.LC' in target_rtl_func_name:  # skip local labels
                 continue
 
@@ -330,10 +325,7 @@ def get_symbols_and_refs(rtl_list: List[str], elf_file: BinaryIO, ignore_pairs: 
 
     rtl_functions: List[RtlFunction] = []
     for file_name in rtl_list:
-        load_rtl_file(file_name, file_name, rtl_functions)
-
-    for rtl_func in rtl_functions:
-        filter_ignore_pairs(rtl_func, ignore_pairs)
+        load_rtl_file(file_name, file_name, rtl_functions, ignore_pairs)
 
     return match_rtl_funcs_to_symbols(rtl_functions, elfinfo)
 
@@ -365,7 +357,7 @@ def main() -> None:
         type=argparse.FileType('r'),
     )
     parser.add_argument(
-        '--rtl-dirs', help='comma-separated list of directories where to look for RTL files, recursively'
+        '--rtl-dir', help='Directory where to look for RTL files, recursively'
     )
     parser.add_argument(
         '--elf-file',
@@ -386,9 +378,8 @@ def main() -> None:
         '--to-sections', help='comma-separated list of target sections'
     )
     find_refs_parser.add_argument(
-        '--ignore-refs', help='Comma-separated list of symbol pairs to exclude from the references list.'
-                              'The caller and the callee are separated by a slash. '
-                              'Wildcards are supported. Example: my_lib_*/some_lib_in_flash_*.'
+        '--ignore-symbols', help='comma-separated list of symbol/function_name pairs. \
+                                  This will force the parser to ignore the symbol preceding the call to function_name'
     )
     find_refs_parser.add_argument(
         '--exit-code',
@@ -406,20 +397,16 @@ def main() -> None:
         with open(args.rtl_list, 'r') as rtl_list_file:
             rtl_list = [line.strip() for line in rtl_list_file]
     else:
-        if not args.rtl_dirs:
-            raise RuntimeError('Either --rtl-list or --rtl-dirs must be specified')
-        rtl_dirs = args.rtl_dirs.split(',')
-        rtl_list = []
-        for dir in rtl_dirs:
-            rtl_list.extend(list(find_files_recursive(dir, '.expand')))
+        if not args.rtl_dir:
+            raise RuntimeError('Either --rtl-list or --rtl-dir must be specified')
+        rtl_list = list(find_files_recursive(args.rtl_dir, '.expand'))
 
     if not rtl_list:
         raise RuntimeError('No RTL files specified')
 
-    if args.action == 'find-refs' and args.ignore_refs:
-        ignore_pairs = [IgnorePair(pair) for pair in args.ignore_refs.split(',')]
-    else:
-        ignore_pairs = []
+    ignore_pairs = []
+    for pair in args.ignore_symbols.split(',') if args.ignore_symbols else []:
+        ignore_pairs.append(IgnorePair(pair))
 
     _, refs = get_symbols_and_refs(rtl_list, args.elf_file, ignore_pairs)
 

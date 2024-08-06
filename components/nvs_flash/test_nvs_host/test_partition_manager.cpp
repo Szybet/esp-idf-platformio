@@ -13,7 +13,6 @@
 #include "nvs_test_api.h"
 #include "test_fixtures.hpp"
 
-/*
 TEST_CASE("Partition manager initializes multiple partitions", "[partition_mgr]")
 {
     const uint32_t NVS_FLASH_SECTOR = 6;
@@ -36,4 +35,3 @@ TEST_CASE("Partition manager initializes multiple partitions", "[partition_mgr]"
     REQUIRE(nvs::NVSPartitionManager::get_instance()->deinit_partition(part_0.get_partition_name()) == ESP_OK);
     REQUIRE(nvs::NVSPartitionManager::get_instance()->deinit_partition(part_1.get_partition_name()) == ESP_OK);
 }
-*/

@@ -47,26 +47,25 @@ DRAM_ATTR static const char TAG[] = "spi_flash";
 /* CHECK_WRITE_ADDRESS macro to fail writes which land in the
    bootloader, partition table, or running application region.
 */
-#define CHECK_WRITE_ADDRESS(CHIP, ADDR, SIZE) do { \
-        if (CHIP && CHIP->os_func->region_protected) { \
-            esp_err_t ret = CHIP->os_func->region_protected(CHIP->os_func_data, ADDR, SIZE); \
-            if (ret == ESP_ERR_NOT_ALLOWED) { \
-                return ret; /* ESP_ERR_NOT_ALLOWED from read-only partition check */ \
-            } else if (ret != ESP_OK) { \
-                UNSAFE_WRITE_ADDRESS; /* FAILS or ABORTS */ \
-            } \
-        } \
+#if CONFIG_SPI_FLASH_DANGEROUS_WRITE_ALLOWED
+#define CHECK_WRITE_ADDRESS(CHIP, ADDR, SIZE)
+#else /* FAILS or ABORTS */
+#define CHECK_WRITE_ADDRESS(CHIP, ADDR, SIZE) do {                            \
+        if (CHIP && CHIP->os_func->region_protected && CHIP->os_func->region_protected(CHIP->os_func_data, ADDR, SIZE)) {                       \
+            UNSAFE_WRITE_ADDRESS;                                 \
+        }                                                               \
     } while(0)
+#endif // CONFIG_SPI_FLASH_DANGEROUS_WRITE_ALLOWED
 
 /* Convenience macro for beginning of all API functions.
  * Check the return value of `rom_spiflash_api_funcs->chip_check` is correct,
  * and the chip supports the operation in question.
  */
-#define VERIFY_CHIP_OP(op) do { \
+#define VERIFY_CHIP_OP(op) do {                                  \
         if (err != ESP_OK) return err; \
-        if (chip->chip_drv->op == NULL) { \
-            return ESP_ERR_FLASH_UNSUPPORTED_CHIP; \
-        } \
+        if (chip->chip_drv->op == NULL) {                        \
+            return ESP_ERR_FLASH_UNSUPPORTED_CHIP;              \
+        }                                                   \
     } while (0)
 
 
@@ -1195,9 +1194,6 @@ IRAM_ATTR esp_err_t esp_flash_set_io_mode(esp_flash_t* chip, bool qe)
 }
 #endif //CONFIG_SPI_FLASH_ROM_IMPL
 
-#if !CONFIG_SPI_FLASH_ROM_IMPL || ESP_ROM_HAS_ENCRYPTED_WRITES_USING_LEGACY_DRV
-// use `esp_flash_write_encrypted` ROM version not in C3 and S3
-
 FORCE_INLINE_ATTR esp_err_t s_encryption_write_lock(esp_flash_t *chip) {
 #if CONFIG_IDF_TARGET_ESP32S2
     esp_crypto_dma_lock_acquire();
@@ -1212,6 +1208,10 @@ FORCE_INLINE_ATTR esp_err_t s_encryption_write_unlock(esp_flash_t *chip) {
 #endif //CONFIG_IDF_TARGET_ESP32S2
     return err;
 }
+
+
+#if !CONFIG_SPI_FLASH_ROM_IMPL || ESP_ROM_HAS_ENCRYPTED_WRITES_USING_LEGACY_DRV
+// use `esp_flash_write_encrypted` ROM version not in C3 and S3
 
 esp_err_t IRAM_ATTR esp_flash_write_encrypted(esp_flash_t *chip, uint32_t address, const void *buffer, uint32_t length)
 {

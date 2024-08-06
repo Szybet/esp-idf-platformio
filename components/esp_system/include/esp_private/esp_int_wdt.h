@@ -10,6 +10,7 @@
 extern "C" {
 #endif
 
+
 /**
  * @brief Initialize the non-CPU-specific parts of interrupt watchdog.
  *

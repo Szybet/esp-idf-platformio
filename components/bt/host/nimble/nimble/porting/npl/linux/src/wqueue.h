@@ -27,7 +27,7 @@
 
 template <typename T> class wqueue
 {
-    std::list<T>         m_queue;
+    list<T>              m_queue;
     pthread_mutex_t      m_mutex;
     pthread_mutexattr_t  m_mutex_attr;
     pthread_cond_t       m_condv;

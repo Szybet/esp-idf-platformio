@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2017-2024 Espressif Systems (Shanghai) CO LTD
+ * SPDX-FileCopyrightText: 2017-2022 Espressif Systems (Shanghai) CO LTD
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -27,9 +27,7 @@
  * used for simple callback functions, which do not take longer than a few
  * microseconds to run.
  *
- * Timer callbacks are called from a task running on CPU0.
- * On chips with multiple cores, CPU0 (default) can be changed using
- * the Kconfig option CONFIG_ESP_TIMER_TASK_AFFINITY.
+ * Timer callbacks are called from a task running on the PRO CPU.
  */
 
 #include <stdint.h>
@@ -44,7 +42,7 @@ extern "C" {
 #endif
 
 /**
- * @brief Opaque type representing a single timer handle
+ * @brief Opaque type representing a single esp_timer
  */
 typedef struct esp_timer* esp_timer_handle_t;
 
@@ -54,29 +52,29 @@ typedef struct esp_timer* esp_timer_handle_t;
  */
 typedef void (*esp_timer_cb_t)(void* arg);
 
+
 /**
- * @brief Method to dispatch timer callback
+ * @brief Method for dispatching timer callback
  */
 typedef enum {
-    ESP_TIMER_TASK,     //!< Callback is dispatched from esp_timer task
-#if CONFIG_ESP_TIMER_SUPPORTS_ISR_DISPATCH_METHOD || __DOXYGEN__
-    ESP_TIMER_ISR,      //!< Callback is dispatched from interrupt handler
+    ESP_TIMER_TASK,     //!< Callback is called from timer task
+#ifdef CONFIG_ESP_TIMER_SUPPORTS_ISR_DISPATCH_METHOD
+    ESP_TIMER_ISR,      //!< Callback is called from timer ISR
 #endif
-    ESP_TIMER_MAX,      //!< Sentinel value for the number of callback dispatch methods
+    ESP_TIMER_MAX,      //!< Count of the methods for dispatching timer callback
 } esp_timer_dispatch_t;
 
 /**
- * @brief Timer configuration passed to esp_timer_create()
+ * @brief Timer configuration passed to esp_timer_create
  */
 typedef struct {
-    esp_timer_cb_t callback;        //!< Callback function to execute when timer expires
-    void* arg;                      //!< Argument to pass to callback
-    esp_timer_dispatch_t dispatch_method;   //!< Dispatch callback from task or ISR; if not specified, esp_timer task
-    //                                !< is used; for ISR to work, also set Kconfig option
-    //                                !< `CONFIG_ESP_TIMER_SUPPORTS_ISR_DISPATCH_METHOD`
-    const char* name;               //!< Timer name, used in esp_timer_dump() function
-    bool skip_unhandled_events;     //!< Setting to skip unhandled events in light sleep for periodic timers
+    esp_timer_cb_t callback;        //!< Function to call when timer expires
+    void* arg;                      //!< Argument to pass to the callback
+    esp_timer_dispatch_t dispatch_method;   //!< Call the callback from task or from ISR
+    const char* name;               //!< Timer name, used in esp_timer_dump function
+    bool skip_unhandled_events;     //!< Skip unhandled events for periodic timers
 } esp_timer_create_args_t;
+
 
 /**
  * @brief Minimal initialization of esp_timer
@@ -85,7 +83,7 @@ typedef struct {
  * to call this function before using other esp_timer APIs.
  *
  * This function can be called very early in startup process, after this call
- * only esp_timer_get_time() function can be used.
+ * only esp_timer_get_time function can be used.
  *
  * @return
  *      - ESP_OK on success
@@ -97,12 +95,12 @@ esp_err_t esp_timer_early_init(void);
  *
  * @note This function is called from startup code. Applications do not need
  * to call this function before using other esp_timer APIs.
- * Before calling this function, esp_timer_early_init() must be called by the
+ * Before calling this function, esp_timer_early_init must be called by the
  * startup code.
  *
- * This function will be called from startup code on every core.
- * If Kconfig option `CONFIG_ESP_TIMER_ISR_AFFINITY` is set to `NO_AFFINITY`,
- * it allocates the timer ISR on MULTIPLE cores and
+ * This function will be called from startup code on every core
+ * if CONFIG_ESP_TIMER_ISR_AFFINITY_NO_AFFINITY is enabled,
+ * It allocates the timer ISR on MULTIPLE cores and
  * creates the timer task which can be run on any core.
  *
  * @return
@@ -127,12 +125,12 @@ esp_err_t esp_timer_deinit(void);
 /**
  * @brief Create an esp_timer instance
  *
- * @note When timer no longer needed, delete it using esp_timer_delete().
+ * @note When done using the timer, delete it with esp_timer_delete function.
  *
  * @param create_args   Pointer to a structure with timer creation arguments.
  *                      Not saved by the library, can be allocated on the stack.
- * @param[out] out_handle  Output, pointer to esp_timer_handle_t variable that
- *                         holds the created timer handle.
+ * @param[out] out_handle  Output, pointer to esp_timer_handle_t variable which
+ *                         will hold the created timer handle.
  *
  * @return
  *      - ESP_OK on success
@@ -144,11 +142,11 @@ esp_err_t esp_timer_create(const esp_timer_create_args_t* create_args,
                            esp_timer_handle_t* out_handle);
 
 /**
- * @brief Start a one-shot timer
+ * @brief Start one-shot timer
  *
- * Timer represented by `timer` should not be running when this function is called.
+ * Timer should not be running when this function is called.
  *
- * @param timer timer handle created using esp_timer_create()
+ * @param timer timer handle created using esp_timer_create
  * @param timeout_us timer timeout, in microseconds relative to the current moment
  * @return
  *      - ESP_OK on success
@@ -160,10 +158,10 @@ esp_err_t esp_timer_start_once(esp_timer_handle_t timer, uint64_t timeout_us);
 /**
  * @brief Start a periodic timer
  *
- * Timer represented by `timer` should not be running when this function is called.
- * This function starts the timer which will trigger every `period` microseconds.
+ * Timer should not be running when this function is called. This function will
+ * start the timer which will trigger every 'period' microseconds.
  *
- * @param timer timer handle created using esp_timer_create()
+ * @param timer timer handle created using esp_timer_create
  * @param period timer period, in microseconds
  * @return
  *      - ESP_OK on success
@@ -175,13 +173,11 @@ esp_err_t esp_timer_start_periodic(esp_timer_handle_t timer, uint64_t period);
 /**
  * @brief Restart a currently running timer
  *
- * Type of `timer` | Action
- * --------------- | ------
- * One-shot timer  | Restarted immediately and times out once in `timeout_us` microseconds
- * Periodic timer  | Restarted immediately with a new period of `timeout_us` microseconds
+ * If the given timer is a one-shot timer, the timer is restarted immediately and will timeout once in `timeout_us` microseconds.
+ * If the given timer is a periodic timer, the timer is restarted immediately with a new period of `timeout_us` microseconds.
  *
- * @param timer timer handle created using esp_timer_create()
- * @param timeout_us Timeout in microseconds relative to the current time.
+ * @param timer timer Handle created using esp_timer_create
+ * @param timeout_us Timeout, in microseconds relative to the current time.
  *                   In case of a periodic timer, also represents the new period.
  * @return
  *      - ESP_OK on success
@@ -191,12 +187,12 @@ esp_err_t esp_timer_start_periodic(esp_timer_handle_t timer, uint64_t period);
 esp_err_t esp_timer_restart(esp_timer_handle_t timer, uint64_t timeout_us);
 
 /**
- * @brief Stop a running timer
+ * @brief Stop the timer
  *
- * This function stops the timer previously started using esp_timer_start_once()
- * or esp_timer_start_periodic().
+ * This function stops the timer previously started using esp_timer_start_once
+ * or esp_timer_start_periodic.
  *
- * @param timer timer handle created using esp_timer_create()
+ * @param timer timer handle created using esp_timer_create
  * @return
  *      - ESP_OK on success
  *      - ESP_ERR_INVALID_STATE if the timer is not running
@@ -209,7 +205,7 @@ esp_err_t esp_timer_stop(esp_timer_handle_t timer);
  * The timer must be stopped before deleting. A one-shot timer which has expired
  * does not need to be stopped.
  *
- * @param timer timer handle created using esp_timer_create()
+ * @param timer timer handle allocated using esp_timer_create
  * @return
  *      - ESP_OK on success
  *      - ESP_ERR_INVALID_STATE if the timer is running
@@ -218,23 +214,21 @@ esp_err_t esp_timer_delete(esp_timer_handle_t timer);
 
 /**
  * @brief Get time in microseconds since boot
- * @return Number of microseconds since the initialization of ESP Timer
+ * @return number of microseconds since underlying timer has been started
  */
 int64_t esp_timer_get_time(void);
 
 /**
- * @brief Get the timestamp of the next expected timeout
+ * @brief Get the timestamp when the next timeout is expected to occur
  * @return Timestamp of the nearest timer event, in microseconds.
- *         The timebase is the same as for the values returned by esp_timer_get_time().
+ *         The timebase is the same as for the values returned by esp_timer_get_time.
  */
 int64_t esp_timer_get_next_alarm(void);
 
 /**
- * @brief Get the timestamp of the next expected timeout excluding those timers
- *        that should not interrupt light sleep (such timers have
- *        ::esp_timer_create_args_t::skip_unhandled_events enabled)
+ * @brief Get the timestamp when the next timeout is expected to occur skipping those which have skip_unhandled_events flag
  * @return Timestamp of the nearest timer event, in microseconds.
- *         The timebase is the same as for the values returned by esp_timer_get_time().
+ *         The timebase is the same as for the values returned by esp_timer_get_time.
  */
 int64_t esp_timer_get_next_alarm_for_wake_up(void);
 
@@ -242,9 +236,11 @@ int64_t esp_timer_get_next_alarm_for_wake_up(void);
  * @brief Get the period of a timer
  *
  * This function fetches the timeout period of a timer.
- * For a one-shot timer, the timeout period will be 0.
  *
- * @param timer timer handle created using esp_timer_create()
+ * @note The timeout period is the time interval with which a timer restarts after expiry. For one-shot timers, the
+ * period is 0 as there is no periodicity associated with such timers.
+ *
+ * @param timer timer handle allocated using esp_timer_create
  * @param period memory to store the timer period value in microseconds
  * @return
  *      - ESP_OK on success
@@ -257,9 +253,10 @@ esp_err_t esp_timer_get_period(esp_timer_handle_t timer, uint64_t *period);
  *
  * This function fetches the expiry time of a one-shot timer.
  *
- * @note Passing the timer handle of a periodic timer will result in an error.
+ * @note This API returns a valid expiry time only for a one-shot timer. It returns an error if the timer handle passed
+ * to the function is for a periodic timer.
  *
- * @param timer timer handle created using esp_timer_create()
+ * @param timer timer handle allocated using esp_timer_create
  * @param expiry memory to store the timeout value in microseconds
  * @return
  *      - ESP_OK on success
@@ -271,28 +268,27 @@ esp_err_t esp_timer_get_expiry_time(esp_timer_handle_t timer, uint64_t *expiry);
 /**
  * @brief Dump the list of timers to a stream
  *
- * By default, this function prints the list of active (running) timers. The output format is:
+ * If CONFIG_ESP_TIMER_PROFILING option is enabled, this prints the list of all
+ * the existing timers. Otherwise, only the list active timers is printed.
  *
- * | Name | Period | Alarm |
+ * The format is:
  *
- * - Name — timer pointer
- * - Period — period of timer in microseconds, or 0 for one-shot timer
- * - Alarm - time of the next alarm in microseconds since boot, or 0 if the timer is not started
+ *   name  period  alarm  times_armed  times_triggered  total_callback_run_time
  *
- * To print the list of all created timers, enable Kconfig option `CONFIG_ESP_TIMER_PROFILING`.
- * In this case, the output format is:
+ * where:
  *
- * | Name | Period | Alarm | Times_armed | Times_trigg | Times_skip | Cb_exec_time |
+ * name — timer name (if CONFIG_ESP_TIMER_PROFILING is defined), or timer pointer
+ * period — period of timer, in microseconds, or 0 for one-shot timer
+ * alarm - time of the next alarm, in microseconds since boot, or 0 if the timer
+ *         is not started
  *
- * - Name — timer name
- * - Period — same as above
- * - Alarm — same as above
- * - Times_armed — number of times the timer was armed via esp_timer_start_X
- * - Times_triggered - number of times the callback was triggered
- * - Times_skipped - number of times the callback was skipped
- * - Callback_exec_time - total time taken by callback to execute, across all calls
+ * The following fields are printed if CONFIG_ESP_TIMER_PROFILING is defined:
  *
- * @param stream stream (such as stdout) to which to dump the information
+ * times_armed — number of times the timer was armed via esp_timer_start_X
+ * times_triggered - number of times the callback was called
+ * total_callback_run_time - total time taken by callback to execute, across all calls
+ *
+ * @param stream stream (such as stdout) to dump the information to
  * @return
  *      - ESP_OK on success
  *      - ESP_ERR_NO_MEM if can not allocate temporary buffer for the output
@@ -312,21 +308,21 @@ void esp_timer_isr_dispatch_need_yield(void);
 /**
  * @brief Returns status of a timer, active or not
  *
- * This function is used to identify if the timer is still active (running) or not.
+ * This function is used to identify if the timer is still active or not.
  *
- * @param timer timer handle created using esp_timer_create()
+ * @param timer timer handle created using esp_timer_create
  * @return
- *      - 1 if timer is still active (running)
- *      - 0 if timer is not active
+ *      - 1 if timer is still active
+ *      - 0 if timer is not active.
  */
 bool esp_timer_is_active(esp_timer_handle_t timer);
 
 /**
  * @brief Get the ETM event handle of esp_timer underlying alarm event
  *
- * @note The created ETM event object can be deleted later using esp_etm_del_event()
+ * @note The created ETM event object can be deleted later by calling `esp_etm_del_event`
  *
- * @note The ETM event is generated by the underlying hardware - systimer;
+ * @note The ETM event is generated by the underlying hardware -- systimer,
  *       therefore, if the esp_timer is not clocked by systimer, then no ETM event will be generated.
  *
  * @param[out] out_event Returned ETM event handle

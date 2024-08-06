@@ -1,5 +1,6 @@
-# SPDX-FileCopyrightText: 2022-2024 Espressif Systems (Shanghai) CO LTD
+# SPDX-FileCopyrightText: 2022 Espressif Systems (Shanghai) CO LTD
 # SPDX-License-Identifier: CC0-1.0
+
 import contextlib
 import logging
 import os
@@ -9,8 +10,7 @@ from typing import Iterator
 
 import pytest
 from pytest_embedded import Dut
-from scapy.all import Ether
-from scapy.all import raw
+from scapy.all import Ether, raw
 
 ETH_TYPE_1 = 0x2220
 ETH_TYPE_2 = 0x2221

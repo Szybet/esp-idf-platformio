@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2018-2023 Espressif Systems (Shanghai) CO LTD
+ * SPDX-FileCopyrightText: 2018-2022 Espressif Systems (Shanghai) CO LTD
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -19,14 +19,8 @@
 #include "esp32c2/rom/rom_layout.h"
 #elif CONFIG_IDF_TARGET_ESP32C6
 #include "esp32c6/rom/rom_layout.h"
-#elif CONFIG_IDF_TARGET_ESP32C61    //TODO: IDF-9526, refactor this
-#include "esp32c61/rom/rom_layout.h"
-#elif CONFIG_IDF_TARGET_ESP32C5
-#include "esp32c5/rom/rom_layout.h"
 #elif CONFIG_IDF_TARGET_ESP32H2
 #include "esp32h2/rom/rom_layout.h"
-#elif CONFIG_IDF_TARGET_ESP32P4
-#include "esp32p4/rom/rom_layout.h"
 #endif
 #endif // ESP_ROM_HAS_LAYOUT_TABLE
 
@@ -75,11 +69,7 @@ static void s_prepare_reserved_regions(soc_reserved_region_t *reserved, size_t c
     /* Get the ROM layout to find which part of DRAM is reserved */
     const ets_rom_layout_t *layout = ets_rom_layout_p;
     reserved[0].start = (intptr_t)layout->dram0_rtos_reserved_start;
-#ifdef SOC_DIRAM_ROM_RESERVE_HIGH
-    reserved[0].end = SOC_DIRAM_ROM_RESERVE_HIGH;
-#else
     reserved[0].end = SOC_DIRAM_DRAM_HIGH;
-#endif
 
     memcpy(reserved + 1, &soc_reserved_memory_region_start, (count - 1) * sizeof(soc_reserved_region_t));
 #else

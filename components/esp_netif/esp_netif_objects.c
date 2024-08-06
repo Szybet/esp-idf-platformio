@@ -58,7 +58,7 @@ esp_err_t esp_netif_remove_from_list_unsafe(esp_netif_t *netif)
             SLIST_REMOVE(&s_head, item, slist_netifs_s, next);
             assert(s_esp_netif_counter > 0);
             --s_esp_netif_counter;
-            ESP_LOGD(TAG, "%s netif successfully removed (total netifs: %" PRIu32 ")", __func__, (uint32_t)s_esp_netif_counter);
+            ESP_LOGD(TAG, "%s netif successfully removed (total netifs: %d)", __func__, s_esp_netif_counter);
             free(item);
             return ESP_OK;
         }

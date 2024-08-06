@@ -87,7 +87,7 @@ Instance::Instance(void)
     , mSettings(*this)
     , mSettingsDriver(*this)
     , mMessagePool(*this)
-#if OPENTHREAD_CONFIG_PLATFORM_DNSSD_ENABLE
+#if OPENTHREAD_CONFIG_PLATFORM_DNSSD_ENABLE || OPENTHREAD_CONFIG_MULTICAST_DNS_ENABLE
     // DNS-SD (mDNS) platform is initialized early to
     // allow other modules to use it.
     , mDnssd(*this)
@@ -234,8 +234,7 @@ Instance::Instance(void)
     , mChannelMonitor(*this)
 #endif
 #if OPENTHREAD_CONFIG_CHANNEL_MANAGER_ENABLE && \
-    (OPENTHREAD_FTD ||                          \
-     (OPENTHREAD_CONFIG_MAC_CSL_RECEIVER_ENABLE && OPENTHREAD_CONFIG_CHANNEL_MANAGER_CSL_CHANNEL_SELECT_ENABLE))
+    (OPENTHREAD_FTD || OPENTHREAD_CONFIG_CHANNEL_MANAGER_CSL_CHANNEL_SELECT_ENABLE)
     , mChannelManager(*this)
 #endif
 #if OPENTHREAD_CONFIG_MESH_DIAG_ENABLE && OPENTHREAD_FTD

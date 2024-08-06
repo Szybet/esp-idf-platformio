@@ -132,16 +132,16 @@ void esp_gdbstub_init_dports(void)
 {
 }
 
-#if CONFIG_IDF_TARGET_ARCH_XTENSA && (!CONFIG_ESP_SYSTEM_SINGLE_CORE_MODE) && CONFIG_ESP_SYSTEM_GDBSTUB_RUNTIME
+#if CONFIG_IDF_TARGET_ARCH_XTENSA && (!CONFIG_FREERTOS_UNICORE) && CONFIG_ESP_SYSTEM_GDBSTUB_RUNTIME
 static bool stall_started = false;
 #endif
 
 /** @brief GDB stall other CPU
  * GDB stall other CPU
  * */
-void esp_gdbstub_stall_other_cpus_start(void)
+void esp_gdbstub_stall_other_cpus_start()
 {
-#if CONFIG_IDF_TARGET_ARCH_XTENSA && (!CONFIG_ESP_SYSTEM_SINGLE_CORE_MODE) && CONFIG_ESP_SYSTEM_GDBSTUB_RUNTIME
+#if CONFIG_IDF_TARGET_ARCH_XTENSA && (!CONFIG_FREERTOS_UNICORE) && CONFIG_ESP_SYSTEM_GDBSTUB_RUNTIME
     if (stall_started == false) {
         esp_ipc_isr_stall_other_cpu();
         stall_started = true;
@@ -152,9 +152,9 @@ void esp_gdbstub_stall_other_cpus_start(void)
 /** @brief GDB end stall other CPU
  * GDB end stall other CPU
  * */
-void esp_gdbstub_stall_other_cpus_end(void)
+void esp_gdbstub_stall_other_cpus_end()
 {
-#if CONFIG_IDF_TARGET_ARCH_XTENSA && (!CONFIG_ESP_SYSTEM_SINGLE_CORE_MODE) && CONFIG_ESP_SYSTEM_GDBSTUB_RUNTIME
+#if CONFIG_IDF_TARGET_ARCH_XTENSA && (!CONFIG_FREERTOS_UNICORE) && CONFIG_ESP_SYSTEM_GDBSTUB_RUNTIME
     if (stall_started == true) {
         esp_ipc_isr_release_other_cpu();
         stall_started = false;
@@ -174,7 +174,7 @@ void esp_gdbstub_clear_step(void)
 /** @brief GDB do step
  * GDB do one step
  * */
-void esp_gdbstub_do_step( esp_gdbstub_frame_t *frame)
+void esp_gdbstub_do_step(void)
 {
     // We have gdbstub uart interrupt, and if we will call step, with ICOUNTLEVEL=2 or higher, from uart interrupt, the
     // application will hang because it will try to step uart interrupt. That's why we have to set ICOUNTLEVEL=1
@@ -193,7 +193,7 @@ void esp_gdbstub_do_step( esp_gdbstub_frame_t *frame)
  * */
 void esp_gdbstub_trigger_cpu(void)
 {
-#if !CONFIG_ESP_SYSTEM_SINGLE_CORE_MODE
+#if !CONFIG_FREERTOS_UNICORE
     if (0 == esp_cpu_get_core_id()) {
         esp_crosscore_int_send_gdb_call(1);
     } else {

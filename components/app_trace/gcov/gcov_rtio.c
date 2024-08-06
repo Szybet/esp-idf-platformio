@@ -14,10 +14,15 @@
 #include "soc/timer_periph.h"
 #include "esp_app_trace.h"
 #include "esp_freertos_hooks.h"
-#include "dbg_stubs.h"
-#include "esp_private/esp_ipc.h"
+#include "esp_private/dbg_stubs.h"
+#include "esp_ipc.h"
 #include "esp_attr.h"
 #include "hal/wdt_hal.h"
+#if CONFIG_IDF_TARGET_ESP32
+#include "esp32/rom/libc_stubs.h"
+#elif CONFIG_IDF_TARGET_ESP32S2
+#include "esp32s2/rom/libc_stubs.h"
+#endif
 
 #if CONFIG_APPTRACE_GCOV_ENABLE
 
@@ -79,8 +84,9 @@ void gcov_create_task(void *arg)
 static IRAM_ATTR
 void gcov_create_task_tick_hook(void)
 {
+    extern esp_err_t esp_ipc_start_gcov_from_isr(uint32_t cpu_id, esp_ipc_func_t func, void* arg);
     if (s_create_gcov_task) {
-        if (esp_ipc_call_nonblocking(xPortGetCoreID(), &gcov_create_task, NULL) == ESP_OK) {
+        if (esp_ipc_start_gcov_from_isr(xPortGetCoreID(), &gcov_create_task, NULL) == ESP_OK) {
             s_create_gcov_task = false;
         }
     }
@@ -170,13 +176,6 @@ long gcov_rtio_ftell(void *stream)
 {
     long ret = esp_apptrace_ftell(ESP_APPTRACE_DEST_TRAX, stream);
     ESP_EARLY_LOGV(TAG, "%s(%p) = %ld", __FUNCTION__, stream, ret);
-    return ret;
-}
-
-int gcov_rtio_feof(void *stream)
-{
-    int ret = esp_apptrace_feof(ESP_APPTRACE_DEST_TRAX, stream);
-    ESP_EARLY_LOGV(TAG, "%s(%p) = %d", __FUNCTION__, stream, ret);
     return ret;
 }
 

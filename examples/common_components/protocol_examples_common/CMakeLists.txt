@@ -22,23 +22,15 @@ if(CONFIG_EXAMPLE_CONNECT_ETHERNET)
     list(APPEND srcs "eth_connect.c")
 endif()
 
-if(CONFIG_EXAMPLE_CONNECT_PPP)
-    list(APPEND srcs "ppp_connect.c")
-endif()
-
 
 idf_component_register(SRCS "${srcs}"
                        INCLUDE_DIRS "include"
-                       PRIV_REQUIRES esp_netif driver esp_wifi vfs console esp_eth)
+                       PRIV_REQUIRES esp_netif driver esp_wifi vfs)
 
 if(CONFIG_EXAMPLE_PROVIDE_WIFI_CONSOLE_CMD)
     idf_component_optional_requires(PRIVATE console)
 endif()
 
 if(CONFIG_EXAMPLE_CONNECT_ETHERNET)
-    idf_component_optional_requires(PUBLIC esp_eth)
-endif()
-
-if(CONFIG_EXAMPLE_CONNECT_PPP)
-    idf_component_optional_requires(PRIVATE esp_tinyusb espressif__esp_tinyusb)
+    idf_component_optional_requires(PRIVATE esp_eth)
 endif()

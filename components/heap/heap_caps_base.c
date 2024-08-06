@@ -23,12 +23,6 @@
 #define CALL_HOOK(hook, ...) {}
 #endif
 
-//This is normally provided by the heap-memalign-hw component.
-extern void esp_heap_adjust_alignment_to_hw(size_t *p_alignment, size_t *p_size, uint32_t *p_caps);
-
-//Default alignment the multiheap allocator / tlsf will align 'unaligned' memory to, in bytes
-#define UNALIGNED_MEM_ALIGNMENT_BYTES 4
-
 /*
   This takes a memory chunk in a region that can be addressed as both DRAM as well as IRAM. It will convert it to
   IRAM in such a way that it can be later freed. It assumes both the address as well as the length to be word-aligned.
@@ -64,37 +58,23 @@ HEAP_IRAM_ATTR void heap_caps_free( void *ptr)
         uint32_t *dramAddrPtr = (uint32_t *)ptr;
         ptr = (void *)dramAddrPtr[-1];
     }
-    void *block_owner_ptr = MULTI_HEAP_REMOVE_BLOCK_OWNER_OFFSET(ptr);
-    heap_t *heap = find_containing_heap(block_owner_ptr);
+
+    heap_t *heap = find_containing_heap(ptr);
     assert(heap != NULL && "free() target pointer is outside heap areas");
-    multi_heap_free(heap->heap, block_owner_ptr);
+    multi_heap_free(heap->heap, ptr);
 
     CALL_HOOK(esp_heap_trace_free_hook, ptr);
 }
 
-HEAP_IRAM_ATTR static inline void *aligned_or_unaligned_alloc(multi_heap_handle_t heap, size_t size, size_t alignment, size_t offset) {
-    if (alignment<=UNALIGNED_MEM_ALIGNMENT_BYTES) { //alloc and friends align to 32-bit by default
-        return multi_heap_malloc(heap, size);
-    } else {
-        return multi_heap_aligned_alloc_offs(heap, size, alignment, offset);
-    }
-}
-
 /*
-This function should not be called directly as it does not check for failure / call heap_caps_alloc_failed()
-Note that this function does 'unaligned' alloc calls if alignment <= UNALIGNED_MEM_ALIGNMENT_BYTES (=4) as the
-allocator will align to that value by default.
+This function should not be called directly as it does not
+check for failure / call heap_caps_alloc_failed()
 */
-HEAP_IRAM_ATTR NOINLINE_ATTR void *heap_caps_aligned_alloc_base(size_t alignment, size_t size, uint32_t caps)
+HEAP_IRAM_ATTR NOINLINE_ATTR void *heap_caps_malloc_base( size_t size, uint32_t caps)
 {
     void *ret = NULL;
 
-    // Alignment, size and caps may need to be modified because of hardware requirements.
-    esp_heap_adjust_alignment_to_hw(&alignment, &size, &caps);
-
-    // remove block owner size to HEAP_SIZE_MAX rather than adding the block owner size
-    // to size to prevent overflows.
-    if (size == 0 || size > MULTI_HEAP_REMOVE_BLOCK_OWNER_SIZE(HEAP_SIZE_MAX) ) {
+    if (size == 0 || size > HEAP_SIZE_MAX ) {
         // Avoids int overflow when adding small numbers to size, or
         // calculating 'end' from start+size, by limiting 'size' to the possible range
         return NULL;
@@ -136,22 +116,17 @@ HEAP_IRAM_ATTR NOINLINE_ATTR void *heap_caps_aligned_alloc_base(size_t alignment
                         //This is special, insofar that what we're going to get back is a DRAM address. If so,
                         //we need to 'invert' it (lowest address in DRAM == highest address in IRAM and vice-versa) and
                         //add a pointer to the DRAM equivalent before the address we're going to return.
-                        ret = aligned_or_unaligned_alloc(heap->heap, MULTI_HEAP_ADD_BLOCK_OWNER_SIZE(size) + 4,
-                                                        alignment, MULTI_HEAP_BLOCK_OWNER_SIZE());  // int overflow checked above
+                        ret = multi_heap_malloc(heap->heap, size + 4);  // int overflow checked above
+
                         if (ret != NULL) {
-                            MULTI_HEAP_SET_BLOCK_OWNER(ret);
-                            ret = MULTI_HEAP_ADD_BLOCK_OWNER_OFFSET(ret);
                             uint32_t *iptr = dram_alloc_to_iram_addr(ret, size + 4);  // int overflow checked above
                             CALL_HOOK(esp_heap_trace_alloc_hook, iptr, size, caps);
                             return iptr;
                         }
                     } else {
                         //Just try to alloc, nothing special.
-                        ret = aligned_or_unaligned_alloc(heap->heap, MULTI_HEAP_ADD_BLOCK_OWNER_SIZE(size),
-                                                        alignment, MULTI_HEAP_BLOCK_OWNER_SIZE());
+                        ret = multi_heap_malloc(heap->heap, size);
                         if (ret != NULL) {
-                            MULTI_HEAP_SET_BLOCK_OWNER(ret);
-                            ret = MULTI_HEAP_ADD_BLOCK_OWNER_OFFSET(ret);
                             CALL_HOOK(esp_heap_trace_alloc_hook, ret, size, caps);
                             return ret;
                         }
@@ -165,11 +140,6 @@ HEAP_IRAM_ATTR NOINLINE_ATTR void *heap_caps_aligned_alloc_base(size_t alignment
     return NULL;
 }
 
-//Wrapper for heap_caps_aligned_alloc_base as that can also do unaligned allocs.
-HEAP_IRAM_ATTR NOINLINE_ATTR void *heap_caps_malloc_base( size_t size, uint32_t caps) {
-    return heap_caps_aligned_alloc_base(UNALIGNED_MEM_ALIGNMENT_BYTES, size, caps);
-}
-
 /*
 This function should not be called directly as it does not
 check for failure / call heap_caps_alloc_failed()
@@ -180,12 +150,8 @@ HEAP_IRAM_ATTR NOINLINE_ATTR void *heap_caps_realloc_base( void *ptr, size_t siz
     heap_t *heap = NULL;
     void *dram_ptr = NULL;
 
-    //See if memory needs alignment because of hardware reasons.
-    size_t alignment = UNALIGNED_MEM_ALIGNMENT_BYTES;
-    esp_heap_adjust_alignment_to_hw(&alignment, &size, &caps);
-
     if (ptr == NULL) {
-        return heap_caps_aligned_alloc_base(alignment, size, caps);
+        return heap_caps_malloc_base(size, caps);
     }
 
     if (size == 0) {
@@ -193,9 +159,7 @@ HEAP_IRAM_ATTR NOINLINE_ATTR void *heap_caps_realloc_base( void *ptr, size_t siz
         return NULL;
     }
 
-    // remove block owner size to HEAP_SIZE_MAX rather than adding the block owner size
-    // to size to prevent overflows.
-    if (size > MULTI_HEAP_REMOVE_BLOCK_OWNER_SIZE(HEAP_SIZE_MAX)) {
+    if (size > HEAP_SIZE_MAX) {
         return NULL;
     }
 
@@ -204,7 +168,6 @@ HEAP_IRAM_ATTR NOINLINE_ATTR void *heap_caps_realloc_base( void *ptr, size_t siz
     if(esp_ptr_in_diram_iram((void *)ptr)) {
         uint32_t *dram_addr = (uint32_t *)ptr;
         dram_ptr  = (void *)dram_addr[-1];
-        dram_ptr = MULTI_HEAP_REMOVE_BLOCK_OWNER_OFFSET(dram_ptr);
 
         heap = find_containing_heap(dram_ptr);
         assert(heap != NULL && "realloc() pointer is outside heap areas");
@@ -219,25 +182,15 @@ HEAP_IRAM_ATTR NOINLINE_ATTR void *heap_caps_realloc_base( void *ptr, size_t siz
         assert(heap != NULL && "realloc() pointer is outside heap areas");
     }
 
-    // shift ptr by block owner offset. Since the ptr returned to the user
-    // does not include the block owner bytes (that are located at the
-    // beginning of the allocated memory) we have to add them back before
-    // processing the realloc.
-    ptr = MULTI_HEAP_REMOVE_BLOCK_OWNER_OFFSET(ptr);
-
     // are the existing heap's capabilities compatible with the
     // requested ones?
     bool compatible_caps = (caps & get_all_caps(heap)) == caps;
 
-    //Note we don't try realloc() on memory that needs to be aligned, that is handled
-    //by the fallthrough code.
-    if (compatible_caps && !ptr_in_diram_case && alignment<=UNALIGNED_MEM_ALIGNMENT_BYTES) {
+    if (compatible_caps && !ptr_in_diram_case) {
         // try to reallocate this memory within the same heap
         // (which will resize the block if it can)
-        void *r = multi_heap_realloc(heap->heap, ptr, MULTI_HEAP_ADD_BLOCK_OWNER_SIZE(size));
+        void *r = multi_heap_realloc(heap->heap, ptr, size);
         if (r != NULL) {
-            MULTI_HEAP_SET_BLOCK_OWNER(r);
-            r = MULTI_HEAP_ADD_BLOCK_OWNER_OFFSET(r);
             CALL_HOOK(esp_heap_trace_alloc_hook, r, size, caps);
             return r;
         }
@@ -245,7 +198,7 @@ HEAP_IRAM_ATTR NOINLINE_ATTR void *heap_caps_realloc_base( void *ptr, size_t siz
 
     // if we couldn't do that, try to see if we can reallocate
     // in a different heap with requested capabilities.
-    void *new_p = heap_caps_aligned_alloc_base(alignment, size, caps);
+    void *new_p = heap_caps_malloc_base(size, caps);
     if (new_p != NULL) {
         size_t old_size = 0;
 
@@ -258,10 +211,8 @@ HEAP_IRAM_ATTR NOINLINE_ATTR void *heap_caps_realloc_base( void *ptr, size_t siz
         }
 
         assert(old_size > 0);
-        // do not copy the block owner bytes
-        memcpy(new_p, MULTI_HEAP_ADD_BLOCK_OWNER_OFFSET(ptr), MIN(size, old_size));
-        // add the block owner bytes to ptr since they are removed in heap_caps_free
-        heap_caps_free(MULTI_HEAP_ADD_BLOCK_OWNER_OFFSET(ptr));
+        memcpy(new_p, ptr, MIN(size, old_size));
+        heap_caps_free(ptr);
         return new_p;
     }
 
@@ -286,4 +237,32 @@ HEAP_IRAM_ATTR void *heap_caps_calloc_base( size_t n, size_t size, uint32_t caps
         memset(result, 0, size_bytes);
     }
     return result;
+}
+
+HEAP_IRAM_ATTR void *heap_caps_aligned_alloc_base(size_t alignment, size_t size, uint32_t caps)
+{
+    for (int prio = 0; prio < SOC_MEMORY_TYPE_NO_PRIOS; prio++) {
+        //Iterate over heaps and check capabilities at this priority
+        heap_t *heap;
+        SLIST_FOREACH(heap, &registered_heaps, next) {
+            if (heap->heap == NULL) {
+                continue;
+            }
+            if ((heap->caps[prio] & caps) != 0) {
+                //Heap has at least one of the caps requested. If caps has other bits set that this prio
+                //doesn't cover, see if they're available in other prios.
+                if ((get_all_caps(heap) & caps) == caps) {
+                    //Just try to alloc, nothing special.
+                    void *ret = multi_heap_aligned_alloc(heap->heap, size, alignment);
+                    if (ret != NULL) {
+                        CALL_HOOK(esp_heap_trace_alloc_hook, ret, size, caps);
+                        return ret;
+                    }
+                }
+            }
+        }
+    }
+
+    //Nothing usable found.
+    return NULL;
 }

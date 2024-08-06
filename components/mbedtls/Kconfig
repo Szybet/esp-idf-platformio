@@ -347,21 +347,6 @@ menu "mbedTLS"
                 Name of the custom certificate directory or file. This path is evaluated
                 relative to the project root directory.
 
-        config MBEDTLS_CERTIFICATE_BUNDLE_DEPRECATED_LIST
-            bool "Add deprecated root certificates"
-            depends on MBEDTLS_CERTIFICATE_BUNDLE && !MBEDTLS_CERTIFICATE_BUNDLE_DEFAULT_NONE
-            help
-                Include the deprecated list of root certificates in the bundle.
-                This list gets updated when a certificate is removed from the Mozilla's
-                NSS root certificate store. This config can be enabled if you would like
-                to ensure that none of the certificates that were deployed in the product
-                are affected because of the update to bundle. In turn, enabling this
-                config keeps expired, retracted certificates in the bundle and it may
-                pose a security risk.
-
-                - Deprecated cert list may grow based based on sync with upstream bundle
-                - Deprecated certs would be be removed in ESP-IDF (next) major release
-
         config MBEDTLS_CERTIFICATE_BUNDLE_MAX_CERTS
             int "Maximum no of certificates allowed in certificate bundle"
             default 200
@@ -405,17 +390,6 @@ menu "mbedTLS"
             This allows other code to run on the CPU while an AES operation is pending.
             Otherwise the CPU busy-waits.
 
-    config MBEDTLS_AES_INTERRUPT_LEVEL
-        int "AES hardware interrupt level"
-        default 0
-        depends on MBEDTLS_AES_USE_INTERRUPT
-        range 0 3
-        help
-            This config helps to set the interrupt priority level for the AES peripheral.
-            Value 0 (default) means that there is no preference regarding the interrupt
-            priority level and any level from 1 to 3 can be selected (based on the availability).
-            Note: Higher value indicates high interrupt priority.
-
     config MBEDTLS_HARDWARE_GCM
         bool "Enable partially hardware accelerated GCM"
         depends on SOC_AES_SUPPORT_GCM && MBEDTLS_HARDWARE_AES
@@ -431,7 +405,7 @@ menu "mbedTLS"
     config MBEDTLS_GCM_SUPPORT_NON_AES_CIPHER
         bool "Enable support for non-AES ciphers in GCM operation"
         depends on MBEDTLS_HARDWARE_AES
-        default y
+        default n
         help
             Enable this config to support fallback to software definitions for a non-AES
             cipher GCM operation as we support hardware acceleration only for AES cipher.
@@ -483,17 +457,6 @@ menu "mbedTLS"
 
             This allows other code to run on the CPU while an MPI operation is pending.
             Otherwise the CPU busy-waits.
-
-    config MBEDTLS_MPI_INTERRUPT_LEVEL
-        int "MPI hardware interrupt level"
-        default 0
-        depends on MBEDTLS_MPI_USE_INTERRUPT
-        range 0 3
-        help
-            This config helps to set the interrupt priority level for the MPI peripheral.
-            Value 0 (default) means that there is no preference regarding the interrupt
-            priority level and any level from 1 to 3 can be selected (based on the availability).
-            Note: Higher value indicates high interrupt priority.
 
     config MBEDTLS_HARDWARE_SHA
         bool "Enable hardware SHA acceleration"
@@ -561,14 +524,14 @@ menu "mbedTLS"
         default n
         help
             This option enables hardware acceleration for ECDSA sign function, only
-            when using ATECC608A cryptoauth chip.
+            when using ATECC608A cryptoauth chip (integrated with ESP32-WROOM-32SE)
 
     config MBEDTLS_ATCA_HW_ECDSA_VERIFY
         bool "Enable hardware ECDSA verify acceleration when using ATECC608A"
         default n
         help
             This option enables hardware acceleration for ECDSA sign function, only
-            when using ATECC608A cryptoauth chip.
+            when using ATECC608A cryptoauth chip (integrated with ESP32-WROOM-32SE)
 
     config MBEDTLS_HAVE_TIME
         bool "Enable mbedtls time support"

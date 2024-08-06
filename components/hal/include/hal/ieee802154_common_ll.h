@@ -8,19 +8,13 @@
 
 #include <stdbool.h>
 #include <stdint.h>
-#include "soc/soc_caps.h"
-
-#if SOC_IEEE802154_SUPPORTED
 #include "soc/ieee802154_reg.h"
 #include "soc/ieee802154_struct.h"
 #include "esp_attr.h"
-#endif
 
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-#if SOC_IEEE802154_SUPPORTED
 
 /**
  * @brief IEEE802154 opcode.
@@ -194,7 +188,7 @@ FORCE_INLINE_ATTR void ieee802154_ll_clear_events(ieee802154_ll_events events)
 
 FORCE_INLINE_ATTR ieee802154_ll_events ieee802154_ll_get_events(void)
 {
-    return (ieee802154_ll_events)(IEEE802154.event_status.events);
+    return IEEE802154.event_status.events;
 }
 
 FORCE_INLINE_ATTR bool ieee802154_ll_is_current_rx_frame(void)
@@ -244,7 +238,7 @@ FORCE_INLINE_ATTR uint32_t ieee802154_ll_get_rx_status(void)
 
 FORCE_INLINE_ATTR ieee802154_ll_rx_abort_reason_t ieee802154_ll_get_rx_abort_reason(void)
 {
-    return (ieee802154_ll_rx_abort_reason_t)(IEEE802154.rx_status.rx_abort_reason);
+    return IEEE802154.rx_status.rx_abort_reason;
 }
 
 FORCE_INLINE_ATTR uint32_t ieee802154_ll_get_tx_status(void)
@@ -254,12 +248,12 @@ FORCE_INLINE_ATTR uint32_t ieee802154_ll_get_tx_status(void)
 
 FORCE_INLINE_ATTR ieee802154_ll_tx_abort_reason_t ieee802154_ll_get_tx_abort_reason(void)
 {
-    return (ieee802154_ll_tx_abort_reason_t)(IEEE802154.tx_status.tx_abort_reason);
+    return IEEE802154.tx_status.tx_abort_reason;
 }
 
 FORCE_INLINE_ATTR ieee802154_ll_tx_security_failed_reason_t ieee802154_ll_get_tx_security_failed_reason(void)
 {
-    return (ieee802154_ll_tx_security_failed_reason_t)(IEEE802154.tx_status.tx_security_error);
+    return IEEE802154.tx_status.tx_security_error;
 }
 
 static inline uint8_t ieee802154_ll_get_freq(void)
@@ -543,7 +537,6 @@ static inline uint32_t ieee802154_ll_get_cca_busy_cnt(void)
 {
     return IEEE802154.debug_cca_busy_cnt;
 }
-#endif
 
 #ifdef __cplusplus
 }

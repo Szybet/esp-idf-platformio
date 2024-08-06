@@ -10,8 +10,6 @@
 #include "soc/memprot_defs.h"
 #include "hal/memprot_types.h"
 #include "soc/dport_reg.h"
-#include "soc/dport_access.h"
-#include "soc/periph_defs.h"
 
 #ifdef __cplusplus
 extern "C" {

@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2015-2024 Espressif Systems (Shanghai) CO LTD
+ * SPDX-FileCopyrightText: 2015-2022 Espressif Systems (Shanghai) CO LTD
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -68,6 +68,7 @@ esp_err_t esp_register_shutdown_handler(shutdown_handler_t handle);
   */
 esp_err_t esp_unregister_shutdown_handler(shutdown_handler_t handle);
 
+
 /**
   * @brief  Restart PRO and APP CPUs.
   *
@@ -76,7 +77,7 @@ esp_err_t esp_unregister_shutdown_handler(shutdown_handler_t handle);
   * Peripherals (except for Wi-Fi, BT, UART0, SPI1, and legacy timers) are not reset.
   * This function does not return.
   */
-void esp_restart(void) __attribute__((__noreturn__));
+void esp_restart(void) __attribute__ ((__noreturn__));
 
 /**
  * @brief  Get reason of last reset
@@ -109,7 +110,7 @@ uint32_t esp_get_free_internal_heap_size(void);
   *
   * @return Minimum free heap ever available
   */
-uint32_t esp_get_minimum_free_heap_size(void);
+uint32_t esp_get_minimum_free_heap_size( void );
 
 /**
  * @brief Trigger a software abort

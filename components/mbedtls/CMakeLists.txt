@@ -45,12 +45,6 @@ if(CONFIG_MBEDTLS_CERTIFICATE_BUNDLE)
         list(APPEND args --filter ${DEFAULT_CRT_DIR}/cmn_crt_authorities.csv)
     endif()
 
-    # Add deprecated root certs if enabled. This config is not visible if the default cert
-    # bundle is not selected
-    if(CONFIG_MBEDTLS_CERTIFICATE_BUNDLE_DEPRECATED_LIST)
-        list(APPEND crt_paths ${DEFAULT_CRT_DIR}/cacrt_deprecated.pem)
-    endif()
-
     if(CONFIG_MBEDTLS_CUSTOM_CERTIFICATE_BUNDLE)
         get_filename_component(custom_bundle_path
         ${CONFIG_MBEDTLS_CUSTOM_CERTIFICATE_BUNDLE_PATH} ABSOLUTE BASE_DIR "${project_dir}")
@@ -144,7 +138,8 @@ endif()
 
 # net_sockets.c should only be compiled if BSD socket functions are available.
 # Do this by checking if lwip component is included into the build.
-if(CONFIG_LWIP_ENABLE)
+idf_build_get_property(build_components BUILD_COMPONENTS)
+if(lwip IN_LIST build_components)
     list(APPEND mbedtls_target_sources "${COMPONENT_DIR}/port/net_sockets.c")
     idf_component_get_property(lwip_lib lwip COMPONENT_LIB)
     target_link_libraries(${COMPONENT_LIB} ${linkage_type} ${lwip_lib})
@@ -153,7 +148,7 @@ endif()
 # Add port files to mbedtls targets
 target_sources(mbedtls PRIVATE ${mbedtls_target_sources})
 
-# Choose peripheral type
+# Choose perihperal type
 
 if(CONFIG_SOC_SHA_SUPPORTED)
     if(CONFIG_SOC_SHA_SUPPORT_DMA)
@@ -180,6 +175,7 @@ if(SHA_PERIPHERAL_TYPE STREQUAL "dma")
         set(SHA_DMA_SRCS "${COMPONENT_DIR}/port/sha/dma/esp_sha_crypto_dma_impl.c")
     else()
         set(SHA_DMA_SRCS "${COMPONENT_DIR}/port/sha/dma/esp_sha_gdma_impl.c")
+
     endif()
     target_sources(mbedcrypto PRIVATE  "${SHA_DMA_SRCS}")
 endif()
@@ -188,34 +184,21 @@ if(AES_PERIPHERAL_TYPE STREQUAL "dma")
     if(NOT CONFIG_SOC_AES_GDMA)
         set(AES_DMA_SRCS "${COMPONENT_DIR}/port/aes/dma/esp_aes_crypto_dma_impl.c")
     else()
-        set(AES_DMA_SRCS "${COMPONENT_DIR}/port/aes/dma/esp_aes_gdma_impl.c")
+        set(AES_DMA_SRCS "${COMPONENT_DIR}/port/aes/dma/esp_aes_gdma_impl.c"
+                         "${COMPONENT_DIR}/port/crypto_shared_gdma/esp_crypto_shared_gdma.c")
     endif()
-
-    list(APPEND AES_DMA_SRCS "${COMPONENT_DIR}/port/aes/dma/esp_aes_dma_core.c")
 
     target_include_directories(mbedcrypto PRIVATE "${COMPONENT_DIR}/port/aes/dma/include")
     target_sources(mbedcrypto PRIVATE  "${AES_DMA_SRCS}")
 endif()
 
-if(SHA_PERIPHERAL_TYPE STREQUAL "dma" OR AES_PERIPHERAL_TYPE STREQUAL "dma")
-    target_link_libraries(mbedcrypto PRIVATE idf::esp_mm)
-    if(CONFIG_SOC_SHA_GDMA OR CONFIG_SOC_AES_GDMA)
-        if(CONFIG_SOC_AXI_DMA_EXT_MEM_ENC_ALIGNMENT)
-            target_link_libraries(mbedcrypto PRIVATE idf::bootloader_support)
-        endif()
-        target_sources(mbedcrypto PRIVATE "${COMPONENT_DIR}/port/crypto_shared_gdma/esp_crypto_shared_gdma.c")
-    endif()
-endif()
 
-if(NOT ${IDF_TARGET} STREQUAL "linux")
-    target_sources(mbedcrypto PRIVATE "${COMPONENT_DIR}/port/esp_hardware.c")
-endif()
-target_sources(mbedcrypto PRIVATE "${COMPONENT_DIR}/port/esp_mem.c"
+target_sources(mbedcrypto PRIVATE "${COMPONENT_DIR}/port/esp_hardware.c"
+                                  "${COMPONENT_DIR}/port/esp_mem.c"
                                   "${COMPONENT_DIR}/port/esp_timing.c"
 )
 
 if(CONFIG_SOC_AES_SUPPORTED)
-    target_include_directories(mbedcrypto PRIVATE "${COMPONENT_DIR}/port/aes/include")
     target_sources(mbedcrypto PRIVATE "${COMPONENT_DIR}/port/aes/esp_aes_xts.c"
                                   "${COMPONENT_DIR}/port/aes/esp_aes_common.c"
                                   "${COMPONENT_DIR}/port/aes/${AES_PERIPHERAL_TYPE}/esp_aes.c"
@@ -241,8 +224,9 @@ endif()
 # The other port-specific files don't override internal mbedTLS functions, they just add new functions.
 
 if(CONFIG_MBEDTLS_HARDWARE_MPI)
-    target_sources(mbedcrypto PRIVATE  "${COMPONENT_DIR}/port/bignum/esp_bignum.c"
-                                       "${COMPONENT_DIR}/port/bignum/bignum_alt.c")
+    target_sources(mbedcrypto PRIVATE  "${COMPONENT_DIR}/port/esp_bignum.c"
+                                       "${COMPONENT_DIR}/port/${idf_target}/bignum.c"
+    )
 endif()
 
 if(CONFIG_MBEDTLS_HARDWARE_SHA)
@@ -269,12 +253,6 @@ if(CONFIG_MBEDTLS_HARDWARE_ECDSA_SIGN OR CONFIG_MBEDTLS_HARDWARE_ECDSA_VERIFY)
         target_link_libraries(${COMPONENT_LIB} INTERFACE "-Wl,--wrap=mbedtls_ecdsa_sign_restartable")
         target_link_libraries(${COMPONENT_LIB} INTERFACE "-Wl,--wrap=mbedtls_ecdsa_write_signature")
         target_link_libraries(${COMPONENT_LIB} INTERFACE "-Wl,--wrap=mbedtls_ecdsa_write_signature_restartable")
-
-        if(CONFIG_SOC_ECDSA_SUPPORT_DETERMINISTIC_MODE)
-            target_link_libraries(${COMPONENT_LIB} INTERFACE "-Wl,--wrap=mbedtls_ecdsa_sign_det_ext")
-            target_link_libraries(${COMPONENT_LIB} INTERFACE "-Wl,--wrap=mbedtls_ecdsa_sign_det_restartable")
-        endif()
-
     endif()
 
     if(CONFIG_MBEDTLS_HARDWARE_ECDSA_VERIFY)

@@ -212,7 +212,6 @@
 #define HCI_WRITE_ERRONEOUS_DATA_RPT    (0x005B | HCI_GRP_HOST_CONT_BASEBAND_CMDS)
 #define HCI_ENHANCED_FLUSH              (0x005F | HCI_GRP_HOST_CONT_BASEBAND_CMDS)
 #define HCI_SEND_KEYPRESS_NOTIF         (0x0060 | HCI_GRP_HOST_CONT_BASEBAND_CMDS)
-#define HCI_SET_MIN_ENC_KEY_SIZE        (0x0084 | HCI_GRP_HOST_CONT_BASEBAND_CMDS)
 
 
 /* AMP HCI */
@@ -425,9 +424,8 @@
 #define HCI_SUBCODE_BLE_MAX                        0x7F
 
 //ESP BT subcode define
-#define HCI_SUBCODE_BT_INIT                     0x00
-#define HCI_SUBCODE_BT_SET_MIN_ENC_KEY_SIZE     0x02
-#define HCI_SUBCODE_BT_MAX                      0x7F
+#define HCI_SUBCODE_BT_INIT     0x00
+#define HCI_SUBCODE_BT_MAX      0x7F
 
 #define HCI_ESP_VENDOR_OPCODE_BUILD(ogf, group, subcode) ((ogf << 10) | (group <<7) | (subcode << 0))
 /*
@@ -469,7 +467,6 @@
 /* BLE clear legacy advertising */
 #define HCI_VENDOR_BLE_CLEAR_ADV          HCI_ESP_VENDOR_OPCODE_BUILD(HCI_VENDOR_OGF, HCI_ESP_GROUP_BLE, HCI_SUBCODE_BLE_CLEAR_ADV)
 //ESP BT HCI CMD
-#define HCI_VENDOR_BT_SET_MIN_ENC_KEY_SIZE         HCI_ESP_VENDOR_OPCODE_BUILD(HCI_VENDOR_OGF, HCI_ESP_GROUP_BT, HCI_SUBCODE_BT_SET_MIN_ENC_KEY_SIZE)
 
 /* subcode for multi adv feature */
 #define BTM_BLE_MULTI_ADV_SET_PARAM                     0x01
@@ -1292,7 +1289,6 @@ typedef UINT8 tHCI_STATUS;
 
 /* Page timeout is used in LC only and LC is counting down slots not using OS */
 #define HCI_DEFAULT_PAGE_TOUT           0x2000  /* 5.12 sec (in slots) */
-#define HCI_MIN_PAGE_TOUT               0x0016  /* 13.75 ms (in slots) */
 
 /* Scan enable flags */
 #define HCI_NO_SCAN_ENABLED             0x00

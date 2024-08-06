@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2020-2024 Espressif Systems (Shanghai) CO LTD
+ * SPDX-FileCopyrightText: 2020-2021 Espressif Systems (Shanghai) CO LTD
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -8,11 +8,9 @@
 #include <stddef.h> /* For NULL declaration */
 #include <stdint.h>
 #include <stdbool.h>
-#include "hal/assert.h"
 #include "hal/gdma_types.h"
 #include "soc/gdma_struct.h"
 #include "soc/gdma_reg.h"
-#include "soc/system_struct.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -49,55 +47,18 @@ extern "C" {
 #define GDMA_LL_EVENT_RX_SUC_EOF     (1<<1)
 #define GDMA_LL_EVENT_RX_DONE        (1<<0)
 
-#define GDMA_LL_L2FIFO_BASE_SIZE     16 // Basic size of GDMA Level 2 FIFO
+#define GDMA_LL_L2FIFO_BASE_SIZE (16) // Basic size of GDMA Level 2 FIFO
 
 /* Memory block size value supported by channel */
-#define GDMA_LL_EXT_MEM_BK_SIZE_16B   0
-#define GDMA_LL_EXT_MEM_BK_SIZE_32B   1
-#define GDMA_LL_EXT_MEM_BK_SIZE_64B   2
-
-#define GDMA_LL_AHB_GROUP_START_ID    0 // AHB GDMA group ID starts from 0
-#define GDMA_LL_AHB_NUM_GROUPS        1 // Number of AHB GDMA groups
-#define GDMA_LL_AHB_PAIRS_PER_GROUP   5 // Number of GDMA pairs in each AHB group
-
-#define GDMA_LL_AHB_DESC_ALIGNMENT    4
-
-#define GDMA_LL_AHB_BURST_SIZE_ADJUSTABLE 1 // AHB GDMA supports adjustable burst size
-#define GDMA_LL_AHB_RX_BURST_NEEDS_ALIGNMENT  1
+#define GDMA_LL_EXT_MEM_BK_SIZE_16B (0)
+#define GDMA_LL_EXT_MEM_BK_SIZE_32B (1)
+#define GDMA_LL_EXT_MEM_BK_SIZE_64B (2)
 
 ///////////////////////////////////// Common /////////////////////////////////////////
-
 /**
- * @brief Enable the bus clock for the DMA module
+ * @brief Enable DMA clock gating
  */
-static inline void gdma_ll_enable_bus_clock(int group_id, bool enable)
-{
-    (void)group_id;
-    SYSTEM.perip_clk_en1.dma_clk_en = enable;
-}
-
-/// use a macro to wrap the function, force the caller to use it in a critical section
-/// the critical section needs to declare the __DECLARE_RCC_ATOMIC_ENV variable in advance
-#define gdma_ll_enable_bus_clock(...) (void)__DECLARE_RCC_ATOMIC_ENV; gdma_ll_enable_bus_clock(__VA_ARGS__)
-
-/**
- * @brief Reset the DMA module
- */
-static inline void gdma_ll_reset_register(int group_id)
-{
-    (void)group_id;
-    SYSTEM.perip_rst_en1.dma_rst = 1;
-    SYSTEM.perip_rst_en1.dma_rst = 0;
-}
-
-/// use a macro to wrap the function, force the caller to use it in a critical section
-/// the critical section needs to declare the __DECLARE_RCC_ATOMIC_ENV variable in advance
-#define gdma_ll_reset_register(...) (void)__DECLARE_RCC_ATOMIC_ENV; gdma_ll_reset_register(__VA_ARGS__)
-
-/**
- * @brief Force enable register clock
- */
-static inline void gdma_ll_force_enable_reg_clock(gdma_dev_t *dev, bool enable)
+static inline void gdma_ll_enable_clock(gdma_dev_t *dev, bool enable)
 {
     dev->misc_conf.clk_en = enable;
 }
@@ -107,13 +68,9 @@ static inline void gdma_ll_force_enable_reg_clock(gdma_dev_t *dev, bool enable)
  * @brief Get DMA RX channel interrupt status word
  */
 __attribute__((always_inline))
-static inline uint32_t gdma_ll_rx_get_interrupt_status(gdma_dev_t *dev, uint32_t channel, bool raw)
+static inline uint32_t gdma_ll_rx_get_interrupt_status(gdma_dev_t *dev, uint32_t channel)
 {
-    if (raw) {
-        return dev->channel[channel].in.int_raw.val;
-    } else {
-        return dev->channel[channel].in.int_st.val;
-    }
+    return dev->channel[channel].in.int_st.val;
 }
 
 /**
@@ -180,28 +137,12 @@ static inline void gdma_ll_rx_reset_channel(gdma_dev_t *dev, uint32_t channel)
 }
 
 /**
- * @brief Set DMA RX channel memory block size based on the burst requirement
- * @param burst_sz Supported value: 16/32/64
+ * @brief Set DMA RX channel memory block size
+ * @param size_index Supported value: GDMA_LL_EXT_MEM_BK_SIZE_16B/32B/64B
  */
-static inline void gdma_ll_rx_set_burst_size(gdma_dev_t *dev, uint32_t channel, uint32_t burst_sz)
+static inline void gdma_ll_rx_set_block_size_psram(gdma_dev_t *dev, uint32_t channel, uint32_t size_index)
 {
-    uint32_t block_size = 0;
-    switch (burst_sz) {
-    case 64:
-        block_size = GDMA_LL_EXT_MEM_BK_SIZE_64B;
-        break;
-    case 32:
-        block_size = GDMA_LL_EXT_MEM_BK_SIZE_32B;
-        break;
-    case 16:
-        block_size = GDMA_LL_EXT_MEM_BK_SIZE_16B;
-        break;
-    default:
-        HAL_ASSERT(false);
-        break;
-    }
-
-    dev->channel[channel].in.conf1.in_ext_mem_bk_size = block_size;
+    dev->channel[channel].in.conf1.in_ext_mem_bk_size = size_index;
 }
 
 /**
@@ -302,9 +243,9 @@ static inline void gdma_ll_rx_enable_auto_return(gdma_dev_t *dev, uint32_t chann
 }
 
 /**
- * @brief Check if DMA RX descriptor FSM is in IDLE state
+ * @brief Check if DMA RX FSM is in IDLE state
  */
-static inline bool gdma_ll_rx_is_desc_fsm_idle(gdma_dev_t *dev, uint32_t channel)
+static inline bool gdma_ll_rx_is_fsm_idle(gdma_dev_t *dev, uint32_t channel)
 {
     return dev->channel[channel].in.link.park;
 }
@@ -328,10 +269,10 @@ static inline uint32_t gdma_ll_rx_get_error_eof_desc_addr(gdma_dev_t *dev, uint3
 }
 
 /**
- * @brief Get the pre-fetched RX descriptor's address
+ * @brief Get current RX descriptor's address
  */
 __attribute__((always_inline))
-static inline uint32_t gdma_ll_rx_get_prefetched_desc_addr(gdma_dev_t *dev, uint32_t channel)
+static inline uint32_t gdma_ll_rx_get_current_desc_addr(gdma_dev_t *dev, uint32_t channel)
 {
     return dev->channel[channel].in.dscr;
 }
@@ -341,7 +282,7 @@ static inline uint32_t gdma_ll_rx_get_prefetched_desc_addr(gdma_dev_t *dev, uint
  */
 static inline void gdma_ll_rx_set_weight(gdma_dev_t *dev, uint32_t channel, uint32_t weight)
 {
-    dev->channel[channel].in.weight.rx_weight = weight;
+    dev->channel[channel].in.wight.rx_weight = weight;
 }
 
 /**
@@ -375,13 +316,9 @@ static inline void gdma_ll_rx_disconnect_from_periph(gdma_dev_t *dev, uint32_t c
  * @brief Get DMA TX channel interrupt status word
  */
 __attribute__((always_inline))
-static inline uint32_t gdma_ll_tx_get_interrupt_status(gdma_dev_t *dev, uint32_t channel, bool raw)
+static inline uint32_t gdma_ll_tx_get_interrupt_status(gdma_dev_t *dev, uint32_t channel)
 {
-    if (raw) {
-        return dev->channel[channel].out.int_raw.val;
-    } else {
-        return dev->channel[channel].out.int_st.val;
-    }
+    return dev->channel[channel].out.int_st.val;
 }
 
 /**
@@ -464,28 +401,12 @@ static inline void gdma_ll_tx_reset_channel(gdma_dev_t *dev, uint32_t channel)
 }
 
 /**
- * @brief Set DMA TX channel memory block size based on the burst requirement
- * @param burst_sz Supported value: 16/32/64
+ * @brief Set DMA TX channel memory block size
+ * @param size_index Supported value: GDMA_LL_EXT_MEM_BK_SIZE_16B/32B/64B
  */
-static inline void gdma_ll_tx_set_burst_size(gdma_dev_t *dev, uint32_t channel, uint32_t burst_sz)
+static inline void gdma_ll_tx_set_block_size_psram(gdma_dev_t *dev, uint32_t channel, uint32_t size_index)
 {
-    uint32_t block_size = 0;
-    switch (burst_sz) {
-    case 64:
-        block_size = GDMA_LL_EXT_MEM_BK_SIZE_64B;
-        break;
-    case 32:
-        block_size = GDMA_LL_EXT_MEM_BK_SIZE_32B;
-        break;
-    case 16:
-        block_size = GDMA_LL_EXT_MEM_BK_SIZE_16B;
-        break;
-    default:
-        HAL_ASSERT(false);
-        break;
-    }
-
-    dev->channel[channel].out.conf1.out_ext_mem_bk_size = block_size;
+    dev->channel[channel].out.conf1.out_ext_mem_bk_size = size_index;
 }
 
 /**
@@ -570,9 +491,9 @@ static inline void gdma_ll_tx_restart(gdma_dev_t *dev, uint32_t channel)
 }
 
 /**
- * @brief Check if DMA TX descriptor FSM is in IDLE state
+ * @brief Check if DMA TX FSM is in IDLE state
  */
-static inline bool gdma_ll_tx_is_desc_fsm_idle(gdma_dev_t *dev, uint32_t channel)
+static inline bool gdma_ll_tx_is_fsm_idle(gdma_dev_t *dev, uint32_t channel)
 {
     return dev->channel[channel].out.link.park;
 }
@@ -587,10 +508,10 @@ static inline uint32_t gdma_ll_tx_get_eof_desc_addr(gdma_dev_t *dev, uint32_t ch
 }
 
 /**
- * @brief Get the pre-fetched TX descriptor's address
+ * @brief Get current TX descriptor's address
  */
 __attribute__((always_inline))
-static inline uint32_t gdma_ll_tx_get_prefetched_desc_addr(gdma_dev_t *dev, uint32_t channel)
+static inline uint32_t gdma_ll_tx_get_current_desc_addr(gdma_dev_t *dev, uint32_t channel)
 {
     return dev->channel[channel].out.dscr;
 }
@@ -600,7 +521,7 @@ static inline uint32_t gdma_ll_tx_get_prefetched_desc_addr(gdma_dev_t *dev, uint
  */
 static inline void gdma_ll_tx_set_weight(gdma_dev_t *dev, uint32_t channel, uint32_t weight)
 {
-    dev->channel[channel].out.weight.tx_weight = weight;
+    dev->channel[channel].out.wight.tx_weight = weight;
 }
 
 /**

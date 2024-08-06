@@ -9,19 +9,26 @@
  *
  * SPDX-License-Identifier: Apache-2.0
  *
- * SPDX-FileContributor: 2015-2024 Espressif Systems (Shanghai) CO LTD
+ * SPDX-FileContributor: 2015-2021 Espressif Systems (Shanghai) CO LTD
  */
 #include <string.h>
 #include <stdlib.h>
 #include <inttypes.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "esp_wifi.h"
 #include "esp_event.h"
 #include "esp_log.h"
 #include "esp_system.h"
 #include "nvs_flash.h"
 #include "protocol_examples_common.h"
 #include "esp_netif.h"
+
+#include "lwip/err.h"
+#include "lwip/sockets.h"
+#include "lwip/sys.h"
+#include "lwip/netdb.h"
+#include "lwip/dns.h"
 
 #include "mbedtls/platform.h"
 #include "mbedtls/net_sockets.h"
@@ -64,7 +71,7 @@ static void https_get_task(void *pvParameters)
 #ifdef CONFIG_MBEDTLS_SSL_PROTO_TLS1_3
     psa_status_t status = psa_crypto_init();
     if (status != PSA_SUCCESS) {
-        ESP_LOGE(TAG, "Failed to initialize PSA crypto, returned %d", (int) status);
+        ESP_LOGE(TAG, "Failed to initialize PSA crypto, returned %d\n", (int) status);
         return;
     }
 #endif
@@ -90,7 +97,7 @@ static void https_get_task(void *pvParameters)
 
     if(ret < 0)
     {
-        ESP_LOGE(TAG, "esp_crt_bundle_attach returned -0x%x", -ret);
+        ESP_LOGE(TAG, "esp_crt_bundle_attach returned -0x%x\n\n", -ret);
         abort();
     }
 
@@ -123,7 +130,7 @@ static void https_get_task(void *pvParameters)
 
     if ((ret = mbedtls_ssl_setup(&ssl, &conf)) != 0)
     {
-        ESP_LOGE(TAG, "mbedtls_ssl_setup returned -0x%x", -ret);
+        ESP_LOGE(TAG, "mbedtls_ssl_setup returned -0x%x\n\n", -ret);
         goto exit;
     }
 

@@ -43,12 +43,11 @@ CFLAGS =                    \
     $(INCLUDES) $(DEFINES)  \
     -g                      \
     -D_GNU_SOURCE           \
-    -m32                    \
     $(NULL)
 
 LIBS = -lrt -lpthread -lstdc++
 
-LDFLAGS = -m32
+LDFLAGS =
 
 ### ===== Sources =====
 
@@ -100,7 +99,7 @@ show_objs:
 ### ===== Clean =====
 clean:
 	@echo "Cleaning artifacts."
-	rm -f .depend $(OBJS) *.o *.exe
+	rm *~ .depend $(OBJS) *.o *.exe
 
 ### ===== Dependencies =====
 ### Rebuild if headers change

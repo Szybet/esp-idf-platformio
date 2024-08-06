@@ -24,6 +24,7 @@
 
 static volatile int in_int_context, int_handled;
 
+
 static void testint(void)
 {
     esp_rom_printf("INT!\n");
@@ -32,6 +33,7 @@ static void testint(void)
     }
     int_handled++;
 }
+
 
 static void testthread(void *arg)
 {
@@ -47,14 +49,16 @@ static void testthread(void *arg)
     vTaskDelete(NULL);
 }
 
+
 TEST_CASE("xPortInIsrContext test", "[freertos]")
 {
     xTaskCreatePinnedToCore(testthread, "tst", 4096, NULL, 3, NULL, 0);
     vTaskDelay(150 / portTICK_PERIOD_MS);
-#if CONFIG_FREERTOS_NUMBER_OF_CORES == 2
+#if portNUM_PROCESSORS == 2
     xTaskCreatePinnedToCore(testthread, "tst", 4096, NULL, 3, NULL, 1);
     vTaskDelay(150 / portTICK_PERIOD_MS);
 #endif
 }
+
 
 #endif

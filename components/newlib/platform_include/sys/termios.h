@@ -14,6 +14,7 @@
 // Not everything has a defined meaning for ESP-IDF (e.g. process leader IDs) and therefore are likely to be stubbed
 // in actual implementations.
 
+
 #include <stdint.h>
 #include <sys/types.h>
 #include "sdkconfig.h"
@@ -163,7 +164,8 @@ typedef uint8_t cc_t;
 typedef uint32_t speed_t;
 typedef uint16_t tcflag_t;
 
-struct termios {
+struct termios
+{
     tcflag_t c_iflag;    /** Input modes */
     tcflag_t c_oflag;    /** Output modes */
     tcflag_t c_cflag;    /** Control modes */

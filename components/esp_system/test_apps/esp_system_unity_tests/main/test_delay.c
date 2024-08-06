@@ -3,7 +3,6 @@
  *
  * SPDX-License-Identifier: Unlicense OR CC0-1.0
  */
-#include "sdkconfig.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
@@ -57,7 +56,7 @@ TEST_CASE("esp_rom_delay_us produces correct delay on CPUs", "[delay]")
     TEST_ASSERT(xSemaphoreTake(args.done, delay_ms * 2 / portTICK_PERIOD_MS));
     TEST_ASSERT_INT32_WITHIN(1000, args.delay_us, args.result);
 
-#if CONFIG_FREERTOS_NUMBER_OF_CORES == 2
+#if portNUM_PROCESSORS == 2
     xTaskCreatePinnedToCore(test_delay_task, "", 2048, (void *)&args, 3, NULL, 1);
     TEST_ASSERT(xSemaphoreTake(args.done, delay_ms * 2 / portTICK_PERIOD_MS));
     TEST_ASSERT_INT32_WITHIN(1000, args.delay_us, args.result);
@@ -80,7 +79,7 @@ TEST_CASE("vTaskDelay produces correct delay on CPUs", "[delay]")
     TEST_ASSERT(xSemaphoreTake(args.done, delay_ms * 2 / portTICK_PERIOD_MS));
     TEST_ASSERT_INT32_WITHIN(1000, args.delay_us, args.result);
 
-#if CONFIG_FREERTOS_NUMBER_OF_CORES == 2
+#if portNUM_PROCESSORS == 2
     xTaskCreatePinnedToCore(test_delay_task, "", 2048, (void *)&args, 3, NULL, 1);
     TEST_ASSERT(xSemaphoreTake(args.done, delay_ms * 2 / portTICK_PERIOD_MS));
     TEST_ASSERT_INT32_WITHIN(1000, args.delay_us, args.result);

@@ -154,10 +154,10 @@ public:
     };
 
     /**
-     * TCAT TLV Types.
+     * TCAT Command TLV Types.
      *
      */
-    enum TlvType : uint8_t
+    enum CommandTlvType : uint8_t
     {
         // Command Class General
         kTlvResponseWithStatus        = 1,  ///< TCAT response with status value TLV
@@ -240,6 +240,7 @@ public:
     enum TcatCertificateAttribute
     {
         kCertificateDomainName         = 1,
+        kCertificateThreadVersion      = 2,
         kCertificateAuthorizationField = 3,
         kCertificateNetworkName        = 4,
         kCertificateExtendedPanId      = 5,
@@ -257,6 +258,19 @@ public:
     };
 
     /**
+     * Represents Device ID type.
+     *
+     */
+    enum TcatDeviceIdType : uint8_t
+    {
+        kTcatDeviceIdEmpty         = OT_TCAT_DEVICE_ID_EMPTY,
+        kTcatDeviceIdOui24         = OT_TCAT_DEVICE_ID_OUI24,
+        kTcatDeviceIdOui36         = OT_TCAT_DEVICE_ID_OUI36,
+        kTcatDeviceIdDiscriminator = OT_TCAT_DEVICE_ID_DISCRIMINATOR,
+        kTcatDeviceIdIanaPen       = OT_TCAT_DEVICE_ID_IANAPEN,
+    };
+
+    /**
      * Initializes the Joiner object.
      *
      * @param[in]  aInstance     A reference to the OpenThread instance.
@@ -267,8 +281,6 @@ public:
     /**
      * Enables the TCAT protocol.
      *
-     * @param[in] aVendorInfo               A pointer to the Vendor Information (must remain valid after the method
-     * call, may be NULL).
      * @param[in] aAppDataReceiveCallback   A pointer to a function that is called when the user data is received.
      * @param[in] aHandler                  A pointer to a function that is called when the join operation completes.
      * @param[in] aContext                  A context pointer.
@@ -277,16 +289,21 @@ public:
      * @retval kErrorInvalidArgs    The aVendorInfo is invalid.
      *
      */
-    Error Start(const VendorInfo      &aVendorInfo,
-                AppDataReceiveCallback aAppDataReceiveCallback,
-                JoinCallback           aHandler,
-                void                  *aContext);
+    Error Start(AppDataReceiveCallback aAppDataReceiveCallback, JoinCallback aHandler, void *aContext);
 
     /**
      * Stops the TCAT protocol.
      *
      */
     void Stop(void);
+
+    /**
+     * Set the TCAT Vendor Info object
+     *
+     * @param[in] aVendorInfo A pointer to the Vendor Information (must remain valid after the method call).
+     *
+     */
+    Error SetTcatVendorInfo(const VendorInfo &aVendorInfo);
 
     /**
      * Indicates whether or not the TCAT agent is enabled.
@@ -317,12 +334,26 @@ public:
      */
     bool IsCommandClassAuthorized(CommandClass aCommandClass) const;
 
+    /**
+     * Gets TCAT advertisement data.
+     *
+     * @param[out] aLen Advertisement length.
+     * @param[out] aAdvertisementData Advertisement data.
+     *
+     * @retval kErrorNone           Successfully started the TCAT agent.
+     * @retval kErrorInvalidArgs    The aVendorInfo is invalid or provided incorrect parameters.
+     *
+     */
+    Error GetAdvertisementData(uint16_t &aLen, uint8_t *aAdvertisementData);
+
 private:
     Error Connected(MeshCoP::SecureTransport &aTlsContext);
     void  Disconnected(void);
 
-    Error HandleSingleTlv(const Message &aIncommingMessage, Message &aOutgoingMessage);
-    Error HandleSetActiveOperationalDataset(const Message &aIncommingMessage, uint16_t aOffset, uint16_t aLength);
+    Error HandleSingleTlv(const Message &aIncomingMessage, Message &aOutgoingMessage);
+    Error HandleSetActiveOperationalDataset(const Message &aIncomingMessage, uint16_t aOffset, uint16_t aLength);
+    Error HandleDecomission(void);
+    Error HandlePing(const Message &aIncomingMessage, Message &aOutgoingMessage, uint16_t aOffset, uint16_t aLength);
     Error HandleStartThreadInterface(void);
 
     bool         CheckCommandClassAuthorizationFlags(CommandClassFlags aCommissionerCommandClassFlags,
@@ -331,7 +362,8 @@ private:
     bool         CanProcessTlv(uint8_t aTlvType) const;
     CommandClass GetCommandClass(uint8_t aTlvType) const;
 
-    static constexpr uint16_t kJoinerUdpPort = OPENTHREAD_CONFIG_JOINER_UDP_PORT;
+    static constexpr uint16_t kJoinerUdpPort        = OPENTHREAD_CONFIG_JOINER_UDP_PORT;
+    static constexpr uint16_t kPingPayloadMaxLength = 512;
 
     JoinerPskd                       mJoinerPskd;
     const VendorInfo                *mVendorInfo;
@@ -345,7 +377,6 @@ private:
     ExtendedPanId                    mCommissionerExtendedPanId;
     char                             mCurrentServiceName[OT_TCAT_MAX_SERVICE_NAME_LENGTH + 1];
     State                            mState;
-    bool                             mAlreadyCommissioned : 1;
     bool                             mCommissionerHasNetworkName : 1;
     bool                             mCommissionerHasDomainName : 1;
     bool                             mCommissionerHasExtendedPanId : 1;
@@ -358,8 +389,43 @@ private:
 DefineCoreType(otTcatVendorInfo, MeshCoP::TcatAgent::VendorInfo);
 
 DefineMapEnum(otTcatApplicationProtocol, MeshCoP::TcatAgent::TcatApplicationProtocol);
+DefineMapEnum(otTcatDeviceIdType, MeshCoP::TcatAgent::TcatDeviceIdType);
 
+// Command class TLVs
 typedef UintTlvInfo<MeshCoP::TcatAgent::kTlvResponseWithStatus, uint8_t> ResponseWithStatusTlv;
+
+/**
+ * Represent Device Type and Status
+ *
+ */
+struct DeviceTypeAndStatus
+{
+    uint8_t mRsv : 1;
+    bool    mMultiradioSupport : 1;
+    bool    mStoresActiveOpertonalDataset : 1;
+    bool    mIsCommisionned : 1;
+    bool    mThreadNetworkActive : 1;
+    bool    mIsBorderRouter : 1;
+    bool    mRxOnWhenIdle : 1;
+    bool    mDeviceType : 1;
+};
+
+static constexpr uint8_t kTlvVendorOui24Length         = 3;
+static constexpr uint8_t kTlvVendorOui36Length         = 5;
+static constexpr uint8_t kTlvDeviceDiscriminatorLength = 5;
+static constexpr uint8_t kTlvBleLinkCapabilitiesLength = 1;
+static constexpr uint8_t kTlvDeviceTypeAndStatusLength = 1;
+static constexpr uint8_t kTlvVendorIanaPenLength       = 4;
+
+enum TcatAdvertisementTlvType : uint8_t
+{
+    kTlvVendorOui24         = 1, ///< TCAT vendor OUI 24
+    kTlvVendorOui36         = 2, ///< TCAT vendor OUI 36
+    kTlvDeviceDiscriminator = 3, ///< TCAT random vendor discriminator
+    kTlvDeviceTypeAndStatus = 4, ///< TCAT Thread device type and status
+    kTlvBleLinkCapabilities = 5, ///< TCAT BLE link capabilities of device
+    kTlvVendorIanaPen       = 6, ///< TCAT Vendor IANA PEN
+};
 
 } // namespace ot
 

@@ -558,16 +558,6 @@ static void prov_stop_and_notify(bool is_async)
         vTaskDelay(cleanup_delay / portTICK_PERIOD_MS);
     }
 
-    protocomm_remove_endpoint(prov_ctx->pc, "prov-ctrl");
-
-    protocomm_remove_endpoint(prov_ctx->pc, "prov-scan");
-
-    protocomm_remove_endpoint(prov_ctx->pc, "prov-config");
-
-    protocomm_unset_security(prov_ctx->pc, "prov-session");
-
-    protocomm_unset_version(prov_ctx->pc, "proto-ver");
-
     /* All the extra application added endpoints are also
      * removed automatically when prov_stop is called */
     prov_ctx->mgr_config.scheme.prov_stop(prov_ctx->pc);
@@ -1213,11 +1203,6 @@ esp_err_t wifi_prov_mgr_is_provisioned(bool *provisioned)
         debug_print_wifi_credentials(wifi_cfg.sta, "Found");
     }
     return ESP_OK;
-}
-
-bool wifi_prov_mgr_is_sm_idle(void)
-{
-    return (prov_ctx->prov_state == WIFI_PROV_STATE_IDLE);
 }
 
 static void wifi_connect_timer_cb(void *arg)

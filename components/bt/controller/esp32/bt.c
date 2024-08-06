@@ -16,8 +16,8 @@
 #include "freertos/task.h"
 #include "freertos/queue.h"
 #include "freertos/semphr.h"
+#include "freertos/xtensa_api.h"
 #include "freertos/portmacro.h"
-#include "xtensa_api.h" // Replace with interrupt allocator API (IDF-3891)
 #include "xtensa/core-macros.h"
 #include "esp_types.h"
 #include "esp_mac.h"
@@ -25,9 +25,7 @@
 #include "esp_task.h"
 #include "esp_intr_alloc.h"
 #include "esp_attr.h"
-#ifdef CONFIG_ESP_PHY_ENABLED
 #include "esp_phy_init.h"
-#endif
 #include "esp_bt.h"
 #include "esp_err.h"
 #include "esp_log.h"
@@ -37,9 +35,7 @@
 #include "soc/rtc.h"
 #include "soc/soc_memory_layout.h"
 #include "soc/dport_reg.h"
-#ifdef CONFIG_ESP_COEX_ENABLED
 #include "private/esp_coexist_internal.h"
-#endif
 #include "esp_timer.h"
 #if !CONFIG_FREERTOS_UNICORE
 #include "esp_ipc.h"
@@ -830,7 +826,7 @@ static int32_t IRAM_ATTR queue_recv_from_isr_wrapper(void *queue, void *item, vo
 
 static int32_t task_create_wrapper(void *task_func, const char *name, uint32_t stack_depth, void *param, uint32_t prio, void *task_handle, uint32_t core_id)
 {
-    return (uint32_t)xTaskCreatePinnedToCore(task_func, name, stack_depth, param, prio, task_handle, (core_id < CONFIG_FREERTOS_NUMBER_OF_CORES ? core_id : tskNO_AFFINITY));
+    return (uint32_t)xTaskCreatePinnedToCore(task_func, name, stack_depth, param, prio, task_handle, (core_id < portNUM_PROCESSORS ? core_id : tskNO_AFFINITY));
 }
 
 static void task_delete_wrapper(void *task_handle)

@@ -13,7 +13,6 @@
 #pragma once
 
 #include <stdint.h>
-#include "hal/parlio_types.h"
 
 #ifdef __cplusplus
 extern "C" {

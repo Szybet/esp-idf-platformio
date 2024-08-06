@@ -33,10 +33,6 @@
 #include "trng/trng.h"
 #endif
 
-#ifdef RIOT_VERSION
-#include "random.h"
-#endif
-
 #if BABBLESIM
 extern void tm_tick(void);
 #endif
@@ -138,7 +134,6 @@ ble_ll_rand_data_get(uint8_t *buf, uint8_t len)
 uint32_t
 ble_ll_rand(void)
 {
-#ifndef RIOT_VERSION
     static unsigned short xsubi[3];
     static bool init = true;
 
@@ -148,9 +143,6 @@ ble_ll_rand(void)
     }
 
     return (uint32_t) jrand48(xsubi);
-#else
-    return random_uint32();
-#endif
 }
 
 /**

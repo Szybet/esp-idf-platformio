@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2010-2023 Espressif Systems (Shanghai) CO LTD
+ * SPDX-FileCopyrightText: 2010-2022 Espressif Systems (Shanghai) CO LTD
  *
  * SPDX-License-Identifier: CC0-1.0
  */
@@ -23,6 +23,7 @@ typedef enum {
     SOFT_I2C_FREQ_END
 } soft_i2c_master_freq_t;
 
+
 /**
  * @brief Structure defining the configuration for the software I2C master bus
  */
@@ -32,10 +33,12 @@ typedef struct {
     soft_i2c_master_freq_t freq;
 } soft_i2c_master_config_t;
 
+
 /**
  * @brief Abstract type representing a software I2C bus.
  */
 typedef struct i2c_master_bus_impl_t* soft_i2c_master_bus_t;
+
 
 /**
  * @brief Create and configure the software I2C bus.
@@ -47,6 +50,7 @@ typedef struct i2c_master_bus_impl_t* soft_i2c_master_bus_t;
  */
 esp_err_t soft_i2c_master_new(soft_i2c_master_config_t *config, soft_i2c_master_bus_t *bus);
 
+
 /**
  * @brief Delete a previously initialized I2C software bus.
  *
@@ -55,6 +59,7 @@ esp_err_t soft_i2c_master_new(soft_i2c_master_config_t *config, soft_i2c_master_
  * @return ESP_OK on success
  */
 esp_err_t soft_i2c_master_del(soft_i2c_master_bus_t bus);
+
 
 /**
  * @brief Perform a write to the given device on the software I2C bus.
@@ -70,6 +75,7 @@ esp_err_t soft_i2c_master_write(soft_i2c_master_bus_t bus,
                                 uint8_t device_address,
                                 const uint8_t* write_buffer, size_t write_size);
 
+
 /**
  * @brief Perform a read from the given device on the software I2C bus.
  *
@@ -83,6 +89,7 @@ esp_err_t soft_i2c_master_write(soft_i2c_master_bus_t bus,
 esp_err_t soft_i2c_master_read(soft_i2c_master_bus_t bus,
                                uint8_t device_address,
                                uint8_t* read_buffer, size_t read_size);
+
 
 /**
  * @brief Perform a write followed by a read to the given device on the software I2C bus.

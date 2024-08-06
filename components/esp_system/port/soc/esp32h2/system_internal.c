@@ -23,7 +23,7 @@
 #include "hal/wdt_hal.h"
 #include "hal/spimem_flash_ll.h"
 #include "esp_private/cache_err_int.h"
-#include "esp_private/mspi_timing_tuning.h"
+#include "esp_private/spi_flash_os.h"
 
 #include "esp32h2/rom/cache.h"
 #include "esp32h2/rom/rtc.h"
@@ -32,11 +32,8 @@
 void IRAM_ATTR esp_system_reset_modules_on_exit(void)
 {
     // Flush any data left in UART FIFOs before reset the UART peripheral
-    for (int i = 0; i < SOC_UART_HP_NUM; ++i) {
-        if (uart_ll_is_enabled(i)) {
-            esp_rom_output_tx_wait_idle(i);
-        }
-    }
+    esp_rom_uart_tx_wait_idle(0);
+    esp_rom_uart_tx_wait_idle(1);
 
     // Set Peripheral clk rst
     SET_PERI_REG_MASK(PCR_MSPI_CONF_REG, PCR_MSPI_RST_EN);
@@ -96,15 +93,8 @@ void IRAM_ATTR esp_restart_noos(void)
 
     esp_system_reset_modules_on_exit();
 
-#if !CONFIG_APP_BUILD_TYPE_PURE_RAM_APP
-    /**
-     * Turn down MSPI speed
-     *
-     * We set MSPI clock to a high speed one before, ROM doesn't have such high speed clock source option.
-     * This function will change clock source to a ROM supported one when system restarts.
-     */
-    mspi_timing_change_speed_mode_cache_safe(true);
-#endif  //#if !CONFIG_APP_BUILD_TYPE_PURE_RAM_APP
+    // If we set mspi clock frequency to PLL, but ROM does not have such clock source option. So reset the clock to XTAL when software restart.
+    spi_flash_set_clock_src(MSPI_CLK_SRC_ROM_DEFAULT);
 
     // Set CPU back to XTAL source, same as hard reset, but keep BBPLL on so that USB Serial JTAG can log at 1st stage bootloader.
 #if !CONFIG_IDF_ENV_FPGA

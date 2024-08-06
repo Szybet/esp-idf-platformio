@@ -41,18 +41,11 @@ if(EXISTS ${PROJECT_EXTRA_COMPONENTS})
     list(APPEND EXTRA_COMPONENT_DIRS "${PROJECT_EXTRA_COMPONENTS}")
 endif()
 
-if(IGNORE_EXTRA_COMPONENT)
-    # Prefix all entries of the list with ${PROJECT_EXTRA_COMPONENTS} absolute path
-    list(TRANSFORM IGNORE_EXTRA_COMPONENT
-         PREPEND "${PROJECT_EXTRA_COMPONENTS}/"
-         OUTPUT_VARIABLE EXTRA_COMPONENT_EXCLUDE_DIRS)
-endif()
-
-# Consider each directory in the project's bootloader_components as a component to be compiled
+# Consider each directory in project's bootloader_components as a component to be compiled
 file(GLOB proj_components RELATIVE ${PROJECT_EXTRA_COMPONENTS} ${PROJECT_EXTRA_COMPONENTS}/*)
 foreach(component ${proj_components})
-  # Only directories are considered components
-  if(IS_DIRECTORY "${PROJECT_EXTRA_COMPONENTS}/${component}" AND NOT ${component} IN_LIST IGNORE_EXTRA_COMPONENT)
+  # Only directories are considered as components
+  if(IS_DIRECTORY ${curdir}/${child})
     list(APPEND COMPONENTS ${component})
   endif()
 endforeach()
@@ -60,7 +53,6 @@ endforeach()
 set(BOOTLOADER_BUILD 1)
 include("${IDF_PATH}/tools/cmake/project.cmake")
 set(common_req log esp_rom esp_common esp_hw_support newlib)
-idf_build_set_property(EXTRA_COMPONENT_EXCLUDE_DIRS "${EXTRA_COMPONENT_EXCLUDE_DIRS}")
 idf_build_set_property(__COMPONENT_REQUIRES_COMMON "${common_req}")
 idf_build_set_property(__OUTPUT_SDKCONFIG 0)
 project(bootloader)
@@ -210,11 +202,7 @@ elseif(CONFIG_SECURE_BOOTLOADER_REFLASHABLE)
             "* Not recommended to re-use the same secure boot keyfile on multiple production devices."
         DEPENDS gen_secure_bootloader_key gen_bootloader_digest_bin
         VERBATIM)
-elseif(
-        CONFIG_SECURE_BOOT_V2_ENABLED AND
-        (CONFIG_SOC_EFUSE_SECURE_BOOT_KEY_DIGESTS GREATER 1) AND
-        NOT CONFIG_SECURE_BOOT_FLASH_BOOTLOADER_DEFAULT
-    )
+elseif(CONFIG_SECURE_BOOT_V2_ENABLED AND (CONFIG_IDF_TARGET_ESP32S2 OR CONFIG_IDF_TARGET_ESP32C3))
     add_custom_command(TARGET bootloader.elf POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E echo
         "=============================================================================="
@@ -233,7 +221,7 @@ elseif(
         "=============================================================================="
     DEPENDS gen_signed_bootloader
     VERBATIM)
-elseif(CONFIG_SECURE_BOOT_V2_ENABLED AND NOT CONFIG_SECURE_BOOT_FLASH_BOOTLOADER_DEFAULT)
+elseif(CONFIG_SECURE_BOOT_V2_ENABLED)
     add_custom_command(TARGET bootloader.elf POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E echo
         "=============================================================================="

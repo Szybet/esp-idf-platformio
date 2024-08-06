@@ -68,6 +68,9 @@ RegisterLogModule("Ip6");
 Ip6::Ip6(Instance &aInstance)
     : InstanceLocator(aInstance)
     , mIsReceiveIp6FilterEnabled(false)
+#if OPENTHREAD_CONFIG_REFERENCE_DEVICE_ENABLE
+    , mTmfOriginFilterEnabled(true)
+#endif
     , mSendQueueTask(aInstance)
     , mIcmp(aInstance)
     , mUdp(aInstance)
@@ -306,30 +309,35 @@ exit:
 
 Error Ip6::RemoveMplOption(Message &aMessage)
 {
-    Error          error = kErrorNone;
+    enum Action : uint8_t
+    {
+        kNoMplOption,
+        kShrinkHbh,
+        kRemoveHbh,
+        kReplaceMplWithPad,
+    };
+
+    Error          error  = kErrorNone;
+    Action         action = kNoMplOption;
     Header         ip6Header;
     HopByHopHeader hbh;
     Option         option;
-    uint16_t       offset;
-    uint16_t       endOffset;
-    uint16_t       mplOffset = 0;
-    uint8_t        mplLength = 0;
-    bool           remove    = false;
+    OffsetRange    offsetRange;
+    OffsetRange    mplOffsetRange;
+    PadOption      padOption;
 
-    offset = 0;
-    IgnoreError(aMessage.Read(offset, ip6Header));
-    offset += sizeof(ip6Header);
+    offsetRange.InitFromMessageFullLength(aMessage);
+
+    IgnoreError(aMessage.Read(offsetRange, ip6Header));
+    offsetRange.AdvanceOffset(sizeof(ip6Header));
+
     VerifyOrExit(ip6Header.GetNextHeader() == kProtoHopOpts);
 
-    IgnoreError(aMessage.Read(offset, hbh));
-    endOffset = offset + hbh.GetSize();
-    VerifyOrExit(aMessage.GetLength() >= endOffset, error = kErrorParse);
+    SuccessOrExit(error = ReadHopByHopHeader(aMessage, offsetRange, hbh));
 
-    offset += sizeof(hbh);
-
-    for (; offset < endOffset; offset += option.GetSize())
+    for (; !offsetRange.IsEmpty(); offsetRange.AdvanceOffset(option.GetSize()))
     {
-        IgnoreError(option.ParseFrom(aMessage, offset, endOffset));
+        SuccessOrExit(error = option.ParseFrom(aMessage, offsetRange));
 
         if (option.IsPadding())
         {
@@ -339,44 +347,49 @@ Error Ip6::RemoveMplOption(Message &aMessage)
         if (option.GetType() == MplOption::kType)
         {
             // If multiple MPL options exist, discard packet
-            VerifyOrExit(mplOffset == 0, error = kErrorParse);
+            VerifyOrExit(action == kNoMplOption, error = kErrorParse);
 
-            mplOffset = offset;
-            mplLength = option.GetLength();
+            // `Option::ParseFrom()` already validated that the entire
+            // option is present in the `offsetRange`.
 
-            VerifyOrExit(mplLength <= sizeof(MplOption) - sizeof(Option), error = kErrorParse);
+            mplOffsetRange = offsetRange;
+            mplOffsetRange.ShrinkLength(option.GetSize());
 
-            if (mplOffset == sizeof(ip6Header) + sizeof(hbh) && hbh.GetLength() == 0)
+            VerifyOrExit(option.GetSize() <= sizeof(MplOption), error = kErrorParse);
+
+            if (mplOffsetRange.GetOffset() == sizeof(ip6Header) + sizeof(hbh) && hbh.GetLength() == 0)
             {
                 // First and only IPv6 Option, remove IPv6 HBH Option header
-                remove = true;
+                action = kRemoveHbh;
             }
-            else if (mplOffset + ExtensionHeader::kLengthUnitSize == endOffset)
+            else if (mplOffsetRange.GetOffset() + ExtensionHeader::kLengthUnitSize == offsetRange.GetEndOffset())
             {
-                // Last IPv6 Option, remove the last 8 bytes
-                remove = true;
+                // Last IPv6 Option, shrink the last 8 bytes
+                action = kShrinkHbh;
             }
         }
-        else
+        else if (action != kNoMplOption)
         {
             // Encountered another option, now just replace
             // MPL Option with Pad Option
-            remove = false;
+            action = kReplaceMplWithPad;
         }
     }
 
-    // verify that IPv6 Options header is properly formed
-    VerifyOrExit(offset == endOffset, error = kErrorParse);
-
-    if (remove)
+    switch (action)
     {
+    case kNoMplOption:
+        break;
+
+    case kShrinkHbh:
+    case kRemoveHbh:
         // Last IPv6 Option, shrink HBH Option header by
         // 8 bytes (`kLengthUnitSize`)
-        aMessage.RemoveHeader(endOffset - ExtensionHeader::kLengthUnitSize, ExtensionHeader::kLengthUnitSize);
+        aMessage.RemoveHeader(offsetRange.GetEndOffset() - ExtensionHeader::kLengthUnitSize,
+                              ExtensionHeader::kLengthUnitSize);
 
-        if (mplOffset == sizeof(ip6Header) + sizeof(hbh))
+        if (action == kRemoveHbh)
         {
-            // Remove entire HBH header
             ip6Header.SetNextHeader(hbh.GetNextHeader());
         }
         else
@@ -390,14 +403,12 @@ Error Ip6::RemoveMplOption(Message &aMessage)
 
         ip6Header.SetPayloadLength(ip6Header.GetPayloadLength() - ExtensionHeader::kLengthUnitSize);
         aMessage.Write(0, ip6Header);
-    }
-    else if (mplOffset != 0)
-    {
-        // Replace MPL Option with Pad Option
-        PadOption padOption;
+        break;
 
-        padOption.InitForPadSize(sizeof(Option) + mplLength);
-        aMessage.WriteBytes(mplOffset, &padOption, padOption.GetSize());
+    case kReplaceMplWithPad:
+        padOption.InitForPadSize(static_cast<uint8_t>(mplOffsetRange.GetLength()));
+        aMessage.WriteBytes(mplOffsetRange.GetOffset(), &padOption, padOption.GetSize());
+        break;
     }
 
 exit:
@@ -498,24 +509,37 @@ void Ip6::HandleSendQueue(void)
     }
 }
 
+Error Ip6::ReadHopByHopHeader(const Message &aMessage, OffsetRange &aOffsetRange, HopByHopHeader &aHbhHeader) const
+{
+    // Reads the HBH header from the message at the given offset range.
+    // On success, updates `aOffsetRange` to indicate the location of
+    // options within the HBH header.
+
+    Error error;
+
+    SuccessOrExit(error = aMessage.Read(aOffsetRange, aHbhHeader));
+    VerifyOrExit(aOffsetRange.Contains(aHbhHeader.GetSize()), error = kErrorParse);
+    aOffsetRange.ShrinkLength(aHbhHeader.GetSize());
+    aOffsetRange.AdvanceOffset(sizeof(HopByHopHeader));
+
+exit:
+    return error;
+}
+
 Error Ip6::HandleOptions(Message &aMessage, Header &aHeader, bool &aReceive)
 {
     Error          error = kErrorNone;
     HopByHopHeader hbhHeader;
     Option         option;
-    uint16_t       offset = aMessage.GetOffset();
-    uint16_t       endOffset;
+    OffsetRange    offsetRange;
 
-    SuccessOrExit(error = aMessage.Read(offset, hbhHeader));
+    offsetRange.InitFromMessageOffsetToEnd(aMessage);
 
-    endOffset = offset + hbhHeader.GetSize();
-    VerifyOrExit(endOffset <= aMessage.GetLength(), error = kErrorParse);
+    SuccessOrExit(error = ReadHopByHopHeader(aMessage, offsetRange, hbhHeader));
 
-    offset += sizeof(HopByHopHeader);
-
-    for (; offset < endOffset; offset += option.GetSize())
+    for (; !offsetRange.IsEmpty(); offsetRange.AdvanceOffset(option.GetSize()))
     {
-        SuccessOrExit(error = option.ParseFrom(aMessage, offset, endOffset));
+        SuccessOrExit(error = option.ParseFrom(aMessage, offsetRange));
 
         if (option.IsPadding())
         {
@@ -524,14 +548,14 @@ Error Ip6::HandleOptions(Message &aMessage, Header &aHeader, bool &aReceive)
 
         if (option.GetType() == MplOption::kType)
         {
-            SuccessOrExit(error = mMpl.ProcessOption(aMessage, offset, aHeader.GetSource(), aReceive));
+            SuccessOrExit(error = mMpl.ProcessOption(aMessage, offsetRange, aHeader.GetSource(), aReceive));
             continue;
         }
 
         VerifyOrExit(option.GetAction() == Option::kActionSkip, error = kErrorDrop);
     }
 
-    aMessage.SetOffset(offset);
+    aMessage.SetOffset(offsetRange.GetEndOffset());
 
 exit:
     return error;
@@ -651,8 +675,8 @@ Error Ip6::HandleFragment(Message &aMessage)
     offset          = FragmentHeader::FragmentOffsetToBytes(fragmentHeader.GetOffset());
     payloadFragment = aMessage.GetLength() - aMessage.GetOffset() - sizeof(fragmentHeader);
 
-    LogInfo("Fragment with id %d received > %d bytes, offset %d", fragmentHeader.GetIdentification(), payloadFragment,
-            offset);
+    LogInfo("Fragment with id %lu received > %u bytes, offset %u", ToUlong(fragmentHeader.GetIdentification()),
+            payloadFragment, offset);
 
     if (offset + payloadFragment + aMessage.GetOffset() > kMaxAssembledDatagramLength)
     {
@@ -932,7 +956,7 @@ Error Ip6::PassToHost(OwnedPtr<Message> &aMessagePtr,
     Error             error = kErrorNone;
     OwnedPtr<Message> messagePtr;
 
-    VerifyOrExit(aMessagePtr->IsLoopbackToHostAllowed(), error = kErrorNoRoute);
+    VerifyOrExit(aMessagePtr->IsLoopbackToHostAllowed());
 
     VerifyOrExit(mReceiveIp6DatagramCallback.IsSet(), error = kErrorNoRoute);
 
@@ -1022,7 +1046,8 @@ Error Ip6::PassToHost(OwnedPtr<Message> &aMessagePtr,
     // than realm-local, set the hop limit to 1 before sending to host, so this packet
     // will not be forwarded by host.
     if (aMessageInfo.GetSockAddr().IsMulticastLargerThanRealmLocal() &&
-        (aMessageInfo.GetPeerAddr().IsLinkLocal() || (Get<Mle::Mle>().IsMeshLocalAddress(aMessageInfo.GetPeerAddr()))))
+        (aMessageInfo.GetPeerAddr().IsLinkLocalUnicast() ||
+         (Get<Mle::Mle>().IsMeshLocalAddress(aMessageInfo.GetPeerAddr()))))
     {
         messagePtr->Write<uint8_t>(Header::kHopLimitFieldOffset, 1);
     }
@@ -1119,10 +1144,6 @@ Error Ip6::HandleDatagram(OwnedPtr<Message> aMessagePtr, bool aIsReassembled)
         {
             receive = true;
         }
-        else if (Get<ThreadNetif>().IsMulticastPromiscuousEnabled())
-        {
-            forwardHost = true;
-        }
     }
     else
     {
@@ -1132,9 +1153,9 @@ Error Ip6::HandleDatagram(OwnedPtr<Message> aMessagePtr, bool aIsReassembled)
         {
             receive = true;
         }
-        else if (!aMessagePtr->IsOriginThreadNetif() || !header.GetDestination().IsLinkLocal())
+        else if (!aMessagePtr->IsOriginThreadNetif() || !header.GetDestination().IsLinkLocalUnicast())
         {
-            if (header.GetDestination().IsLinkLocal())
+            if (header.GetDestination().IsLinkLocalUnicast())
             {
                 forwardThread = true;
             }
@@ -1239,7 +1260,11 @@ Error Ip6::HandleDatagram(OwnedPtr<Message> aMessagePtr, bool aIsReassembled)
                 error = aMessagePtr->Read(aMessagePtr->GetOffset() + Udp::Header::kDestPortFieldOffset, destPort));
             destPort = BigEndian::HostSwap16(destPort);
 
-            if (destPort == Tmf::kUdpPort)
+            if (destPort == Tmf::kUdpPort
+#if OPENTHREAD_CONFIG_REFERENCE_DEVICE_ENABLE
+                && mTmfOriginFilterEnabled
+#endif
+            )
             {
                 LogNote("Dropping TMF message from untrusted origin");
                 ExitNow(error = kErrorDrop);
@@ -1427,8 +1452,8 @@ void Ip6::UpdateBorderRoutingCounters(const Header &aHeader, uint16_t aMessageLe
     otPacketsAndBytes       *counter         = nullptr;
     otPacketsAndBytes       *internetCounter = nullptr;
 
-    VerifyOrExit(!aHeader.GetSource().IsLinkLocal());
-    VerifyOrExit(!aHeader.GetDestination().IsLinkLocal());
+    VerifyOrExit(!aHeader.GetSource().IsLinkLocalUnicast());
+    VerifyOrExit(!aHeader.GetDestination().IsLinkLocalUnicast());
     VerifyOrExit(aHeader.GetSource().GetPrefix() != Get<Mle::Mle>().GetMeshLocalPrefix());
     VerifyOrExit(aHeader.GetDestination().GetPrefix() != Get<Mle::Mle>().GetMeshLocalPrefix());
 

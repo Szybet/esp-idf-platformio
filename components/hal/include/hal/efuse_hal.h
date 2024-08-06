@@ -44,14 +44,6 @@ uint32_t efuse_hal_blk_version(void);
 bool efuse_hal_flash_encryption_enabled(void);
 
 /**
- * @brief Returns the status of whether the bootloader (and OTA)
- *        will check the maximum chip version or not.
- *
- * @return true - Skip the maximum chip version check.
- */
-bool efuse_hal_get_disable_wafer_version_major(void);
-
-/**
  * @brief Returns major chip version
  */
 uint32_t efuse_hal_get_major_chip_version(void);
@@ -61,7 +53,7 @@ uint32_t efuse_hal_get_major_chip_version(void);
  */
 uint32_t efuse_hal_get_minor_chip_version(void);
 
-#if SOC_EFUSE_ECDSA_KEY
+#if SOC_ECDSA_SUPPORTED
 /**
  * @brief Set the efuse block that should be used as ECDSA private key
  *

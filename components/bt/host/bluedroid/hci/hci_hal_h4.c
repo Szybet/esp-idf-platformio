@@ -22,22 +22,14 @@
 #include "hci/hci_hal.h"
 #include "hci/hci_internals.h"
 #include "hci/hci_layer.h"
-#include "hci/hci_trans_int.h"
 #include "osi/thread.h"
 #include "osi/pkt_queue.h"
 #if (BLE_ADV_REPORT_FLOW_CONTROL == TRUE)
 #include "osi/mutex.h"
 #include "osi/alarm.h"
 #endif
-#if (BT_CONTROLLER_INCLUDED == TRUE)
 #include "esp_bt.h"
-#endif
-#include "esp_bluedroid_hci.h"
 #include "stack/hcimsgs.h"
-
-#if ((BT_CONTROLLER_INCLUDED == TRUE) && SOC_ESP_NIMBLE_CONTROLLER)
-#include "ble_hci_trans.h"
-#endif
 
 #if (C2H_FLOW_CONTROL_INCLUDED == TRUE)
 #include "l2c_int.h"
@@ -92,7 +84,7 @@ typedef struct {
 
 static hci_hal_env_t hci_hal_env;
 static const hci_hal_t interface;
-static const esp_bluedroid_hci_driver_callbacks_t hci_host_cb;
+static const esp_vhci_host_callback_t vhci_host_cb;
 
 static void host_send_pkt_available_cb(void);
 static int host_recv_pkt_cb(uint8_t *data, uint16_t len);
@@ -177,7 +169,7 @@ static bool hal_open(const hci_hal_callbacks_t *upper_callbacks, void *task_thre
     hci_hal_env_init(upper_callbacks, (osi_thread_t *)task_thread);
 
     //register vhci host cb
-    if (hci_host_register_callback(&hci_host_cb) != ESP_OK) {
+    if (esp_vhci_host_register_callback(&vhci_host_cb) != ESP_OK) {
         return false;
     }
 
@@ -216,8 +208,11 @@ static uint16_t transmit_data(serial_data_type_t type,
 
     BTTRC_DUMP_BUFFER("Transmit Pkt", data, length);
 
+#if (BT_HCI_LOG_INCLUDED == TRUE)
+        bt_hci_log_record_hci_data(data[0], &data[1], length - 1);
+#endif
     // TX Data to target
-    hci_host_send_packet(data, length);
+    esp_vhci_host_send_packet(data, length);
 
     // Be nice and restore the old value of that byte
     *(data) = previous_byte;
@@ -622,43 +617,8 @@ static int host_recv_pkt_cb(uint8_t *data, uint16_t len)
 
     return 0;
 }
-#if ((BT_CONTROLLER_INCLUDED == TRUE) && SOC_ESP_NIMBLE_CONTROLLER)
 
-int
-ble_hs_hci_rx_evt(uint8_t *hci_ev, void *arg)
-{
-    if(esp_bluedroid_get_status() == ESP_BLUEDROID_STATUS_UNINITIALIZED) {
-        ble_hci_trans_buf_free(hci_ev);
-        return 0;
-    }
-    uint16_t len = hci_ev[1] + 3;
-    uint8_t *data = (uint8_t *)malloc(len);
-    assert(data != NULL);
-    data[0] = 0x04;
-    memcpy(&data[1], hci_ev, len - 1);
-    ble_hci_trans_buf_free(hci_ev);
-    host_recv_pkt_cb(data, len);
-    free(data);
-    return 0;
-}
-
-
-int
-ble_hs_rx_data(struct os_mbuf *om, void *arg)
-{
-    uint16_t len = OS_MBUF_PKTHDR(om)->omp_len + 1;
-    uint8_t *data = (uint8_t *)malloc(len);
-    assert(data != NULL);
-    data[0] = 0x02;
-    os_mbuf_copydata(om, 0, len - 1, &data[1]);
-    host_recv_pkt_cb(data, len);
-    free(data);
-    os_mbuf_free_chain(om);
-    return 0;
-}
-
-#endif
-static const esp_bluedroid_hci_driver_callbacks_t hci_host_cb = {
+static const esp_vhci_host_callback_t vhci_host_cb = {
     .notify_host_send_available = host_send_pkt_available_cb,
     .notify_host_recv = host_recv_pkt_cb,
 };

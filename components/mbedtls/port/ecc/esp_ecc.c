@@ -8,7 +8,7 @@
 #include <stdio.h>
 
 #include "esp_crypto_lock.h"
-#include "esp_private/esp_crypto_lock_internal.h"
+#include "esp_private/periph_ctrl.h"
 #include "ecc_impl.h"
 #include "hal/ecc_hal.h"
 #include "hal/ecc_ll.h"
@@ -17,17 +17,14 @@ static void esp_ecc_acquire_hardware(void)
 {
     esp_crypto_ecc_lock_acquire();
 
-    ECC_RCC_ATOMIC() {
-        ecc_ll_enable_bus_clock(true);
-        ecc_ll_reset_register();
-    }
+    periph_module_enable(PERIPH_ECC_MODULE);
+    ecc_ll_power_up();
 }
 
 static void esp_ecc_release_hardware(void)
 {
-    ECC_RCC_ATOMIC() {
-        ecc_ll_enable_bus_clock(false);
-    }
+    periph_module_disable(PERIPH_ECC_MODULE);
+    ecc_ll_power_down();
 
     esp_crypto_ecc_lock_release();
 }

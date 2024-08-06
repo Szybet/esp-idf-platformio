@@ -94,9 +94,9 @@ def test_thread_connect(dut:Tuple[IdfDut, IdfDut, IdfDut]) -> None:
     ocf.init_thread(br)
     for cli in cli_list:
         ocf.init_thread(cli)
-    br_ot_para = copy.copy(default_br_ot_para)
+    br_ot_para = default_br_ot_para
     ocf.joinThreadNetwork(br, br_ot_para)
-    cli_ot_para = copy.copy(default_cli_ot_para)
+    cli_ot_para = default_cli_ot_para
     cli_ot_para.dataset = ocf.getDataset(br)
     try:
         order = 0
@@ -127,14 +127,12 @@ def test_thread_connect(dut:Tuple[IdfDut, IdfDut, IdfDut]) -> None:
 def formBasicWiFiThreadNetwork(br:IdfDut, cli:IdfDut) -> None:
     ocf.init_thread(br)
     ocf.init_thread(cli)
-    otbr_wifi_para = copy.copy(default_br_wifi_para)
-    ocf.joinWiFiNetwork(br, otbr_wifi_para)
-    otbr_thread_para = copy.copy(default_br_ot_para)
-    ocf.joinThreadNetwork(br, otbr_thread_para)
-    otcli_thread_para = copy.copy(default_cli_ot_para)
-    otcli_thread_para.dataset = ocf.getDataset(br)
-    otcli_thread_para.exaddr = '7766554433221101'
-    ocf.joinThreadNetwork(cli, otcli_thread_para)
+    ocf.joinWiFiNetwork(br, default_br_wifi_para)
+    ocf.joinThreadNetwork(br, default_br_ot_para)
+    ot_para = default_cli_ot_para
+    ot_para.dataset = ocf.getDataset(br)
+    ot_para.exaddr = '7766554433221101'
+    ocf.joinThreadNetwork(cli, ot_para)
     ocf.wait(cli,10)
 
 
@@ -143,7 +141,7 @@ def formBasicWiFiThreadNetwork(br:IdfDut, cli:IdfDut) -> None:
 @pytest.mark.esp32h2
 @pytest.mark.esp32c6
 @pytest.mark.openthread_br
-@pytest.mark.flaky(reruns=1, reruns_delay=1)
+@pytest.mark.flaky(reruns=0, reruns_delay=1)
 @pytest.mark.parametrize(
     'config, count, app_path, target', [
         ('rcp|cli_h2|br', 3,
@@ -221,16 +219,6 @@ def test_multicast_forwarding_A(Init_interface:bool, dut: Tuple[IdfDut, IdfDut, 
         print('ping result:\n', str(out_str))
         role = re.findall(r' (\d+)%', str(out_str))[0]
         assert role != '100'
-        ocf.execute_command(cli, 'udp open')
-        cli.expect('Done', timeout=5)
-        ocf.execute_command(cli, 'udp bind :: 12350')
-        cli.expect('Done', timeout=5)
-        ocf.clean_buffer(cli)
-        target_udp = ocf.udp_parameter('INET6', 'ff04::125', 12350, '', False, 15.0, b'hello')
-        ocf.host_udp_send_message(target_udp)
-        cli.expect('hello', timeout=5)
-        ocf.execute_command(cli, 'udp close')
-        cli.expect('Done', timeout=5)
     finally:
         ocf.execute_command(br, 'factoryreset')
         ocf.execute_command(cli, 'factoryreset')
@@ -644,41 +632,7 @@ def test_basic_startup(dut: Tuple[IdfDut, IdfDut]) -> None:
 
 
 # Case 12: Curl a website via DNS and NAT64
-@pytest.mark.supported_targets
-@pytest.mark.esp32h2
-@pytest.mark.esp32c6
-@pytest.mark.openthread_bbr
-@pytest.mark.flaky(reruns=1, reruns_delay=1)
-@pytest.mark.parametrize(
-    'config, count, app_path, target', [
-        ('rcp|cli_h2|br', 3,
-         f'{os.path.join(os.path.dirname(__file__), "ot_rcp")}'
-         f'|{os.path.join(os.path.dirname(__file__), "ot_cli")}'
-         f'|{os.path.join(os.path.dirname(__file__), "ot_br")}',
-         'esp32c6|esp32h2|esp32s3'),
-    ],
-    indirect=True,
-)
-def test_NAT64_DNS(Init_interface:bool, dut: Tuple[IdfDut, IdfDut, IdfDut]) -> None:
-    br = dut[2]
-    cli  = dut[1]
-    assert Init_interface
-    dut[0].serial.stop_redirect_thread()
-
-    formBasicWiFiThreadNetwork(br, cli)
-    try:
-        ocf.execute_command(br, 'bbr')
-        br.expect('server16', timeout=5)
-        ocf.execute_command(cli, 'dns64server 8.8.8.8')
-        cli.expect('Done', timeout=5)
-        command = 'curl http://www.espressif.com'
-        message = ocf.get_ouput_string(cli, command, 10)
-        assert '<html>' in str(message)
-        assert '301 Moved Permanently' in str(message)
-    finally:
-        ocf.execute_command(br, 'factoryreset')
-        ocf.execute_command(cli, 'factoryreset')
-        time.sleep(3)
+# @pytest.mark.openthread_bbr is not supported on release 5.1, skip this check
 
 
 # Case 13: Meshcop discovery of Border Router

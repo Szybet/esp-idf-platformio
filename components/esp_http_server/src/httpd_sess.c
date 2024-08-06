@@ -107,13 +107,10 @@ static int enum_function(struct sock_db *session, void *context)
         if (session->fd == -1) {
             return 0;
         }
-        // Only close sockets that are not in use
-        if (session->for_async_req == false) {
-            // Check/update lowest lru
-            if (session->lru_counter < ctx->lru_counter) {
-                ctx->lru_counter = session->lru_counter;
-                ctx->session = session;
-            }
+        // Check/update lowest lru
+        if (session->lru_counter < ctx->lru_counter) {
+            ctx->lru_counter = session->lru_counter;
+            ctx->session = session;
         }
         break;
     case HTTPD_TASK_CLOSE:

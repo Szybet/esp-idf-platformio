@@ -31,9 +31,18 @@
 
 #include <openthread/instance.h>
 
+#include "lib/spinel/coprocessor_type.h"
 #include "lib/spinel/logger.hpp"
 #include "lib/spinel/spinel.h"
 #include "lib/spinel/spinel_interface.hpp"
+
+/**
+ * Represents an opaque (and empty) type corresponding to a SpinelDriver object.
+ *
+ */
+struct otSpinelDriver
+{
+};
 
 namespace ot {
 namespace Spinel {
@@ -48,7 +57,7 @@ static constexpr uint8_t kSpinelHeaderMaxNumIid = 4;
 static constexpr uint8_t kSpinelHeaderMaxNumIid = 1;
 #endif
 
-class SpinelDriver : public Logger
+class SpinelDriver : public otSpinelDriver, public Logger
 {
 public:
     typedef void (
@@ -70,11 +79,15 @@ public:
      *                                         First entry must be the IID of the Host Application.
      * @param[in]  aIidListLength              The Length of the @p aIidList.
      *
+     * @retval  OT_COPROCESSOR_UNKNOWN  The initialization fails.
+     * @retval  OT_COPROCESSOR_RCP      The Co-processor is a RCP.
+     * @retval  OT_COPROCESSOR_NCP      The Co-processor is a NCP.
+     *
      */
-    void Init(SpinelInterface    &aSpinelInterface,
-              bool                aSoftwareReset,
-              const spinel_iid_t *aIidList,
-              uint8_t             aIidListLength);
+    CoprocessorType Init(SpinelInterface    &aSpinelInterface,
+                         bool                aSoftwareReset,
+                         const spinel_iid_t *aIidList,
+                         uint8_t             aIidListLength);
 
     /**
      * Deinitialize this SpinelDriver Instance.
@@ -272,9 +285,10 @@ private:
 
     otError SendCommand(uint32_t aCommand, spinel_prop_key_t aKey, spinel_tid_t aTid);
 
-    otError CheckSpinelVersion(void);
-    otError GetCoprocessorVersion(void);
-    otError GetCoprocessorCaps(void);
+    otError         CheckSpinelVersion(void);
+    otError         GetCoprocessorVersion(void);
+    otError         GetCoprocessorCaps(void);
+    CoprocessorType GetCoprocessorType(void);
 
     void ProcessFrameQueue(void);
 

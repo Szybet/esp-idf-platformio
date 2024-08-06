@@ -16,7 +16,6 @@
 *.md        text
 makefile    text
 rakefile    text
-meson.build text
 
 
 #These files are binary and should not be normalized

@@ -14,6 +14,8 @@ menu "Hardware Settings"
                 software recognize the chip version based on the rev selected in menuconfig.
     endmenu
 
+    orsource "./port/$IDF_TARGET/Kconfig.spiram"
+
     menu "MAC Config"
         config ESP_MAC_ADDR_UNIVERSE_WIFI_STA
             bool
@@ -38,12 +40,6 @@ menu "Hardware Settings"
 
         config ESP_MAC_UNIVERSAL_MAC_ADDRESSES_FOUR
             bool
-
-        config ESP_MAC_UNIVERSAL_MAC_ADDRESSES
-            int
-            default 1 if ESP_MAC_UNIVERSAL_MAC_ADDRESSES_ONE
-            default 2 if ESP_MAC_UNIVERSAL_MAC_ADDRESSES_TWO
-            default 4 if ESP_MAC_UNIVERSAL_MAC_ADDRESSES_FOUR
 
             # Insert chip-specific MAC config
         orsource "./port/$IDF_TARGET/Kconfig.mac"
@@ -176,16 +172,6 @@ menu "Hardware Settings"
                 For chips after esp32, the delay will be executed only in light sleep flow, the delay
                 controlled by the EFUSE_FLASH_TPUW in ROM will be executed in deepsleep wake up flow.)
 
-        config ESP_SLEEP_CACHE_SAFE_ASSERTION
-            bool "Check the cache safety of the sleep wakeup code in sleep process"
-            default n
-            select ESP_PANIC_HANDLER_IRAM
-            help
-                Enabling it will check the cache safety of the code before the flash power is ready after
-                light sleep wakeup, and check PM_SLP_IRAM_OPT related code cache safety. This option is
-                only for code quality inspection. Enabling it will increase the time overhead of entering
-                and exiting sleep. It is not recommended to enable it in the release version.
-
         config ESP_SLEEP_DEBUG
             bool "esp sleep debug"
             default n
@@ -212,6 +198,17 @@ menu "Hardware Settings"
 
                 NOTE: Enabling these callbacks may change sleep duration calculations based on time spent in
                 callback and hence it is highly recommended to keep them as short as possible.
+
+        config ESP_SLEEP_CACHE_SAFE_ASSERTION
+            bool "Check the cache safety of the sleep wakeup code in sleep process"
+            default n
+            select ESP_PANIC_HANDLER_IRAM
+            help
+                Enabling it will check the cache safety of the code before the flash power is ready after
+                light sleep wakeup, and check PM_SLP_IRAM_OPT related code cache safety. This option is
+                only for code quality inspection. Enabling it will increase the time overhead of entering
+                and exiting sleep. It is not recommended to enable it in the release version.
+
     endmenu
 
     menu "RTC Clock Config"
@@ -233,18 +230,33 @@ menu "Hardware Settings"
             bool "Enable debug log"
             default n
             help
-                whether to enable the debug log message for ETM core driver.
+                Wether to enable the debug log message for ETM core driver.
                 Note that, this option only controls the ETM related driver log, won't affect other drivers.
     endmenu # ETM Configuration
 
-    rsource "./dma/Kconfig.dma"
+    menu "GDMA Configuration"
+        depends on SOC_GDMA_SUPPORTED
+        config GDMA_CTRL_FUNC_IN_IRAM
+            bool "Place GDMA control functions into IRAM"
+            default n
+            help
+                Place GDMA control functions (like start/stop/append/reset) into IRAM,
+                so that these functions can be IRAM-safe and able to be called in the other IRAM interrupt context.
+                Enabling this option can improve driver performance as well.
+
+        config GDMA_ISR_IRAM_SAFE
+            bool "GDMA ISR IRAM-Safe"
+            default n
+            help
+                This will ensure the GDMA interrupt handler is IRAM-Safe, allow to avoid flash
+                cache misses, and also be able to run whilst the cache is disabled.
+                (e.g. SPI Flash write).
+    endmenu # GDMA Configuration
 
     menu "Main XTAL Config"
-        # TODO: IDF-8943
         choice XTAL_FREQ_SEL
             prompt "Main XTAL frequency"
-            default XTAL_FREQ_48 if SOC_XTAL_SUPPORT_48M
-            default XTAL_FREQ_40 if (SOC_XTAL_SUPPORT_40M && !SOC_XTAL_SUPPORT_48M)
+            default XTAL_FREQ_40 if SOC_XTAL_SUPPORT_40M
             help
                 This option selects the operating frequency of the XTAL (crystal) clock used to drive the ESP target.
                 The selected value MUST reflect the frequency of the given hardware.
@@ -267,15 +279,12 @@ menu "Hardware Settings"
             config XTAL_FREQ_40
                 depends on SOC_XTAL_SUPPORT_40M
                 bool "40 MHz"
-            config XTAL_FREQ_48
-                depends on SOC_XTAL_SUPPORT_48M
-                bool "48 MHz"
             config XTAL_FREQ_AUTO
                 depends on SOC_XTAL_SUPPORT_AUTO_DETECT
                 bool "Autodetect"
         endchoice
 
-        # soc_xtal_freq_t enum in soc/clk_tree_defs.h lists the XTAL frequencies can be supported
+        # rtc_xtal_freq_t enum in soc/rtc.h lists the XTAL frequencies can be supported
         # SOC_XTAL_SUPPORT_XXX in soc_caps.h lists the XTAL frequencies already supported
         config XTAL_FREQ
             int
@@ -283,7 +292,6 @@ menu "Hardware Settings"
             default 26 if XTAL_FREQ_26
             default 32 if XTAL_FREQ_32
             default 40 if XTAL_FREQ_40
-            default 48 if XTAL_FREQ_48
             default 0  if XTAL_FREQ_AUTO
     endmenu
 
@@ -324,38 +332,4 @@ menu "Hardware Settings"
             default 3 if ESP_CRYPTO_DPA_PROTECTION_LEVEL_HIGH
 
     endmenu
-
-    orsource "./port/$IDF_TARGET/Kconfig.dcdc"
-
-    orsource "./port/$IDF_TARGET/Kconfig.ldo"
-
-    # Invisible bringup bypass options for esp_hw_support component
-    config ESP_BRINGUP_BYPASS_CPU_CLK_SETTING
-        bool
-        # TODO: [ESP32C5] IDF-8642 IDF_TARGET_ESP32C5 is added because clock
-        # is required when bringup on C5 beta3, remove it when clock tree is
-        # supported
-        default y if !SOC_CLK_TREE_SUPPORTED && !IDF_TARGET_ESP32C5
-        default n
-        help
-            This option is only used for new chip bringup, when
-            clock support isn't done yet. So with this option,
-            we use xtal on FPGA as the clock source.
-
-    config ESP_BRINGUP_BYPASS_RANDOM_SETTING
-        bool
-        default y if !SOC_RNG_SUPPORTED
-        default n
-        help
-            This option is only used for new chip bringup, when
-            RNG isn't done yet. So with this option, we use 0x5A
-            to fill the random buffers
-
-    config ESP_SPI_BUS_LOCK_ISR_FUNCS_IN_IRAM
-        bool
-        default n
-
-    config ESP_SPI_BUS_LOCK_FUNCS_IN_IRAM
-        bool
-        default n
 endmenu

@@ -5,10 +5,6 @@
  */
 #pragma once
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 typedef enum {
     ECC_MODE_POINT_MUL       = 0x0,         // (Rx, Ry) = K * (Px, Py)
     ECC_MODE_INVERSE_MUL,                   // R = K^(-1) * Py
@@ -32,7 +28,3 @@ typedef enum {
     ECC_MOD_N,                  // Order of the curve
     ECC_MOD_P,                  // Prime modulus
 } ecc_mod_base_t;
-
-#ifdef __cplusplus
-}
-#endif

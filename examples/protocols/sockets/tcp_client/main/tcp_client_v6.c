@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2022-2023 Espressif Systems (Shanghai) CO LTD
+ * SPDX-FileCopyrightText: 2022 Espressif Systems (Shanghai) CO LTD
  *
  * SPDX-License-Identifier: Unlicense OR CC0-1.0
  */
@@ -163,7 +163,7 @@ void tcp_client(void)
 
 #if defined(CONFIG_IDF_TARGET_LINUX)
         if (0 != get_src_iface(interface)) {
-            ESP_LOGE(TAG, "Interface: Unavailable");
+            ESP_LOGE(TAG, "Interface: Unavailable\n");
             break;
         }
         memset (&ifr, 0, sizeof(ifr));
@@ -174,7 +174,7 @@ void tcp_client(void)
         }
 #if defined(CONFIG_EXAMPLE_IPV6)
         dest_addr.sin6_scope_id = ifr.ifr_ifindex;
-        ESP_LOGI(TAG, "Interface index: %d", dest_addr.sin6_scope_id);
+        ESP_LOGI(TAG, "Interface index: %d\n", dest_addr.sin6_scope_id);
 #endif
 #else
         if (NULL == (netif = esp_netif_find_if(choose_netif, interface))) {
@@ -183,7 +183,7 @@ void tcp_client(void)
         }
 #if defined(CONFIG_EXAMPLE_IPV6)
         dest_addr.sin6_scope_id = esp_netif_get_netif_impl_index(netif);
-        ESP_LOGI(TAG, "Interface index: %" PRIu32, dest_addr.sin6_scope_id);
+        ESP_LOGI(TAG, "Interface index: %d\n", dest_addr.sin6_scope_id);
 #endif
 #endif
 

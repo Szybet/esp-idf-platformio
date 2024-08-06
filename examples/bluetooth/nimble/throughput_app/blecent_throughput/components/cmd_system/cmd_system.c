@@ -217,7 +217,7 @@ static int deep_sleep(int argc, char **argv)
                  io_num, level ? "HIGH" : "LOW");
 
 #if SOC_PM_SUPPORT_EXT1_WAKEUP
-        ESP_ERROR_CHECK( esp_sleep_enable_ext1_wakeup_io(1ULL << io_num, level) );
+        ESP_ERROR_CHECK( esp_sleep_enable_ext1_wakeup(1ULL << io_num, level) );
 #endif
     }
 
@@ -225,7 +225,6 @@ static int deep_sleep(int argc, char **argv)
     rtc_gpio_isolate(GPIO_NUM_12);
 #endif
     esp_deep_sleep_start();
-    return 1;
 }
 
 static void register_deep_sleep(void)

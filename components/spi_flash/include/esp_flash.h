@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2015-2023 Espressif Systems (Shanghai) CO LTD
+ * SPDX-FileCopyrightText: 2015-2022 Espressif Systems (Shanghai) CO LTD
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -193,7 +193,6 @@ esp_err_t esp_flash_read_unique_chip_id(esp_flash_t *chip, uint64_t *out_id);
  * @return
  *      - ESP_OK on success,
  *      - ESP_ERR_NOT_SUPPORTED if the chip is not able to perform the operation. This is indicated by WREN = 1 after the command is sent.
- *      - ESP_ERR_NOT_ALLOWED if a read-only partition is present.
  *      - Other flash error code if operation failed.
  */
 esp_err_t esp_flash_erase_chip(esp_flash_t *chip);
@@ -214,7 +213,6 @@ esp_err_t esp_flash_erase_chip(esp_flash_t *chip);
  * @return
  *      - ESP_OK on success,
  *      - ESP_ERR_NOT_SUPPORTED if the chip is not able to perform the operation. This is indicated by WREN = 1 after the command is sent.
- *      - ESP_ERR_NOT_ALLOWED if the address range (start -- start + len) overlaps with a read-only partition address space
  *      - Other flash error code if operation failed.
  */
 esp_err_t esp_flash_erase_region(esp_flash_t *chip, uint32_t start, uint32_t len);
@@ -320,10 +318,9 @@ esp_err_t esp_flash_read(esp_flash_t *chip, void *buffer, uint32_t address, uint
  * There are no alignment constraints on buffer, address or length.
  *
  * @return
- *      - ESP_OK on success
+ *      - ESP_OK on success,
  *      - ESP_FAIL, bad write, this will be detected only when CONFIG_SPI_FLASH_VERIFY_WRITE is enabled
  *      - ESP_ERR_NOT_SUPPORTED if the chip is not able to perform the operation. This is indicated by WREN = 1 after the command is sent.
- *      - ESP_ERR_NOT_ALLOWED if the address range (address -- address + length) overlaps with a read-only partition address space
  *      - Other flash error code if operation failed.
  */
 esp_err_t esp_flash_write(esp_flash_t *chip, const void *buffer, uint32_t address, uint32_t length);
@@ -342,7 +339,6 @@ esp_err_t esp_flash_write(esp_flash_t *chip, const void *buffer, uint32_t addres
  *  - ESP_FAIL: bad write, this will be detected only when CONFIG_SPI_FLASH_VERIFY_WRITE is enabled
  *  - ESP_ERR_NOT_SUPPORTED: encrypted write not supported for this chip.
  *  - ESP_ERR_INVALID_ARG: Either the address, buffer or length is invalid.
- *  - ESP_ERR_NOT_ALLOWED if the address range (address -- address + length) overlaps with a read-only partition address space
  */
 esp_err_t esp_flash_write_encrypted(esp_flash_t *chip, uint32_t address, const void *buffer, uint32_t length);
 

@@ -71,9 +71,9 @@ extern "C" {
 
 /* legacy bin coredumps (before IDF v4.1) has version set to 1 */
 #define COREDUMP_VERSION_BIN_LEGACY         COREDUMP_VERSION_MAKE(COREDUMP_VERSION_BIN, 1) // -> 0x0001
-#define COREDUMP_VERSION_BIN_CURRENT        COREDUMP_VERSION_MAKE(COREDUMP_VERSION_BIN, 3) // -> 0x0003
-#define COREDUMP_VERSION_ELF_CRC32          COREDUMP_VERSION_MAKE(COREDUMP_VERSION_ELF, 2) // -> 0x0102
-#define COREDUMP_VERSION_ELF_SHA256         COREDUMP_VERSION_MAKE(COREDUMP_VERSION_ELF, 3) // -> 0x0103
+#define COREDUMP_VERSION_BIN_CURRENT        COREDUMP_VERSION_MAKE(COREDUMP_VERSION_BIN, 2) // -> 0x0002
+#define COREDUMP_VERSION_ELF_CRC32          COREDUMP_VERSION_MAKE(COREDUMP_VERSION_ELF, 0) // -> 0x0100
+#define COREDUMP_VERSION_ELF_SHA256         COREDUMP_VERSION_MAKE(COREDUMP_VERSION_ELF, 1) // -> 0x0101
 #define COREDUMP_CURR_TASK_MARKER           0xDEADBEEF
 #define COREDUMP_CURR_TASK_NOT_FOUND        -1
 
@@ -88,7 +88,7 @@ extern "C" {
  * MUST be a multiple of 16.
  */
 #if (COREDUMP_CACHE_SIZE % 16) != 0
-#error "Coredump cache size must be a multiple of 16"
+    #error "Coredump cache size must be a multiple of 16"
 #endif
 
 typedef uint32_t core_dump_crc_t;
@@ -129,7 +129,8 @@ typedef core_dump_sha_ctx_t checksum_ctx_t;
  */
 #define COREDUMP_VERSION_CHIP CONFIG_IDF_FIRMWARE_CHIP_ID
 
-typedef struct _core_dump_write_data_t {
+typedef struct _core_dump_write_data_t
+{
     uint32_t off; /*!< Current offset of data being written */
     uint8_t  cached_data[COREDUMP_CACHE_SIZE]; /*!< Cache used to write to flash */
     uint8_t  cached_bytes; /*!< Number of bytes filled in the cached */
@@ -139,13 +140,13 @@ typedef struct _core_dump_write_data_t {
 /**
  * @brief Core dump data header
  * This header predecesses the actual core dump data (ELF or binary). */
-typedef struct _core_dump_header_t {
+typedef struct _core_dump_header_t
+{
     uint32_t data_len;  /*!< Data length */
     uint32_t version;   /*!< Core dump version */
     uint32_t tasks_num; /*!< Number of tasks */
     uint32_t tcb_sz;    /*!< Size of a TCB, in bytes */
     uint32_t mem_segs_num; /*!< Number of memory segments */
-    uint32_t chip_rev; /*!< Chip revision */
 } core_dump_header_t;
 
 /**
@@ -157,7 +158,8 @@ typedef void* core_dump_task_handle_t;
 /**
  * @brief Header for the tasks
  */
-typedef struct _core_dump_task_header_t {
+typedef struct _core_dump_task_header_t
+{
     core_dump_task_handle_t tcb_addr;    /*!< TCB address */
     uint32_t                stack_start; /*!< Start of the stack address */
     uint32_t                stack_end;   /*!< End of the stack address */
@@ -166,7 +168,8 @@ typedef struct _core_dump_task_header_t {
 /**
  * @brief Core dump memory segment header
  */
-typedef struct _core_dump_mem_seg_header_t {
+typedef struct _core_dump_mem_seg_header_t
+{
     uint32_t start; /*!< Memory region start address */
     uint32_t size;  /*!< Memory region size */
 } core_dump_mem_seg_header_t;

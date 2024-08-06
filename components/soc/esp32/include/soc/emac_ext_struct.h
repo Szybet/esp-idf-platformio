@@ -1,8 +1,16 @@
-/*
- * SPDX-FileCopyrightText: 2019-2023 Espressif Systems (Shanghai) CO LTD
- *
- * SPDX-License-Identifier: Apache-2.0
- */
+// Copyright 2019 Espressif Systems (Shanghai) PTE LTD
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 #pragma once
 
 #ifdef __cplusplus
@@ -11,8 +19,8 @@ extern "C" {
 
 #include <stdint.h>
 
-typedef struct emac_ext_dev_s {
-    volatile union {
+typedef volatile struct emac_ext_dev_s {
+    union {
         struct {
             uint32_t div_num : 4;
             uint32_t h_div_num : 4;
@@ -21,7 +29,7 @@ typedef struct emac_ext_dev_s {
         };
         uint32_t val;
     } ex_clkout_conf;
-    volatile union {
+    union {
         struct {
             uint32_t div_num_10m : 6;
             uint32_t h_div_num_10m : 6;
@@ -32,7 +40,7 @@ typedef struct emac_ext_dev_s {
         };
         uint32_t val;
     } ex_oscclk_conf;
-    volatile union {
+    union {
         struct {
             uint32_t ext_en : 1;
             uint32_t int_en : 1;
@@ -44,7 +52,7 @@ typedef struct emac_ext_dev_s {
         };
         uint32_t val;
     } ex_clk_ctrl;
-    volatile union {
+    union {
         struct {
             uint32_t int_revmii_rx_clk_sel : 1;
             uint32_t ext_revmii_rx_clk_sel : 1;
@@ -61,7 +69,7 @@ typedef struct emac_ext_dev_s {
         };
         uint32_t val;
     } ex_phyinf_conf;
-    volatile union {
+    union {
         struct {
             uint32_t ram_pd_en : 2;
             uint32_t reserved2 : 30;

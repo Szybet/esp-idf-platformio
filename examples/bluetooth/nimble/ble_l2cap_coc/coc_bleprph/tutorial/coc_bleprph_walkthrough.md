@@ -316,7 +316,6 @@ case BLE_GAP_EVENT_CONNECT:
         }
         return 0;
 ```
-For More info related to `BLEPRPH_GAP_EVENT` and advertising functionality here is the complete tutorial for [bleprph_walkthrough.md](../../../bleprph/tutorial/bleprph_walkthrough.md)
 
 ## Conclusion 
 This example demonstrates advertising data, connecting to a central device, enabling connection-oriented channels, and transmitting data over the L2CAP layer. Its key objectives are to showcase BLE service discovery, connection setup, and data transfer using connection-oriented channels.

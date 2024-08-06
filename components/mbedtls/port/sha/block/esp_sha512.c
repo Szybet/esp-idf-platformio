@@ -178,8 +178,9 @@ int mbedtls_internal_sha512_process( mbedtls_sha512_context *ctx, const unsigned
 int mbedtls_sha512_update( mbedtls_sha512_context *ctx, const unsigned char *input,
                                size_t ilen )
 {
+    int ret;
     size_t fill;
-    unsigned int left, local_len = 0;
+    unsigned int left, len, local_len = 0;
 
     if ( ilen == 0 ) {
         return 0;
@@ -204,7 +205,7 @@ int mbedtls_sha512_update( mbedtls_sha512_context *ctx, const unsigned char *inp
     }
 
 
-    if ( (ilen >= 128) || local_len) {
+    if ( len || local_len) {
 
         esp_sha_acquire_hardware();
 
@@ -217,14 +218,14 @@ int mbedtls_sha512_update( mbedtls_sha512_context *ctx, const unsigned char *inp
 
         /* First process buffered block, if any */
         if ( local_len ) {
-            esp_internal_sha512_block_process(ctx, ctx->buffer);
+            esp_internal_sha256_block_process(ctx, ctx->buffer);
         }
 
         while ( ilen >= 128 ) {
-            esp_internal_sha512_block_process(ctx, input);
+            esp_internal_sha256_block_process(ctx, input);
 
-            input += 128;
-            ilen  -= 128;
+            input += 64;
+            ilen  -= 64;
         }
         esp_sha_read_digest_state(ctx->mode, ctx->state);
 

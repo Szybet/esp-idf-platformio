@@ -27,7 +27,7 @@ This example contains some build configurations. For each configuration, a few c
 
 ### Hardware Required
 
-This example should be able to run on any commonly available ESP32/ESP32-C3/ESP32-S3/ESP32-H2/ESP32-C6 development board.
+This example should be able to run on any commonly available ESP32/ESP32-C3/ESP32-S3/ESP32-C6/ESP32-H2 development board.
 
 ### Configure the project
 
@@ -125,15 +125,14 @@ I (463) NimBLE:
 
 ## Typical current consumption with management enabled
 
-|         | max current | modem sleep | light sleep (main XTAL) | light sleep (32KHz XTAL) |
-| ------- | ----------- | ----------- | ----------------------- | ------------------------ |
-| ESP32   | 231 mA      | 14.1 mA     | X                       | 1.9 mA                   |
-| ESP32C3 | 262 mA      | 12 mA       | 2.3 mA                  | 140 uA                   |
-| ESP32S3 | 240 mA      | 17.9 mA     | 3.3 mA                  | 230 uA                   |
-| ESP32C6 | 240 mA      | 22 mA       | 3.3 mA                  | 34  uA                   |
-| ESP32H2 | 82 mA       | 16.0 mA     | 4.0 mA                  | 24 uA                    |
-| ESP32C2 | 130 mA      | 18.0 mA     | 2.5 mA                  | 169 uA                   |
-
+|                                             | max current | modem sleep | light sleep (main XTAL) | light sleep (32KHz XTAL) |
+| ------------------------------------------- | ----------- | ----------- | ----------------------- | ------------------------ |
+| ESP32                                       | 231 mA      | 14.1 mA     | X                       | 1.9 mA                   |
+| ESP32C3                                     | 262 mA      | 12 mA       | 2.3 mA                  | 140 uA                   |
+| ESP32S3                                     | 240 mA      | 17.9 mA     | 3.3 mA                  | 230 uA                   |
+| ESP32H2                                     | 82 mA       | 16.0 mA     | 4.0 mA                  | 24 uA                    |
+| ESP32C6                                     | 240 mA      | 22 mA       | 3.3 mA                  | 34  uA                   |
+| ESP32C2                                     | 130 mA      | 18.0 mA     | 2.5 mA                  | 169 uA                   |
 X: This feature is currently not supported.
 
 ## Example Breakdown

@@ -9,7 +9,7 @@ This example creates GATT server demonstrating standard Current Time Service.
 
 It advertises support for the Current Time Service(0x1805) as primary service UUID.
 
-It uses ESP32's Bluetooth controller and NimBLE stack based BLE host
+It uses Espressif chipset's Bluetooth controller and NimBLE stack based BLE host
 
 
 ## How to Use Example

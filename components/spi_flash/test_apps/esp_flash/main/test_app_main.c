@@ -8,8 +8,8 @@
 #include "unity_test_utils.h"
 #include "esp_heap_caps.h"
 
-// Some resources are lazy allocated in esp_flash test, especially ccomp timer test, the threshold is left for that case
-#define TEST_MEMORY_LEAK_THRESHOLD (700)
+// Some resources are lazy allocated in flash encryption, the threadhold is left for that case
+#define TEST_MEMORY_LEAK_THRESHOLD (600)
 
 void setUp(void)
 {

@@ -12,12 +12,8 @@ endif()
 
 set(srcs "esp_err.c")
 
-if(CONFIG_IDF_ENV_FPGA OR CONFIG_ESP_BRINGUP_BYPASS_CPU_CLK_SETTING)
-    list(APPEND srcs "fpga_overrides_clk.c")
-endif()
-
-if(CONFIG_IDF_ENV_FPGA OR CONFIG_ESP_BRINGUP_BYPASS_RANDOM_SETTING)
-    list(APPEND srcs "fpga_overrides_rng.c")
+if(CONFIG_IDF_ENV_FPGA)
+    list(APPEND srcs "fpga_overrides.c")
 endif()
 
 if(BOOTLOADER_BUILD)
@@ -33,11 +29,11 @@ else()
             "panic.c"
             "esp_system.c"
             "startup.c"
-            "startup_funcs.c"
             "system_time.c"
             "stack_check.c"
             "ubsan.c"
-            "xt_wdt.c")
+            "xt_wdt.c"
+            "debug_stubs.c")
 
     if(CONFIG_ESP_TASK_WDT_EN)
         list(APPEND srcs "task_wdt/task_wdt.c")
@@ -57,17 +53,17 @@ else()
         list(APPEND srcs "systick_etm.c")
     endif()
 
-    if(CONFIG_ESP_SYSTEM_HW_STACK_GUARD)
-        list(APPEND srcs "hw_stack_guard.c")
-    endif()
-
     idf_component_register(SRCS "${srcs}"
                         INCLUDE_DIRS include
                         PRIV_REQUIRES spi_flash esp_timer esp_mm
                                     # [refactor-todo] requirements due to init code,
                                     # should be removable once using component init functions
                                     # link-time registration is used.
-                                    bootloader_support esp_pm
+                                    # [refactor-todo] requires "driver" for headers:
+                                    # - spi_common_internal.h
+                                    # [refactor-todo] esp_partition required for virtual efuse
+                                    # init code. Move to esp_efuse component.
+                                    pthread bootloader_support efuse driver esp_partition
                         LDFRAGMENTS "linker.lf" "app.lf")
     add_subdirectory(port)
 
@@ -83,28 +79,22 @@ else()
 
     # Disable stack protection in files which are involved in initialization of that feature
     set_source_files_properties(
-        "startup.c" "stack_check.c" "port/cpu_start.c"
+        "startup.c" "stack_check.c"
         PROPERTIES COMPILE_FLAGS
         -fno-stack-protector)
 
     include(${CMAKE_CURRENT_LIST_DIR}/ld/ld.cmake)
 endif()
 
-if(CONFIG_IDF_ENV_FPGA OR CONFIG_ESP_BRINGUP_BYPASS_CPU_CLK_SETTING)
+if(CONFIG_IDF_ENV_FPGA)
     # Forces the linker to include fpga stubs from this component
-    target_link_libraries(${COMPONENT_LIB} INTERFACE "-u esp_common_include_fpga_overrides_clk")
-endif()
-
-if(CONFIG_IDF_ENV_FPGA OR CONFIG_ESP_BRINGUP_BYPASS_RANDOM_SETTING)
-    # Forces the linker to include fpga stubs from this component
-    target_link_libraries(${COMPONENT_LIB} INTERFACE "-u esp_common_include_fpga_overrides_rng")
+    target_link_libraries(${COMPONENT_LIB} INTERFACE "-u esp_common_include_fpga_overrides")
 endif()
 
 # Force linking UBSAN hooks. If UBSAN is not enabled, the hooks will ultimately be removed
 # due to -ffunction-sections -Wl,--gc-sections options.
 target_link_libraries(${COMPONENT_LIB} INTERFACE "-u __ubsan_include")
 
-target_link_libraries(${COMPONENT_LIB} INTERFACE "-u esp_system_include_startup_funcs")
 
 # [refactor-todo] requirements due to init code, should be removable
 # once link-time registration of component init functions is used.
@@ -120,9 +110,7 @@ endif()
 # need to introduce panic "event" concept to remove this dependency (IDF-2194)
 idf_component_optional_requires(PRIVATE esp_gdbstub)
 
-if(NOT CONFIG_ESP_SYSTEM_PANIC_SILENT_REBOOT)
-    idf_component_optional_requires(PRIVATE esp_app_format)
-endif()
+idf_component_optional_requires(PRIVATE esp_app_format)
 
 if(CONFIG_PM_ENABLE)
     idf_component_optional_requires(PRIVATE pm)
@@ -140,8 +128,4 @@ if(NOT BOOTLOADER_BUILD)
     if(CONFIG_SPIRAM)
         idf_component_optional_requires(PRIVATE esp_psram)
     endif()
-endif()
-
-if(CONFIG_SOC_MEM_NON_CONTIGUOUS_SRAM)
-    target_link_options(${COMPONENT_LIB} INTERFACE "-Wl,--enable-non-contiguous-regions")
 endif()

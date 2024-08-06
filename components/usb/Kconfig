@@ -95,6 +95,14 @@ menu "USB-OTG"
 
     endmenu #Root Hub configuration
 
+    # Hidden or compatibility options
+
+    config USB_OTG_SUPPORTED
+        # Invisible config kept for compatibility
+        # Todo: Remove in v6.0 (IDF-8936)
+        bool
+        default y
+
     config USB_HOST_ENABLE_ENUM_FILTER_CALLBACK
         bool "Enable enumeration filter callback"
         default n
@@ -112,12 +120,5 @@ menu "USB-OTG"
         default n
         help
             Feature is under development.
-
-    # Hidden or compatibility options
-    config USB_OTG_SUPPORTED
-        # Invisible config kept for compatibility
-        # Todo: Remove in v6.0 (IDF-8936)
-        bool
-        default y
 
 endmenu #USB-OTG

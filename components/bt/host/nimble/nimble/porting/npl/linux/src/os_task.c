@@ -17,8 +17,6 @@
  * under the License.
  */
 
-#include <sched.h>
-
 #include "os/os.h"
 #include "nimble/nimble_npl.h"
 
@@ -108,7 +106,7 @@ bool ble_npl_os_started(void)
 
 void ble_npl_task_yield(void)
 {
-    sched_yield();
+    pthread_yield();
 }
 
 #ifdef __cplusplus

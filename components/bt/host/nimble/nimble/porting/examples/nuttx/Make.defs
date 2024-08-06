@@ -48,7 +48,8 @@ INC = \
 
 INCLUDES := $(addprefix -I, $(INC))
 
-CFLAGS +=                   \
+CFLAGS +=                    \
+    $(NIMBLE_CFLAGS)        \
     $(INCLUDES)             \
     $(TINYCRYPT_CFLAGS)     \
     -DNIMBLE_CFG_CONTROLLER=0 -DOS_CFG_ALIGN_4=4 -DOS_CFG_ALIGNMENT=4 \

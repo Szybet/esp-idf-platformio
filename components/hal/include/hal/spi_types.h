@@ -13,10 +13,6 @@
 #include "soc/soc_caps.h"
 #include "sdkconfig.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 /**
  * @brief Enum with the three SPI peripherals that are software-accessible in it
  */
@@ -49,6 +45,7 @@ typedef enum {
     /* Common Event */
     SPI_EV_TRANS          = BIT(8), ///< A transaction has done
 } spi_event_t;
+FLAG_ATTR(spi_event_t)
 
 /**
  * @brief Line mode of SPI transaction phases: CMD, ADDR, DOUT/DIN.
@@ -91,7 +88,3 @@ typedef enum {
 #endif
 
 /** @endcond */
-
-#ifdef __cplusplus
-}
-#endif

@@ -1,4 +1,4 @@
-target_include_directories(${COMPONENT_LIB} PUBLIC . include)
+target_include_directories(${COMPONENT_LIB} PUBLIC .)
 
 set(srcs
     "rtc_clk.c"

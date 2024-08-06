@@ -85,19 +85,32 @@ typedef struct otBorderRoutingPrefixTableIterator
 {
     const void *mPtr1;
     const void *mPtr2;
-    uint32_t    mData32;
+    uint32_t    mData0;
+    uint32_t    mData1;
+    uint8_t     mData2;
+    uint8_t     mData3;
 } otBorderRoutingPrefixTableIterator;
 
 /**
  * Represents a discovered router on the infrastructure link.
  *
+ * The `mIsPeerBr` field requires `OPENTHREAD_CONFIG_BORDER_ROUTING_TRACK_PEER_BR_INFO_ENABLE`. Routing Manager
+ * determines whether the router is a peer BR (connected to the same Thread mesh network) by comparing its advertised
+ * PIO/RIO prefixes with the entries in the Thread Network Data. While this method is generally effective, it may not
+ * be 100% accurate in all scenarios, so the `mIsPeerBr` flag should be used with caution.
+ *
  */
 typedef struct otBorderRoutingRouterEntry
 {
     otIp6Address mAddress;                      ///< IPv6 address of the router.
+    uint32_t     mMsecSinceLastUpdate;          ///< Milliseconds since last update (any message rx) from this router.
+    uint32_t     mAge;                          ///< The router's age in seconds (duration since its first discovery).
     bool         mManagedAddressConfigFlag : 1; ///< The router's Managed Address Config flag (`M` flag).
     bool         mOtherConfigFlag : 1;          ///< The router's Other Config flag (`O` flag).
     bool         mStubRouterFlag : 1;           ///< The router's Stub Router flag.
+    bool         mIsLocalDevice : 1;            ///< This router is the local device (this BR).
+    bool         mIsReachable : 1;              ///< This router is reachable.
+    bool         mIsPeerBr : 1;                 ///< This router is (likely) a peer BR.
 } otBorderRoutingRouterEntry;
 
 /**
@@ -497,6 +510,31 @@ void otBorderRoutingDhcp6PdSetEnabled(otInstance *aInstance, bool aEnabled);
  *
  */
 otBorderRoutingDhcp6PdState otBorderRoutingDhcp6PdGetState(otInstance *aInstance);
+
+/**
+ * When the state of a DHCPv6 Prefix Delegation (PD) on the Thread interface changes, this callback notifies processes
+ * in the OS of this changed state.
+ *
+ * @param[in] aState    The state of DHCPv6 Prefix Delegation State.
+ * @param[in] aContext  A pointer to arbitrary context information.
+ *
+ */
+typedef void (*otBorderRoutingRequestDhcp6PdCallback)(otBorderRoutingDhcp6PdState aState, void *aContext);
+
+/**
+ * Sets the callback whenever the DHCPv6 PD state changes on the Thread interface.
+ *
+ * Subsequent calls to this function replace the previously set callback.
+ *
+ * @param[in] aInstance  A pointer to an OpenThread instance.
+ * @param[in] aCallback  A pointer to a function that is called whenever the DHCPv6 PD state changes.
+ * @param[in] aContext   A pointer to arbitrary context information.
+ *
+ *
+ */
+void otBorderRoutingDhcp6PdSetRequestCallback(otInstance                           *aInstance,
+                                              otBorderRoutingRequestDhcp6PdCallback aCallback,
+                                              void                                 *aContext);
 
 /**
  * @}

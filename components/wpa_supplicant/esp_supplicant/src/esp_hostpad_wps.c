@@ -186,6 +186,7 @@ static int wifi_ap_wps_enable_internal(const esp_wps_config_t *config)
         return ESP_FAIL;
     }
 
+
     if (wps_set_type(config->wps_type) != ESP_OK) {
         goto _err;
     }
@@ -220,7 +221,7 @@ int esp_wifi_ap_wps_enable(const esp_wps_config_t *config)
     return ret;
 }
 
-static int wifi_ap_wps_disable_internal(void)
+int wifi_ap_wps_disable_internal(void)
 {
     struct wps_sm *sm = gWpsSm;
 
@@ -245,6 +246,7 @@ static int wifi_ap_wps_disable_internal(void)
     if (wifi_ap_wps_deinit() != ESP_OK) {
         goto _err;
     }
+
 
     s_wps_enabled = false;
     return ESP_OK;
@@ -273,6 +275,7 @@ static int wifi_ap_wps_start_internal(const unsigned char *pin)
         return ESP_ERR_WIFI_MODE;
     }
 
+
     if (!s_wps_enabled) {
         wpa_printf(MSG_ERROR, "wps start: wps not enabled");
         API_MUTEX_GIVE();
@@ -283,13 +286,13 @@ static int wifi_ap_wps_start_internal(const unsigned char *pin)
             (wps_get_status() != WPS_STATUS_DISABLE &&
              wps_get_status() != WPS_STATUS_SCANNING)) {
         wpa_printf(MSG_ERROR, "wps start: wps_get_type=%d wps_get_status=%d",
-                   wps_get_type(), wps_get_status());
+                wps_get_type(), wps_get_status());
         return ESP_ERR_WIFI_WPS_TYPE;
     }
 
     if (esp_wifi_get_user_init_flag_internal() == 0) {
         wpa_printf(MSG_ERROR, "wps start: esp_wifi_get_user_init_flag_internal=%d",
-                   esp_wifi_get_user_init_flag_internal());
+                esp_wifi_get_user_init_flag_internal());
         return ESP_ERR_WIFI_STATE;
     }
 
@@ -329,7 +332,7 @@ static void wps_reg_eloop_handler(void *eloop_ctx, void *user_ctx)
     enum wps_reg_sig_type *sig = (enum wps_reg_sig_type *) eloop_ctx;
     wps_ioctl_param_t *param = (wps_ioctl_param_t *) user_ctx;
 
-    switch (*sig) {
+    switch(*sig) {
     case SIG_WPS_REG_ENABLE:
         esp_wps_config_t *config = (esp_wps_config_t *)param->arg;
         ret = wifi_ap_wps_enable_internal(config);

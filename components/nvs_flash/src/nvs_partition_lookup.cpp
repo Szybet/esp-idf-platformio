@@ -1,9 +1,9 @@
 #include "esp_partition.h"
 #include "nvs_partition_lookup.hpp"
 
-#ifndef LINUX_TARGET
+#ifdef CONFIG_NVS_ENCRYPTION
 #include "nvs_encrypted_partition.hpp"
-#endif // ! LINUX_TARGET
+#endif // CONFIG_NVS_ENCRYPTION
 
 namespace nvs {
 
@@ -32,7 +32,7 @@ esp_err_t lookup_nvs_partition(const char* label, NVSPartition **p)
     return ESP_OK;
 }
 
-#ifndef LINUX_TARGET
+#ifdef CONFIG_NVS_ENCRYPTION
 esp_err_t lookup_nvs_encrypted_partition(const char* label, nvs_sec_cfg_t* cfg, NVSPartition **p)
 {
     const esp_partition_t* esp_partition = esp_partition_find_first(
@@ -61,7 +61,8 @@ esp_err_t lookup_nvs_encrypted_partition(const char* label, nvs_sec_cfg_t* cfg, 
 
     return ESP_OK;
 }
-#endif // ! LINUX_TARGET
+
+#endif // CONFIG_NVS_ENCRYPTION
 
 } // partition_lookup
 

@@ -12,7 +12,6 @@
 #include "esp_flash_encrypt.h"
 #include "esp_rom_crc.h"
 #include "esp_private/spi_flash_os.h"
-#include "spi_flash_mmap.h"
 
 #define BLANK_COREDUMP_SIZE 0xFFFFFFFF
 
@@ -20,17 +19,14 @@ const static char TAG[] __attribute__((unused)) = "esp_core_dump_flash";
 
 #if CONFIG_ESP_COREDUMP_ENABLE_TO_FLASH
 
-typedef struct _core_dump_partition_t {
+typedef struct _core_dump_partition_t
+{
     /* Core dump partition start. */
     uint32_t start;
     /* Core dump partition size. */
     uint32_t size;
     /* Flag set to true if the partition is encrypted. */
     bool encrypted;
-#if CONFIG_ESP_COREDUMP_FLASH_NO_OVERWRITE
-    /* Flag set to true if the partition is empty. */
-    bool empty;
-#endif
 } core_dump_partition_t;
 
 typedef struct _core_dump_flash_config_t {
@@ -129,18 +125,6 @@ static void esp_core_dump_partition_init(void)
     s_core_flash_config.partition.start      = core_part->address;
     s_core_flash_config.partition.size       = core_part->size;
     s_core_flash_config.partition.encrypted  = core_part->encrypted;
-
-#if CONFIG_ESP_COREDUMP_FLASH_NO_OVERWRITE
-    uint32_t core_size = 0;
-    esp_err_t err = esp_partition_read(core_part, 0, &core_size, sizeof(core_size));
-    if (err == ESP_OK) {
-        s_core_flash_config.partition.empty = (core_size == BLANK_COREDUMP_SIZE);
-    } else {
-        ESP_COREDUMP_LOGE("Failed to read core dump data size (%d)!", err);
-        s_core_flash_config.partition.empty = false;
-    }
-#endif
-
     s_core_flash_config.partition_config_crc = esp_core_dump_calc_flash_config_crc();
 
     if (esp_flash_encryption_enabled() && !core_part->encrypted) {
@@ -161,11 +145,10 @@ static esp_err_t esp_core_dump_flash_write_data(core_dump_write_data_t* wr_data,
         /* Some bytes are in the cache, let's continue filling the cache
          * with the data received as parameter. Let's calculate the maximum
          * amount of bytes we can still fill the cache with. */
-        if ((COREDUMP_CACHE_SIZE - wr_data->cached_bytes) > data_size) {
+        if ((COREDUMP_CACHE_SIZE - wr_data->cached_bytes) > data_size)
             wr_sz = data_size;
-        } else {
+        else
             wr_sz = COREDUMP_CACHE_SIZE - wr_data->cached_bytes;
-        }
 
         /* Append wr_sz bytes from data parameter to the cache. */
         memcpy(&wr_data->cached_data[wr_data->cached_bytes], data, wr_sz);
@@ -365,7 +348,7 @@ void esp_core_dump_init(void)
     uint32_t size = 0;
 
     if (esp_core_dump_image_check() == ESP_OK
-            && esp_core_dump_partition_and_size_get(&partition, &size) == ESP_OK) {
+        && esp_core_dump_partition_and_size_get(&partition, &size) == ESP_OK) {
         ESP_COREDUMP_LOGI("Found core dump %d bytes in flash @ 0x%x", size, partition->address);
     }
 #endif
@@ -478,13 +461,6 @@ esp_err_t esp_core_dump_image_erase(void)
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "Failed to write core dump partition size (%d)!", err);
     }
-
-#if CONFIG_ESP_COREDUMP_FLASH_NO_OVERWRITE
-    if (!s_core_flash_config.partition.empty) {
-        s_core_flash_config.partition.empty = true;
-        s_core_flash_config.partition_config_crc = esp_core_dump_calc_flash_config_crc();
-    }
-#endif
 
     return err;
 }

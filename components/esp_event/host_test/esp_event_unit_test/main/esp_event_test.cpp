@@ -7,10 +7,12 @@
    CONDITIONS OF ANY KIND, either express or implied.
 */
 
+#define CATCH_CONFIG_MAIN
+
 #include <stdio.h>
 #include "esp_event.h"
 
-#include <catch2/catch_test_macros.hpp>
+#include "catch.hpp"
 
 #include "fixtures.hpp"
 
@@ -18,6 +20,7 @@ extern "C" {
 #include "Mocktask.h"
 #include "Mockqueue.h"
 }
+
 
 namespace {
 
@@ -43,8 +46,7 @@ void dummy_handler(void* event_handler_arg, esp_event_base_t event_base, int32_t
 }
 
 // TODO: IDF-2693, function definition just to satisfy linker, implement esp_common instead
-const char *esp_err_to_name(esp_err_t code)
-{
+const char *esp_err_to_name(esp_err_t code) {
     return "test";
 }
 
@@ -140,12 +142,11 @@ TEST_CASE("test esp_event_loop_create with_task(void)")
     xQueueGiveMutexRecursive_StopIgnore();
 }
 
-TEST_CASE("registering with ANY_BASE but specific ID fails")
-{
+TEST_CASE("registering with ANY_BASE but specific ID fails") {
     esp_event_loop_handle_t loop = reinterpret_cast<esp_event_loop_handle_t>(1);
     CHECK(esp_event_handler_register_with(loop,
-                                          ESP_EVENT_ANY_BASE,
-                                          47,
-                                          dummy_handler,
-                                          nullptr) == ESP_ERR_INVALID_ARG);
+            ESP_EVENT_ANY_BASE,
+            47,
+            dummy_handler,
+            nullptr) == ESP_ERR_INVALID_ARG);
 }

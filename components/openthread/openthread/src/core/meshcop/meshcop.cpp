@@ -33,6 +33,7 @@
  */
 
 #include "meshcop.hpp"
+#include <openthread/platform/toolchain.h>
 
 #include "common/clearable.hpp"
 #include "common/crc16.hpp"
@@ -95,7 +96,7 @@ bool JoinerPskd::IsPskdValid(const char *aPskdString)
     {
         char c = aPskdString[i];
 
-        VerifyOrExit(isdigit(c) || isupper(c));
+        VerifyOrExit(IsDigit(c) || IsUppercase(c));
         VerifyOrExit(c != 'I' && c != 'O' && c != 'Q' && c != 'Z');
     }
 

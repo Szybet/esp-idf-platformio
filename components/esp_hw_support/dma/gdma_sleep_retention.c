@@ -7,7 +7,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include "sdkconfig.h"
-#include "soc/gdma_periph.h"
 #include "soc/soc_caps.h"
 
 #include "esp_err.h"
@@ -30,6 +29,13 @@ typedef struct {
     int pair_id;
 } gdma_channel_retention_arg_t;
 
+typedef struct gdma_chx_reg_ctx_link {
+    const sleep_retention_entries_config_t *link_list;
+    uint32_t link_num;
+} gdma_chx_reg_ctx_link_t;
+
+#include "sleep_gdma_retention_context.inc"
+
 static esp_err_t sleep_gdma_channel_retention_init(void *arg)
 {
     gdma_channel_retention_arg_t *parg = (gdma_channel_retention_arg_t *)arg;
@@ -37,7 +43,7 @@ static esp_err_t sleep_gdma_channel_retention_init(void *arg)
     int pair_id = parg->pair_id;
 
     sleep_retention_module_bitmap_t module = GDMA_CH_RETENTION_GET_MODULE_ID(group_id, pair_id);
-    esp_err_t err = sleep_retention_entries_create(gdma_chx_regs_retention[group_id][pair_id].link_list, gdma_chx_regs_retention[group_id][pair_id].link_num, REGDMA_LINK_PRI_GDMA, module);
+    esp_err_t err = sleep_retention_entries_create(gdma_chx_regs_retention[group_id][pair_id].link_list, gdma_chx_regs_retention[group_id][pair_id].link_num, REGDMA_LINK_PRI_7, module);
     if (err == ESP_OK) {
         ESP_LOGD(TAG, "GDMA pair (%d, %d) retention initialization", group_id, pair_id);
     }

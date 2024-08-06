@@ -9,17 +9,13 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
-#include "soc/soc_caps.h"
 #include "soc/soc.h"
-#if SOC_LP_TIMER_SUPPORTED
 #include "hal/lp_timer_types.h"
-#endif
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-#if SOC_LP_TIMER_SUPPORTED
 /*
  * @brief set alarm target value
  *
@@ -43,8 +39,6 @@ void lp_timer_hal_clear_alarm_intr_status(void);
  * @brief clear overflow interrupt status
  */
 void lp_timer_hal_clear_overflow_intr_status(void);
-
-#endif
 
 #ifdef __cplusplus
 }

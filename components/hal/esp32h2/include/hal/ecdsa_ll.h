@@ -9,7 +9,6 @@
 #include <string.h>
 #include "hal/assert.h"
 #include "soc/ecdsa_reg.h"
-#include "soc/pcr_struct.h"
 #include "hal/ecdsa_types.h"
 
 #ifdef __cplusplus
@@ -69,25 +68,6 @@ typedef enum {
     ECDSA_MODE_SHA_START,
     ECDSA_MODE_SHA_CONTINUE
 } ecdsa_ll_sha_mode_t;
-
-/**
- * @brief Enable the bus clock for ECDSA peripheral module
- *
- * @param true to enable the module, false to disable the module
- */
-static inline void ecdsa_ll_enable_bus_clock(bool enable)
-{
-    PCR.ecdsa_conf.ecdsa_clk_en = enable;
-}
-
-/**
- * @brief Reset the ECDSA peripheral module
- */
-static inline void ecdsa_ll_reset_register(void)
-{
-    PCR.ecdsa_conf.ecdsa_rst_en = 1;
-    PCR.ecdsa_conf.ecdsa_rst_en = 0;
-}
 
 /**
  * @brief Enable interrupt of a given type
@@ -239,7 +219,7 @@ static inline void ecdsa_ll_set_stage(ecdsa_ll_stage_t stage)
  */
 static inline ecdsa_ll_state_t ecdsa_ll_get_state(void)
 {
-    return (ecdsa_ll_state_t)(REG_GET_FIELD(ECDSA_STATE_REG, ECDSA_BUSY));
+    return REG_GET_FIELD(ECDSA_STATE_REG, ECDSA_BUSY);
 }
 
 /**

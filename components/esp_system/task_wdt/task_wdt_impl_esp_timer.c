@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2015-2024 Espressif Systems (Shanghai) CO LTD
+ * SPDX-FileCopyrightText: 2015-2022 Espressif Systems (Shanghai) CO LTD
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -32,6 +32,7 @@ typedef struct {
 static twdt_ctx_soft_t init_context;
 
 static const char *TAG = "task_wdt_impl_soft";
+
 
 esp_err_t esp_task_wdt_impl_timer_allocate(const esp_task_wdt_config_t *config,
                                            twdt_isr_callback callback,
@@ -80,6 +81,7 @@ esp_err_t esp_task_wdt_impl_timer_reconfigure(twdt_ctx_t obj, const esp_task_wdt
     return ret;
 }
 
+
 void esp_task_wdt_impl_timer_free(twdt_ctx_t obj)
 {
     const twdt_ctx_soft_t* ctx = (twdt_ctx_soft_t*) obj;
@@ -88,6 +90,7 @@ void esp_task_wdt_impl_timer_free(twdt_ctx_t obj)
         ESP_ERROR_CHECK(esp_timer_delete(ctx->sw_timer));
     }
 }
+
 
 esp_err_t esp_task_wdt_impl_timer_feed(twdt_ctx_t obj)
 {
@@ -106,10 +109,12 @@ esp_err_t esp_task_wdt_impl_timer_feed(twdt_ctx_t obj)
     return ret;
 }
 
+
 void esp_task_wdt_impl_timeout_triggered(twdt_ctx_t obj)
 {
     (void) obj;
 }
+
 
 esp_err_t esp_task_wdt_impl_timer_stop(twdt_ctx_t obj)
 {
@@ -126,6 +131,7 @@ esp_err_t esp_task_wdt_impl_timer_stop(twdt_ctx_t obj)
 
     return ret;
 }
+
 
 esp_err_t esp_task_wdt_impl_timer_restart(twdt_ctx_t obj)
 {

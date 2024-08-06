@@ -23,18 +23,6 @@
 #include "esp_log.h"
 #define TAG "nvs_storage"
 
-#if defined(SEGGER_H) && defined(GLOBAL_H)
-NVS_GUARD_SYSVIEW_MACRO_EXPANSION_PUSH();
-#undef U8
-#undef I8
-#undef U16
-#undef I16
-#undef U32
-#undef I32
-#undef U64
-#undef I64
-#endif
-
 namespace nvs
 {
 
@@ -378,27 +366,13 @@ esp_err_t Storage::writeItem(uint8_t nsIndex, ItemType datatype, const char* key
     }
 
     Page* findPage = nullptr;
-    bool matchedTypePageFound = false;
     Item item;
 
     esp_err_t err;
     if (datatype == ItemType::BLOB) {
         err = findItem(nsIndex, ItemType::BLOB_IDX, key, findPage, item);
-        if(err == ESP_OK) {
-            matchedTypePageFound = true;
-        }
     } else {
-#ifdef CONFIG_NVS_LEGACY_DUP_KEYS_COMPATIBILITY
         err = findItem(nsIndex, datatype, key, findPage, item);
-        if(err == ESP_OK && findPage != nullptr) {
-            matchedTypePageFound = true;
-        }
-#else
-        err = findItem(nsIndex, ItemType::ANY, key, findPage, item);
-        if(err == ESP_OK && datatype == item.datatype) {
-            matchedTypePageFound = true;
-        }
-#endif
     }
 
     if (err != ESP_OK && err != ESP_ERR_NVS_NOT_FOUND) {
@@ -408,7 +382,7 @@ esp_err_t Storage::writeItem(uint8_t nsIndex, ItemType datatype, const char* key
     if (datatype == ItemType::BLOB) {
         VerOffset prevStart,  nextStart;
         prevStart = nextStart = VerOffset::VER_0_OFFSET;
-        if (matchedTypePageFound) {
+        if (findPage) {
             // Do a sanity check that the item in question is actually being modified.
             // If it isn't, it is cheaper to purposefully not write out new data.
             // since it may invoke an erasure of flash.
@@ -442,7 +416,7 @@ esp_err_t Storage::writeItem(uint8_t nsIndex, ItemType datatype, const char* key
             return err;
         }
 
-        if (matchedTypePageFound) {
+        if (findPage) {
             /* Erase the blob with earlier version*/
             err = eraseMultiPageBlob(nsIndex, key, prevStart);
 
@@ -465,7 +439,7 @@ esp_err_t Storage::writeItem(uint8_t nsIndex, ItemType datatype, const char* key
         // Do a sanity check that the item in question is actually being modified.
         // If it isn't, it is cheaper to purposefully not write out new data.
         // since it may invoke an erasure of flash.
-        if (matchedTypePageFound &&
+        if (findPage != nullptr &&
                 findPage->cmpItem(nsIndex, datatype, key, data, dataSize) == ESP_OK) {
             return ESP_OK;
         }
@@ -499,20 +473,12 @@ esp_err_t Storage::writeItem(uint8_t nsIndex, ItemType datatype, const char* key
     if (findPage) {
         if (findPage->state() == Page::PageState::UNINITIALIZED ||
                 findPage->state() == Page::PageState::INVALID) {
-#ifdef CONFIG_NVS_LEGACY_DUP_KEYS_COMPATIBILITY
             err = findItem(nsIndex, datatype, key, findPage, item);
-#else
-            err = findItem(nsIndex, ItemType::ANY, key, findPage, item);
-#endif
             if (err != ESP_OK) {
                 return err;
             }
         }
-#ifdef CONFIG_NVS_LEGACY_DUP_KEYS_COMPATIBILITY
         err = findPage->eraseItem(nsIndex, datatype, key);
-#else
-        err = findPage->eraseItem(nsIndex, ItemType::ANY, key);
-#endif
         if (err == ESP_ERR_FLASH_OP_FAIL) {
             return ESP_ERR_NVS_REMOVE_FAILED;
         }
@@ -807,26 +773,6 @@ esp_err_t Storage::eraseNamespace(uint8_t nsIndex)
 
 }
 
-esp_err_t Storage::findKey(const uint8_t nsIndex, const char* key, ItemType* datatype)
-{
-    if (mState != StorageState::ACTIVE) {
-        return ESP_ERR_NVS_NOT_INITIALIZED;
-    }
-
-    Item item;
-    Page* findPage = nullptr;
-    auto err = findItem(nsIndex, ItemType::ANY, key, findPage, item);
-    if (err != ESP_OK) {
-        return err;
-    }
-
-    if(datatype != nullptr) {
-        *datatype = item.datatype;
-    }
-
-    return err;
-}
-
 esp_err_t Storage::getItemDataSize(uint8_t nsIndex, ItemType datatype, const char* key, size_t& dataSize)
 {
     if (mState != StorageState::ACTIVE) {
@@ -948,15 +894,6 @@ bool Storage::findEntry(nvs_opaque_iterator_t* it, const char* namespace_name)
     return nextEntry(it);
 }
 
-bool Storage::findEntryNs(nvs_opaque_iterator_t* it, uint8_t nsIndex)
-{
-    it->entryIndex = 0;
-    it->nsIndex = nsIndex;
-    it->page = mPageManager.begin();
-
-    return nextEntry(it);
-}
-
 inline bool isIterableItem(Item& item)
 {
     return (item.nsIndex != 0 &&
@@ -995,7 +932,3 @@ bool Storage::nextEntry(nvs_opaque_iterator_t* it)
 
 
 }
-
-#if defined(SEGGER_H) && defined(GLOBAL_H)
-NVS_GUARD_SYSVIEW_MACRO_EXPANSION_POP();
-#endif

@@ -14,6 +14,7 @@
 extern "C" {
 #endif
 
+
 /**
  * Memory Mapping Private APIs for MMU supported memory
  */
@@ -50,6 +51,7 @@ esp_err_t esp_mmu_map_reserve_block_with_caps(size_t size, mmu_mem_caps_t caps, 
  *        - ESP_OK
  */
 esp_err_t esp_mmu_map_dump_mapped_blocks_private(void);
+
 
 #ifdef __cplusplus
 }

@@ -6,7 +6,6 @@
 #pragma once
 
 #include <stdint.h>
-#include <stdbool.h>
 #include "soc/soc_caps.h"
 #include "xtensa/config/core-isa.h"
 #include "xtensa/config/core.h"

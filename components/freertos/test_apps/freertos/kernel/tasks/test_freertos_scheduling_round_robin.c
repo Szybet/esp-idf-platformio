@@ -4,7 +4,6 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#include "sdkconfig.h"
 #include <stdbool.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -52,7 +51,7 @@ Test flow as follows:
 
 static QueueHandle_t core0_run_order_queue;
 static QueueHandle_t core1_run_order_queue;
-static uint32_t total_iter_count[CONFIG_FREERTOS_NUMBER_OF_CORES] = {0};
+static uint32_t total_iter_count[configNUM_CORES] = {0};
 
 static void spin_task(void *arg)
 {
@@ -71,7 +70,7 @@ static void spin_task(void *arg)
 
     //Last iteration of the last spin task on this core. Reenable this core's tick interrupt
     if (total_iter_count[xPortGetCoreID()] == (NUM_PINNED_SPIN_TASK_PER_CORE * SPIN_TASK_NUM_ITER)) {
-        esp_cpu_intr_enable(1 << TICK_INTR_IDX);
+        esp_cpu_intr_enable(1 <<TICK_INTR_IDX);
     }
     vTaskDelete(NULL);
 }

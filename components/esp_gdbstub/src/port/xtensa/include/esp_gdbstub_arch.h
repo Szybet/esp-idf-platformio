@@ -6,7 +6,7 @@
 
 #pragma once
 #include <stdint.h>
-#include "xtensa_context.h"
+#include "freertos/xtensa_context.h"
 #include "sdkconfig.h"
 
 #if CONFIG_IDF_TARGET_ESP32
@@ -84,6 +84,17 @@ typedef struct {
 #endif
 
 } esp_gdbstub_gdb_regfile_t;
+
+
+// Amount of HW breakpoints used in GDB
+#ifndef GDB_BP_SIZE
+#define GDB_BP_SIZE 2
+#endif  // GDB_BP_SIZE
+
+// Amount of HW watchpoints used in GDB
+#ifndef GDB_WP_SIZE
+#define GDB_WP_SIZE 2
+#endif  // GDB_WP_SIZE
 
 #ifdef __cplusplus
 }

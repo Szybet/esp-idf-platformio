@@ -23,6 +23,7 @@ extern "C" {
  */
 void esp_crosscore_int_init(void);
 
+
 /**
  * Send an interrupt to a CPU indicating it should yield its
  * currently running task in favour of a higher-priority task
@@ -34,6 +35,7 @@ void esp_crosscore_int_init(void);
  * @param core_id Core that should do the yielding
  */
 void esp_crosscore_int_send_yield(int core_id);
+
 
 /**
  * Send an interrupt to a CPU indicating it should update its
@@ -48,7 +50,7 @@ void esp_crosscore_int_send_freq_switch(int core_id);
 
 void esp_crosscore_int_send_gdb_call(int core_id);
 
-#if !CONFIG_ESP_SYSTEM_SINGLE_CORE_MODE
+#if !CONFIG_IDF_TARGET_ESP32C3 && !CONFIG_IDF_TARGET_ESP32C2 && !CONFIG_IDF_TARGET_ESP32C6 && !CONFIG_IDF_TARGET_ESP32H2
 /**
  * Send an interrupt to a CPU indicating it should print its current backtrace
  *
@@ -73,7 +75,7 @@ void esp_crosscore_int_send_print_backtrace(int core_id);
 void esp_crosscore_int_send_twdt_abort(int core_id);
 
 #endif // CONFIG_ESP_TASK_WDT_EN
-#endif // !CONFIG_ESP_SYSTEM_SINGLE_CORE_MODE
+#endif // !CONFIG_IDF_TARGET_ESP32C3 && !CONFIG_IDF_TARGET_ESP32C2 && !CONFIG_IDF_TARGET_ESP32C6
 
 #ifdef __cplusplus
 }

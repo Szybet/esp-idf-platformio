@@ -24,10 +24,9 @@
 /* to enable dser diag */
 #include <mcu/mcu.h>
 #endif /* BLE_CONTROLLER */
-#include <ipc_cmac/shm.h>
-#include <ipc_cmac/mbox.h>
+#include <cmac_driver/cmac_shared.h>
 #if !MYNEWT_VAL(BLE_CONTROLLER)
-#include <ipc_cmac/mbox.h>
+#include <cmac_driver/cmac_host.h>
 #endif /* !BLE_CONTROLLER */
 #include <os/os_mbuf.h>
 #include <os/os_mempool.h>
@@ -100,8 +99,8 @@ ble_transport_ll_init(void)
     hci_h4_sm_init(&hci_cmac_h4sm, &hci_h4_allocs_from_ll, hci_cmac_hs_frame_cb);
 
     /* We can now handle data from CMAC, initialize it */
-    cmac_mbox_cb_set(hci_cmac_hs_mbox_read_cb,
-                     hci_cmac_hs_mbox_write_notif_cb);
+    cmac_mbox_set_read_cb(hci_cmac_hs_mbox_read_cb);
+    cmac_mbox_set_write_notif_cb(hci_cmac_hs_mbox_write_notif_cb);
     cmac_host_init();
 }
 #endif /* !BLE_CONTROLLER */
@@ -156,11 +155,11 @@ ble_transport_hs_init(void)
     hci_h4_sm_init(&hci_cmac_h4sm, &hci_h4_allocs_from_hs, hci_cmac_ll_frame_cb);
 
     /* Setup callbacks for mailboxes */
-    cmac_mbox_cb_set(hci_cmac_ll_mbox_read_cb,
-                     hci_cmac_ll_mbox_write_notif_cb);
+    cmac_mbox_set_read_cb(hci_cmac_ll_mbox_read_cb);
+    cmac_mbox_set_write_notif_cb(hci_cmac_ll_mbox_write_notif_cb);
 
     /* Synchronize with SYS */
-    cmac_shm_ll_ready();
+    cmac_shared_sync();
 }
 #endif
 

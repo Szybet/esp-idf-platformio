@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2023 Espressif Systems (Shanghai) CO LTD
+ * SPDX-FileCopyrightText: 2023-2024 Espressif Systems (Shanghai) CO LTD
  *
  * SPDX-License-Identifier: Unlicense OR CC0-1.0
  */
@@ -13,7 +13,7 @@
 #include "esp_check.h"
 
 #define BUF_SIZE (1024)
-#define ECHO_TASK_STACK_SIZE (4096)
+#define ECHO_TASK_STACK_SIZE (2048)
 
 static void echo_task(void *arg)
 {

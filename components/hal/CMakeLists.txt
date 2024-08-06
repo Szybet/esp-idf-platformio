@@ -1,86 +1,60 @@
 idf_build_get_property(target IDF_TARGET)
 
-set(srcs "hal_utils.c")
-set(includes "platform_port/include")
+# On Linux, there is currently no HAL, hence this simple component registration
+if(${target} STREQUAL "linux")
+    idf_component_register()
+    return()
+endif()
 
-# target specific include must be added before the generic one
-# because of the "include_next" directive used by the efuse_hal.h
-if(NOT ${target} STREQUAL "linux")
-    list(APPEND includes "${target}/include")
+set(srcs "mpu_hal.c"
+         "efuse_hal.c"
+         "${target}/efuse_hal.c")
 
-    if(CONFIG_IDF_TARGET_ESP32C5_BETA3_VERSION)
-        list(APPEND includes "${target}/beta3/include")
-    elseif(CONFIG_IDF_TARGET_ESP32C5_MP_VERSION)
-        list(APPEND includes "${target}/mp/include")
+
+set(includes "${target}/include" "include" "platform_port/include")
+
+if(NOT CONFIG_HAL_WDT_USE_ROM_IMPL)
+    list(APPEND srcs "wdt_hal_iram.c")
+endif()
+
+if(NOT CONFIG_APP_BUILD_TYPE_PURE_RAM_APP)
+    list(APPEND srcs "mmu_hal.c")
+
+    # We wrap Cache ROM APIs as Cache HAL APIs for: 1. internal ram ; 2. unified APIs
+    # ESP32 cache structure / ROM APIs are different and we have a patch `cache_hal_esp32.c` for it.
+    if(${target} STREQUAL "esp32")
+        list(APPEND srcs "esp32/cache_hal_esp32.c")
+    else()
+        list(APPEND srcs "cache_hal.c")
     endif()
-endif()
-list(APPEND includes "include")
-
-if(CONFIG_SOC_MPU_SUPPORTED)
-    list(APPEND srcs "mpu_hal.c")
-endif()
-
-if(CONFIG_SOC_EFUSE_SUPPORTED)
-    list(APPEND srcs "efuse_hal.c" "${target}/efuse_hal.c")
 endif()
 
 if(CONFIG_SOC_LP_TIMER_SUPPORTED)
     list(APPEND srcs "lp_timer_hal.c")
 endif()
 
-if(CONFIG_SOC_WDT_SUPPORTED AND NOT CONFIG_HAL_WDT_USE_ROM_IMPL)
-    list(APPEND srcs "wdt_hal_iram.c")
-endif()
-
-if(CONFIG_SOC_KEY_MANAGER_SUPPORTED)
-    list(APPEND srcs "key_mgr_hal.c")
-    list(APPEND srcs "huk_hal.c")
-endif()
-
-if(NOT CONFIG_APP_BUILD_TYPE_PURE_RAM_APP)
-    if(CONFIG_SOC_MMU_PERIPH_NUM)
-        list(APPEND srcs "mmu_hal.c")
-    endif()
-
-    # We wrap Cache ROM APIs as Cache HAL APIs for: 1. internal ram ; 2. unified APIs
-    # ESP32 cache structure / ROM APIs are different and we have a patch `cache_hal_esp32.c` for it.
-    if(${target} STREQUAL "esp32")
-        list(APPEND srcs "esp32/cache_hal_esp32.c")
-    elseif(NOT ${target} STREQUAL "linux")
-        list(APPEND srcs "cache_hal.c")
-    endif()
-endif()
-
 if(NOT BOOTLOADER_BUILD)
-    list(APPEND srcs "color_hal.c")
+    list(APPEND srcs
+        "rtc_io_hal.c"
+        "gpio_hal.c"
+        "uart_hal.c"
+        "uart_hal_iram.c"
+        "adc_hal_common.c"
+        "adc_oneshot_hal.c"
+        "${target}/clk_tree_hal.c")
 
     if(NOT CONFIG_APP_BUILD_TYPE_PURE_RAM_APP)
-        if(CONFIG_SOC_SPI_FLASH_SUPPORTED)
-            list(APPEND srcs "spi_flash_hal.c" "spi_flash_hal_iram.c")
-        endif()
+        list(APPEND srcs
+            "spi_flash_hal.c"
+            "spi_flash_hal_iram.c"
+        )
         if(CONFIG_SOC_FLASH_ENC_SUPPORTED)
             list(APPEND srcs "spi_flash_encrypt_hal_iram.c")
         endif()
     endif()
 
-    if(CONFIG_SOC_CLK_TREE_SUPPORTED)
-        list(APPEND srcs "${target}/clk_tree_hal.c")
-    endif()
-
     if(CONFIG_SOC_SYSTIMER_SUPPORTED AND NOT CONFIG_HAL_SYSTIMER_USE_ROM_IMPL)
         list(APPEND srcs "systimer_hal.c")
-    endif()
-
-    if(CONFIG_SOC_UART_SUPPORTED)
-        list(APPEND srcs "uart_hal.c" "uart_hal_iram.c")
-    endif()
-
-    if(CONFIG_SOC_GPIO_PORT)
-        list(APPEND srcs "gpio_hal.c")
-    endif()
-
-    if(CONFIG_SOC_RTCIO_PIN_COUNT)
-        list(APPEND srcs "rtc_io_hal.c")
     endif()
 
     if(CONFIG_SOC_GPTIMER_SUPPORTED)
@@ -93,10 +67,6 @@ if(NOT BOOTLOADER_BUILD)
 
     if(CONFIG_SOC_I2C_SUPPORTED)
         list(APPEND srcs "i2c_hal.c" "i2c_hal_iram.c")
-    endif()
-
-    if(CONFIG_SOC_ISP_SUPPORTED)
-        list(APPEND srcs "isp_hal.c")
     endif()
 
     if(CONFIG_SOC_RMT_SUPPORTED)
@@ -116,31 +86,7 @@ if(NOT BOOTLOADER_BUILD)
     endif()
 
     if(CONFIG_SOC_GDMA_SUPPORTED)
-        list(APPEND srcs "gdma_hal_top.c")
-
-        if(CONFIG_SOC_GDMA_SUPPORT_CRC)
-            list(APPEND srcs "gdma_hal_crc_gen.c")
-        endif()
-
-        if(CONFIG_SOC_AHB_GDMA_VERSION EQUAL 1)
-            list(APPEND srcs "gdma_hal_ahb_v1.c")
-        endif()
-
-        if(CONFIG_SOC_AHB_GDMA_VERSION EQUAL 2)
-            list(APPEND srcs "gdma_hal_ahb_v2.c")
-        endif()
-
-        if(CONFIG_SOC_AXI_GDMA_SUPPORTED)
-            list(APPEND srcs "gdma_hal_axi.c")
-        endif()
-    endif()
-
-    if(CONFIG_SOC_DW_GDMA_SUPPORTED)
-        list(APPEND srcs "dw_gdma_hal.c")
-    endif()
-
-    if(CONFIG_SOC_DMA2D_SUPPORTED)
-        list(APPEND srcs "dma2d_hal.c")
+        list(APPEND srcs "gdma_hal.c")
     endif()
 
     if(CONFIG_SOC_I2S_SUPPORTED)
@@ -149,10 +95,6 @@ if(NOT BOOTLOADER_BUILD)
 
     if(CONFIG_SOC_SDM_SUPPORTED)
         list(APPEND srcs "sdm_hal.c")
-    endif()
-
-    if(CONFIG_SOC_SDMMC_HOST_SUPPORTED)
-        list(APPEND srcs "sdmmc_hal.c")
     endif()
 
     if(CONFIG_ETH_USE_ESP32_EMAC)
@@ -167,24 +109,12 @@ if(NOT BOOTLOADER_BUILD)
         list(APPEND srcs "parlio_hal.c")
     endif()
 
-    if(CONFIG_SOC_ADC_SUPPORTED)
-        list(APPEND srcs "adc_hal_common.c" "adc_oneshot_hal.c")
-
-        if(CONFIG_SOC_ADC_DMA_SUPPORTED)
-            list(APPEND srcs "adc_hal.c")
-        endif()
+    if(CONFIG_SOC_ADC_DMA_SUPPORTED)
+        list(APPEND srcs "adc_hal.c")
     endif()
 
     if(CONFIG_SOC_LCDCAM_SUPPORTED)
         list(APPEND srcs "lcd_hal.c")
-    endif()
-
-    if(CONFIG_SOC_MIPI_DSI_SUPPORTED)
-        list(APPEND srcs "mipi_dsi_hal.c")
-    endif()
-
-    if(CONFIG_SOC_MIPI_CSI_SUPPORTED)
-        list(APPEND srcs "mipi_csi_hal.c")
     endif()
 
     if(CONFIG_SOC_ECC_SUPPORTED)
@@ -195,10 +125,6 @@ if(NOT BOOTLOADER_BUILD)
         list(APPEND srcs "ecdsa_hal.c")
     endif()
 
-    if(CONFIG_SOC_MPI_SUPPORTED)
-        list(APPEND srcs "mpi_hal.c")
-    endif()
-
     if(CONFIG_SOC_SHA_SUPPORTED)
         list(APPEND srcs "sha_hal.c")
     endif()
@@ -207,7 +133,7 @@ if(NOT BOOTLOADER_BUILD)
         list(APPEND srcs "aes_hal.c")
     endif()
 
-    if(CONFIG_SOC_MODEM_CLOCK_IS_INDEPENDENT AND CONFIG_SOC_MODEM_CLOCK_SUPPORTED)
+    if(CONFIG_SOC_MODEM_CLOCK_IS_INDEPENDENT)
         list(APPEND srcs "${target}/modem_clock_hal.c")
     endif()
 
@@ -219,29 +145,16 @@ if(NOT BOOTLOADER_BUILD)
         list(APPEND srcs "brownout_hal.c")
     endif()
 
-    if(CONFIG_SOC_JPEG_CODEC_SUPPORTED)
-        list(APPEND srcs "jpeg_hal.c")
-    endif()
-
-    if(CONFIG_SOC_PPA_SUPPORTED)
-        list(APPEND srcs "ppa_hal.c")
-    endif()
-
     if(CONFIG_SOC_GPSPI_SUPPORTED)
         list(APPEND srcs
-            "spi_hal.c"
-            "spi_hal_iram.c"
-            "spi_slave_hal.c"
-            "spi_slave_hal_iram.c"
-        )
-
-        if(CONFIG_SOC_SPI_SUPPORT_SLAVE_HD_VER2)
-            list(APPEND srcs "spi_slave_hd_hal.c")
-        endif()
+                    "spi_hal.c"
+                    "spi_hal_iram.c"
+                    "spi_slave_hal.c"
+                    "spi_slave_hal_iram.c")
     endif()
 
-    if(CONFIG_SOC_GPSPI_SUPPORTED AND NOT CONFIG_IDF_TARGET_ESP32)
-        list(APPEND srcs "spi_flash_hal_gpspi.c")
+    if(CONFIG_SOC_SPI_SUPPORT_SLAVE_HD_VER2)
+        list(APPEND srcs "spi_slave_hd_hal.c")
     endif()
 
     if(CONFIG_SOC_SDIO_SLAVE_SUPPORTED)
@@ -266,10 +179,6 @@ if(NOT BOOTLOADER_BUILD)
         list(APPEND srcs "ds_hal.c")
     endif()
 
-    if(CONFIG_SOC_LCDCAM_CAM_SUPPORTED)
-        list(APPEND srcs "cam_hal.c")
-    endif()
-
     if(CONFIG_SOC_USB_SERIAL_JTAG_SUPPORTED)
         list(APPEND srcs "usb_serial_jtag_hal.c")
     endif()
@@ -289,6 +198,7 @@ if(NOT BOOTLOADER_BUILD)
 
     if(${target} STREQUAL "esp32s2")
         list(APPEND srcs
+                    "spi_flash_hal_gpspi.c"
                     "touch_sensor_hal.c"
                     "xt_wdt_hal.c"
                     "esp32s2/cp_dma_hal.c"
@@ -297,6 +207,7 @@ if(NOT BOOTLOADER_BUILD)
 
     if(${target} STREQUAL "esp32s3")
         list(APPEND srcs
+            "spi_flash_hal_gpspi.c"
             "touch_sensor_hal.c"
             "xt_wdt_hal.c"
             "esp32s3/touch_sensor_hal.c"
@@ -305,16 +216,28 @@ if(NOT BOOTLOADER_BUILD)
 
     if(${target} STREQUAL "esp32c3")
         list(APPEND srcs
+              "spi_flash_hal_gpspi.c"
               "xt_wdt_hal.c"
               "esp32c3/rtc_cntl_hal.c")
     endif()
 
     if(${target} STREQUAL "esp32c2")
         list(APPEND srcs
+              "spi_flash_hal_gpspi.c"
               "esp32c2/rtc_cntl_hal.c")
     endif()
 
+    if(${target} STREQUAL "esp32c6")
+        list(APPEND srcs
+              "spi_flash_hal_gpspi.c")
+
+    endif()
+
     if(${target} STREQUAL "esp32h2")
+        list(APPEND srcs
+              "spi_flash_hal_gpspi.c"
+            )
+
         list(REMOVE_ITEM srcs
                 "esp32h2/rtc_cntl_hal.c"
                 )
@@ -326,6 +249,7 @@ idf_component_register(SRCS ${srcs}
                        PRIV_INCLUDE_DIRS ${priv_include}
                        REQUIRES soc esp_rom
                        LDFRAGMENTS linker.lf)
+target_compile_options(${COMPONENT_LIB} PRIVATE "-Wno-format")
 
 if(CONFIG_HAL_DEFAULT_ASSERTION_LEVEL EQUAL 1)
     target_link_libraries(${COMPONENT_LIB} INTERFACE "-u abort")

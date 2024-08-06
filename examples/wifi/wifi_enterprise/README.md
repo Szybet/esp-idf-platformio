@@ -10,9 +10,6 @@
 
 **WPA3 Enterprise(192 bit)**: WPA3 Enterprise + AES256 Keys(GCMP256/CCMP256) + BIP256 + RSA3096/EC certs + NSA SuiteB ciphers in EAP authentication.
 
-*Note:* 
-Note that when using bigger certificates on low-power chips without crypto hardware acceleration, it is recommended to adjust the task watchdog timer (TWDT) if it is enabled. For precise information on timing requirements, you can check performance numbers at https://github.com/espressif/mbedtls/wiki/Performance-Numbers.
-
 # WiFi Enterprise Example
 
 This example shows how ESP32 connects to AP with Wi-Fi enterprise encryption. The example does the following steps:
@@ -24,14 +21,13 @@ This example shows how ESP32 connects to AP with Wi-Fi enterprise encryption. Th
 5. Enable WiFi enterprise mode.
 6. Connect to AP using esp_wifi_connect().
 
-*Note:* 
-1. The certificates currently are generated and are present in examples/wifi/wifi_enterprise/main folder.
-2. The expiration date of the certificates is 2027/06/05.
-3. In case using suite-b, please go into `generate_certs` directory, then execute the script as `python generate_certs.py <cert_type> sha384` to create appropriate certificates such as RSA-3072 or p384 EC certificates.
+*Note:* 1. The certificates currently are generated and are present in examples/wifi/wifi_enterprise/main folder.
+        2. The expiration date of the certificates is 2027/06/05.
+        3. In case using suite-b, please use appropriate certificates such as RSA-3072 or p384 EC certificates.
 
 The steps to create new certificates are given below.
 
-The file ca.pem, ca.key, server.pem, server.crt and server.key can be used to configure AP with enterprise encryption.
+## The file ca.pem, ca.key, server.pem, server.crt and server.key can be used to configure AP with enterprise encryption.
 
 ## How to use Example
 
@@ -56,7 +52,7 @@ idf.py -p PORT flash monitor
 ## Steps to create enterprise openssl certs
 
 1. make directry tree
-```
+
   mkdir demoCA
   mkdir demoCA/newcerts
   mkdir demoCA/private
@@ -71,36 +67,30 @@ idf.py -p PORT flash monitor
 
       [ xpserver_ext ]
       extendedKeyUsage = 1.3.6.1.5.5.7.3.1
-```
+
 2. ca.pem: root certificate, foundation of certificate verigy
-```
   openssl req -new -x509 -keyout ca.key -out ca.pem
-```
+
 3. generate rsa keys for client and server
-```
   openssl genrsa -out client.key 2048
   openssl genrsa -out server.key 2048
-```
+
 4. generate certificate signing req for both client and server
-```
   openssl req -new -key client.key -out client.csr
   openssl req -new -key server.key -out server.csr
-```
+
 5. create certs (.crt) for client nd server
-```
   openssl ca -batch -keyfile ca.key -cert ca.pem -in client.csr -key (password) -out client.crt -extensions xpclient_ext -extfile xpextensions
   openssl ca -batch -keyfile ca.key -cert ca.pem -in server.csr -key (password) -out server.crt -extensions xpserver_ext -extfile xpextensions
-```
+
 6. export .p12 files
-```
   openssl pkcs12 -export -out client.p12 -inkey client.key -in client.crt
   openssl pkcs12 -export -out server.p12 -inkey server.key -in server.crt
-```
+
 7. create .pem files
-```
   openssl pkcs12 -in client.p12 -out client.pem
   openssl pkcs12 -in server.p12 -out server.pem
-```
+
 
 
 ### Example output

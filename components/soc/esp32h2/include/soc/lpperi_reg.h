@@ -148,9 +148,9 @@ extern "C" {
  *  need_des
  */
 #define LPPERI_RNG_DATA    0xFFFFFFFFU
-#define LPPERI_RND_GATA_M  (LPPERI_RND_GATA_V << LPPERI_RND_GATA_S)
-#define LPPERI_RND_GATA_V  0xFFFFFFFFU
-#define LPPERI_RND_GATA_S  0
+#define LPPERI_RNG_DATA_M  (LPPERI_RNG_DATA_V << LPPERI_RNG_DATA_S)
+#define LPPERI_RNG_DATA_V  0xFFFFFFFFU
+#define LPPERI_RNG_DATA_S  0
 
 /** LPPERI_CPU_REG register
  *  need_des

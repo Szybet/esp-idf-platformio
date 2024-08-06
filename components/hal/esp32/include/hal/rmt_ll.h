@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2019-2023 Espressif Systems (Shanghai) CO LTD
+ * SPDX-FileCopyrightText: 2019-2022 Espressif Systems (Shanghai) CO LTD
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -16,7 +16,6 @@
 #include "hal/misc.h"
 #include "hal/assert.h"
 #include "soc/rmt_struct.h"
-#include "soc/dport_reg.h"
 #include "hal/rmt_types.h"
 
 #ifdef __cplusplus
@@ -42,41 +41,6 @@ typedef enum {
 } rmt_ll_mem_owner_t;
 
 /**
- * @brief Enable the bus clock for RMT module
- *
- * @param group_id Group ID
- * @param enable true to enable, false to disable
- */
-static inline void rmt_ll_enable_bus_clock(int group_id, bool enable)
-{
-    (void)group_id;
-    uint32_t reg_val = DPORT_READ_PERI_REG(DPORT_PERIP_CLK_EN_REG);
-    reg_val &= ~DPORT_RMT_CLK_EN;
-    reg_val |= enable << 9;
-    DPORT_WRITE_PERI_REG(DPORT_PERIP_CLK_EN_REG, reg_val);
-}
-
-/// use a macro to wrap the function, force the caller to use it in a critical section
-/// the critical section needs to declare the __DECLARE_RCC_ATOMIC_ENV variable in advance
-#define rmt_ll_enable_bus_clock(...) (void)__DECLARE_RCC_ATOMIC_ENV; rmt_ll_enable_bus_clock(__VA_ARGS__)
-
-/**
- * @brief Reset the RMT module
- *
- * @param group_id Group ID
- */
-static inline void rmt_ll_reset_register(int group_id)
-{
-    (void)group_id;
-    DPORT_WRITE_PERI_REG(DPORT_PERIP_RST_EN_REG, DPORT_RMT_RST);
-    DPORT_WRITE_PERI_REG(DPORT_PERIP_RST_EN_REG, 0);
-}
-
-/// use a macro to wrap the function, force the caller to use it in a critical section
-/// the critical section needs to declare the __DECLARE_RCC_ATOMIC_ENV variable in advance
-#define rmt_ll_reset_register(...) (void)__DECLARE_RCC_ATOMIC_ENV; rmt_ll_reset_register(__VA_ARGS__)
-
-/**
  * @brief Enable clock gate for register and memory
  *
  * @param dev Peripheral instance address
@@ -88,14 +52,33 @@ static inline void rmt_ll_enable_periph_clock(rmt_dev_t *dev, bool enable)
 }
 
 /**
- * @brief Power down memory
+ * @brief Force power on the RMT memory block, regardless of the outside PMU logic
  *
  * @param dev Peripheral instance address
- * @param enable True to power down, False to power up
  */
-static inline void rmt_ll_power_down_mem(rmt_dev_t *dev, bool enable)
+static inline void rmt_ll_mem_force_power_on(rmt_dev_t *dev)
 {
-    dev->conf_ch[0].conf0.mem_pd = enable; // Only conf0 register of channel0 has `mem_pd`
+    (void)dev;
+}
+
+/**
+ * @brief Force power off the RMT memory block, regardless of the outside PMU logic
+ *
+ * @param dev Peripheral instance address
+ */
+static inline void rmt_ll_mem_force_power_off(rmt_dev_t *dev)
+{
+    dev->conf_ch[0].conf0.mem_pd = 1;
+}
+
+/**
+ * @brief Power control the RMT memory block by the outside PMU logic
+ *
+ * @param dev Peripheral instance address
+ */
+static inline void rmt_ll_mem_power_by_pmu(rmt_dev_t *dev)
+{
+    dev->conf_ch[0].conf0.mem_pd = 0;
 }
 
 /**
@@ -120,7 +103,7 @@ static inline void rmt_ll_enable_mem_access_nonfifo(rmt_dev_t *dev, bool enable)
  * @param divider_numerator Numerator part of the divider
  */
 static inline void rmt_ll_set_group_clock_src(rmt_dev_t *dev, uint32_t channel, rmt_clock_source_t src,
-        uint32_t divider_integral, uint32_t divider_denominator, uint32_t divider_numerator)
+                                              uint32_t divider_integral, uint32_t divider_denominator, uint32_t divider_numerator)
 {
     (void)divider_integral;
     (void)divider_denominator;
@@ -631,7 +614,7 @@ static inline uint32_t rmt_ll_tx_get_idle_level(rmt_dev_t *dev, uint32_t channel
     return dev->conf_ch[channel].conf1.idle_out_lv;
 }
 
-static inline bool rmt_ll_is_mem_powered_down(rmt_dev_t *dev)
+static inline bool rmt_ll_is_mem_force_powered_down(rmt_dev_t *dev)
 {
     // Only conf0 register of channel0 has `mem_pd`
     return dev->conf_ch[0].conf0.mem_pd;

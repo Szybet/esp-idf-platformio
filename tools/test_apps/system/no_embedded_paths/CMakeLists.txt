@@ -3,7 +3,6 @@
 cmake_minimum_required(VERSION 3.16)
 
 include($ENV{IDF_PATH}/tools/cmake/project.cmake)
-set(COMPONENTS main)
 project(no_embedded_paths)
 
 idf_build_get_property(idf_path IDF_PATH)

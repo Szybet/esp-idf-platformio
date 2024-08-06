@@ -12,7 +12,7 @@
 #include "soc/rtc.h"
 #include "soc/rtc_periph.h"
 #if SOC_ADC_RTC_CTRL_SUPPORTED
-#include "soc/sens_reg.h"
+#include "soc/sens_periph.h"
 #endif
 #include "soc/gpio_periph.h"
 #include "hal/gpio_ll.h"
@@ -153,7 +153,7 @@ TEST_CASE("Output 8M XTAL clock to GPIO25", "[ignore]")
 
 static void test_clock_switching(void (*switch_func)(const rtc_cpu_freq_config_t* config))
 {
-    esp_rom_output_tx_wait_idle(CONFIG_ESP_CONSOLE_ROM_SERIAL_PORT_NUM);
+    esp_rom_uart_tx_wait_idle(CONFIG_ESP_CONSOLE_UART_NUM);
 
     const int test_duration_sec = 10;
     ref_clock_init();

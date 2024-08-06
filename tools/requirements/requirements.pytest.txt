@@ -7,10 +7,8 @@ pytest-embedded-jtag
 pytest-embedded-qemu
 pytest-rerunfailures
 pytest-timeout
-pytest-ignore-test-results
 
 # build
-python-gitlab
 idf-build-apps
 
 # dependencies in pytest test scripts
@@ -20,10 +18,7 @@ netifaces
 rangehttpserver
 dbus-python; sys_platform == 'linux'
 protobuf
-bleak
 paho-mqtt
-paramiko
-netmiko
 
 # iperf_test_util
 pyecharts

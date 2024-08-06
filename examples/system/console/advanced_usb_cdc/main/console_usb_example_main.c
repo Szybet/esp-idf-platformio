@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2022-2024 Espressif Systems (Shanghai) CO LTD
+ * SPDX-FileCopyrightText: 2022 Espressif Systems (Shanghai) CO LTD
  *
  * SPDX-License-Identifier: Unlicense OR CC0-1.0
  */
@@ -26,17 +26,6 @@
 #include "cmd_nvs.h"
 #include "cmd_system.h"
 #include "cmd_wifi.h"
-
-/*
- * We warn if a secondary serial console is enabled. A secondary serial console is always output-only and
- * hence not very useful for interactive console applications. If you encounter this warning, consider disabling
- * the secondary serial console in menuconfig unless you know what you are doing.
- */
-#if SOC_USB_SERIAL_JTAG_SUPPORTED
-#if !CONFIG_ESP_CONSOLE_SECONDARY_NONE
-#warning "A secondary serial console is not useful when using the console component. Please disable it in menuconfig."
-#endif
-#endif
 
 static void initialize_nvs(void)
 {
@@ -95,16 +84,9 @@ void app_main(void)
     /* Register commands */
     esp_console_register_help_command();
     register_system_common();
-#if SOC_LIGHT_SLEEP_SUPPORTED
-    register_system_light_sleep();
-#endif
-#if SOC_DEEP_SLEEP_SUPPORTED
-    register_system_deep_sleep();
-#endif
-#if SOC_WIFI_SUPPORTED
-    register_wifi();
-#endif
+    register_system_sleep();
     register_nvs();
+    register_wifi();
 
     /* Prompt to be printed before each line.
      * This can be customized, made dynamic, etc.

@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2015-2024 Espressif Systems (Shanghai) CO LTD
+ * SPDX-FileCopyrightText: 2015-2022 Espressif Systems (Shanghai) CO LTD
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -9,6 +9,7 @@
 #include <stdint.h>
 #include "soc/soc.h"
 #include "soc/clk_tree_defs.h"
+#include "soc/rtc.h"
 #include "soc/rtc_cntl_reg.h"
 #include "soc/rtc_io_reg.h"
 #include "soc/dport_reg.h"
@@ -71,19 +72,6 @@ extern "C" {
 #define CLK_LL_XTAL_32K_BOOTSTRAP_DAC_VAL      3
 #define CLK_LL_XTAL_32K_BOOTSTRAP_DRES_VAL     3
 #define CLK_LL_XTAL_32K_BOOTSTRAP_DBIAS_VAL    0
-
-/* RC_FAST clock enable/disable wait time */
-#define CLK_LL_RC_FAST_WAIT_DEFAULT            20
-#define CLK_LL_RC_FAST_ENABLE_WAIT_DEFAULT     5
-
-/* APLL multiplier output frequency range */
-// apll_multiplier_out = xtal_freq * (4 + sdm2 + sdm1/256 + sdm0/65536)
-#define CLK_LL_APLL_MULTIPLIER_MIN_HZ (350000000) // 350 MHz
-#define CLK_LL_APLL_MULTIPLIER_MAX_HZ (500000000) // 500 MHz
-
-/* APLL output frequency range */
-#define CLK_LL_APLL_MIN_HZ    (5303031)   // 5.303031 MHz, refer to 'periph_rtc_apll_freq_set' for the calculation
-#define CLK_LL_APLL_MAX_HZ    (125000000) // 125MHz, refer to 'periph_rtc_apll_freq_set' for the calculation
 
 /**
  * @brief XTAL32K_CLK enable modes
@@ -278,7 +266,7 @@ static inline __attribute__((always_inline)) bool clk_ll_xtal32k_is_enabled(void
 static inline __attribute__((always_inline)) void clk_ll_rc_fast_enable(void)
 {
     CLEAR_PERI_REG_MASK(RTC_CNTL_CLK_CONF_REG, RTC_CNTL_ENB_CK8M);
-    REG_SET_FIELD(RTC_CNTL_TIMER1_REG, RTC_CNTL_CK8M_WAIT, CLK_LL_RC_FAST_ENABLE_WAIT_DEFAULT);
+    REG_SET_FIELD(RTC_CNTL_TIMER1_REG, RTC_CNTL_CK8M_WAIT, RTC_CK8M_ENABLE_WAIT_DEFAULT);
 }
 
 /**
@@ -287,7 +275,7 @@ static inline __attribute__((always_inline)) void clk_ll_rc_fast_enable(void)
 static inline __attribute__((always_inline)) void clk_ll_rc_fast_disable(void)
 {
     SET_PERI_REG_MASK(RTC_CNTL_CLK_CONF_REG, RTC_CNTL_ENB_CK8M);
-    REG_SET_FIELD(RTC_CNTL_TIMER1_REG, RTC_CNTL_CK8M_WAIT, CLK_LL_RC_FAST_WAIT_DEFAULT);
+    REG_SET_FIELD(RTC_CNTL_TIMER1_REG, RTC_CNTL_CK8M_WAIT, RTC_CNTL_CK8M_WAIT_DEFAULT);
 }
 
 /**
@@ -452,7 +440,7 @@ static inline __attribute__((always_inline)) void clk_ll_bbpll_set_config(uint32
     if (pll_freq_mhz == CLK_LL_PLL_320M_FREQ_MHZ) {
         /* Configure 320M PLL */
         switch (xtal_freq_mhz) {
-        case SOC_XTAL_FREQ_40M:
+        case RTC_XTAL_FREQ_40M:
             div_ref = 0;
             div7_0 = 32;
             div10_8 = 0;
@@ -460,7 +448,7 @@ static inline __attribute__((always_inline)) void clk_ll_bbpll_set_config(uint32
             dcur = 6;
             bw = 3;
             break;
-        case SOC_XTAL_FREQ_26M:
+        case RTC_XTAL_FREQ_26M:
             div_ref = 12;
             div7_0 = 224;
             div10_8 = 4;
@@ -468,7 +456,7 @@ static inline __attribute__((always_inline)) void clk_ll_bbpll_set_config(uint32
             dcur = 0;
             bw = 1;
             break;
-        case SOC_XTAL_FREQ_24M:
+        case RTC_XTAL_FREQ_24M:
             div_ref = 11;
             div7_0 = 224;
             div10_8 = 4;
@@ -490,7 +478,7 @@ static inline __attribute__((always_inline)) void clk_ll_bbpll_set_config(uint32
     } else {
         /* Configure 480M PLL */
         switch (xtal_freq_mhz) {
-        case SOC_XTAL_FREQ_40M:
+        case RTC_XTAL_FREQ_40M:
             div_ref = 0;
             div7_0 = 28;
             div10_8 = 0;
@@ -498,7 +486,7 @@ static inline __attribute__((always_inline)) void clk_ll_bbpll_set_config(uint32
             dcur = 6;
             bw = 3;
             break;
-        case SOC_XTAL_FREQ_26M:
+        case RTC_XTAL_FREQ_26M:
             div_ref = 12;
             div7_0 = 144;
             div10_8 = 4;
@@ -506,7 +494,7 @@ static inline __attribute__((always_inline)) void clk_ll_bbpll_set_config(uint32
             dcur = 0;
             bw = 1;
             break;
-        case SOC_XTAL_FREQ_24M:
+        case RTC_XTAL_FREQ_24M:
             div_ref = 11;
             div7_0 = 144;
             div10_8 = 4;

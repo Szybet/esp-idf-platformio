@@ -5,16 +5,12 @@
  */
 
 
-#include "common/bt_target.h"
 #include "esp_bt_main.h"
 #include "btc/btc_task.h"
 #include "btc/btc_main.h"
-#if (BT_CONTROLLER_INCLUDED == TRUE)
 #include "esp_bt.h"
-#endif
 #include "osi/future.h"
 #include "osi/allocator.h"
-#include "config/stack_config.h"
 #include "hci_log/bt_hci_log.h"
 #include "bt_common.h"
 
@@ -113,27 +109,14 @@ esp_err_t esp_bluedroid_disable(void)
 
 esp_err_t esp_bluedroid_init(void)
 {
-    esp_bluedroid_config_t cfg = BT_BLUEDROID_INIT_CONFIG_DEFAULT();
-    return esp_bluedroid_init_with_cfg(&cfg);
-}
-
-esp_err_t esp_bluedroid_init_with_cfg(esp_bluedroid_config_t *cfg)
-{
     btc_msg_t msg;
     future_t **future_p;
     bt_status_t ret;
 
-    if (!cfg) {
-        LOG_ERROR("%s cfg is NULL", __func__);
-        return ESP_ERR_INVALID_ARG;
-    }
-
-#if (BT_CONTROLLER_INCLUDED == TRUE)
     if (esp_bt_controller_get_status() != ESP_BT_CONTROLLER_STATUS_ENABLED) {
         LOG_ERROR("Controller not initialised\n");
         return ESP_ERR_INVALID_STATE;
     }
-#endif
 
     if (bd_already_init) {
         LOG_ERROR("Bluedroid already initialised\n");
@@ -144,15 +127,9 @@ esp_err_t esp_bluedroid_init_with_cfg(esp_bluedroid_config_t *cfg)
     osi_mem_dbg_init();
 #endif
 
-    ret = bluedriod_config_init(cfg);
-    if (ret != BT_STATUS_SUCCESS) {
-        LOG_ERROR("Bluedroid stack initialize fail, ret:%d", ret);
-        return ESP_FAIL;
-    }
-
     /*
-     * BTC Init
-     */
+    * BTC Init
+    */
     ret = btc_init();
     if (ret != BT_STATUS_SUCCESS) {
         LOG_ERROR("Bluedroid Initialize Fail");
@@ -227,8 +204,6 @@ esp_err_t esp_bluedroid_deinit(void)
     }
 
     btc_deinit();
-
-    bluedriod_config_deinit();
 
 #if (BT_HCI_LOG_INCLUDED == TRUE)
     bt_hci_log_deinit();

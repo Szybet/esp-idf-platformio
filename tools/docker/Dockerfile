@@ -1,4 +1,4 @@
-FROM ubuntu:22.04
+FROM ubuntu:20.04
 
 ARG DEBIAN_FRONTEND=noninteractive
 
@@ -90,9 +90,6 @@ RUN : \
   && $IDF_PATH/tools/idf_tools.py --non-interactive install-python-env \
   && rm -rf $IDF_TOOLS_PATH/dist \
   && :
-
-# Add get_idf as alias
-RUN echo 'alias get_idf=". /opt/esp/idf/export.sh"' >> /root/.bashrc
 
 # The constraint file has been downloaded and the right Python package versions installed. No need to check and
 # download this at every invocation of the container.

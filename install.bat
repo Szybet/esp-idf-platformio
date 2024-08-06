@@ -25,11 +25,6 @@ if not "%MISSING_REQUIREMENTS%" == "" goto :__error_missing_requirements
 set IDF_PATH=%~dp0
 set IDF_PATH=%IDF_PATH:~0,-1%
 
-:: Print help if requested
-if /I "%1" == "/?" goto :__help
-if /I "%1" == "-h" goto :__help
-if /I "%1" == "--help" goto :__help
-
 for /f "delims=" %%i in ('python.exe "%IDF_PATH%\tools\install_util.py" extract targets "%*"') do set TARGETS=%%i
 
 echo Installing ESP-IDF tools
@@ -61,10 +56,6 @@ goto :__end
     echo Please use the Windows Tool installer for setting up your environment.
     echo Download link: https://dl.espressif.com/dl/esp-idf/
     echo For more details please visit our website: https://docs.espressif.com/projects/esp-idf/en/latest/esp32/get-started/windows-setup.html
-    goto :__end
-
-:__help
-    python.exe "%IDF_PATH%\tools\install_util.py" print_help bat
     goto :__end
 
 :__end

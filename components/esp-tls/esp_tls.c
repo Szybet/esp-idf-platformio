@@ -1,11 +1,12 @@
 /*
- * SPDX-FileCopyrightText: 2019-2024 Espressif Systems (Shanghai) CO LTD
+ * SPDX-FileCopyrightText: 2019-2022 Espressif Systems (Shanghai) CO LTD
  *
  * SPDX-License-Identifier: Apache-2.0
  */
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
+#include <stdint.h>
 #include <unistd.h>
 
 #include <sys/types.h>
@@ -18,22 +19,14 @@
 #include "esp_tls_private.h"
 #include "esp_tls_platform_port.h"
 #include "esp_tls_error_capture_internal.h"
-#include <fcntl.h>
 #include <errno.h>
 
-#if CONFIG_IDF_TARGET_LINUX && !ESP_TLS_WITH_LWIP
+#if CONFIG_IDF_TARGET_LINUX
 #include <arpa/inet.h>
 #include <netinet/in.h>
 #include <netinet/tcp.h>
-#include <sys/time.h>
-
-#ifdef __linux__
 #include <linux/if.h>
-#endif
-
-#ifdef __APPLE__
-#include <net/if.h>
-#endif
+#include <sys/time.h>
 
 typedef struct in_addr ip_addr_t;
 typedef struct in6_addr ip6_addr_t;
@@ -45,7 +38,7 @@ static inline char *ip6addr_ntoa(const ip6_addr_t *addr)
   return (char *)inet_ntop(AF_INET6, addr->s6_addr, str, 40);
 }
 
-#endif  // CONFIG_IDF_TARGET_LINUX && !ESP_TLS_WITH_LWIP
+#endif
 
 static const char *TAG = "esp-tls";
 
@@ -72,16 +65,17 @@ static const char *TAG = "esp-tls";
 #define _esp_tls_get_client_session         esp_mbedtls_get_client_session
 #define _esp_tls_free_client_session        esp_mbedtls_free_client_session
 #define _esp_tls_get_ssl_context            esp_mbedtls_get_ssl_context
+#ifdef CONFIG_ESP_TLS_SERVER
 #define _esp_tls_server_session_create      esp_mbedtls_server_session_create
 #define _esp_tls_server_session_delete      esp_mbedtls_server_session_delete
 #define _esp_tls_server_session_ticket_ctx_init    esp_mbedtls_server_session_ticket_ctx_init
 #define _esp_tls_server_session_ticket_ctx_free    esp_mbedtls_server_session_ticket_ctx_free
+#endif  /* CONFIG_ESP_TLS_SERVER */
 #define _esp_tls_get_bytes_avail            esp_mbedtls_get_bytes_avail
 #define _esp_tls_init_global_ca_store       esp_mbedtls_init_global_ca_store
 #define _esp_tls_set_global_ca_store        esp_mbedtls_set_global_ca_store                 /*!< Callback function for setting global CA store data for TLS/SSL */
 #define _esp_tls_get_global_ca_store        esp_mbedtls_get_global_ca_store
 #define _esp_tls_free_global_ca_store       esp_mbedtls_free_global_ca_store                /*!< Callback function for freeing global ca store for TLS/SSL */
-#define _esp_tls_get_ciphersuites_list      esp_mbedtls_get_ciphersuites_list
 #elif CONFIG_ESP_TLS_USING_WOLFSSL /* CONFIG_ESP_TLS_USING_MBEDTLS */
 #define _esp_create_ssl_handle              esp_create_wolfssl_handle
 #define _esp_tls_handshake                  esp_wolfssl_handshake
@@ -89,8 +83,10 @@ static const char *TAG = "esp-tls";
 #define _esp_tls_write                      esp_wolfssl_write
 #define _esp_tls_conn_delete                esp_wolfssl_conn_delete
 #define _esp_tls_net_init                   esp_wolfssl_net_init
+#ifdef CONFIG_ESP_TLS_SERVER
 #define _esp_tls_server_session_create      esp_wolfssl_server_session_create
 #define _esp_tls_server_session_delete      esp_wolfssl_server_session_delete
+#endif  /* CONFIG_ESP_TLS_SERVER */
 #define _esp_tls_get_bytes_avail            esp_wolfssl_get_bytes_avail
 #define _esp_tls_init_global_ca_store       esp_wolfssl_init_global_ca_store
 #define _esp_tls_set_global_ca_store        esp_wolfssl_set_global_ca_store                 /*!< Callback function for setting global CA store data for TLS/SSL */
@@ -112,7 +108,7 @@ static const char *TAG = "esp-tls";
 
 static esp_err_t create_ssl_handle(const char *hostname, size_t hostlen, const void *cfg, esp_tls_t *tls)
 {
-    return _esp_create_ssl_handle(hostname, hostlen, cfg, tls, NULL);
+    return _esp_create_ssl_handle(hostname, hostlen, cfg, tls);
 }
 
 static esp_err_t esp_tls_handshake(esp_tls_t *tls, const esp_tls_cfg_t *cfg)
@@ -132,18 +128,14 @@ static ssize_t tcp_write(esp_tls_t *tls, const char *data, size_t datalen)
 
 ssize_t esp_tls_conn_read(esp_tls_t *tls, void  *data, size_t datalen)
 {
-    if (!tls || !data) {
-        return -1;
-    }
     return tls->read(tls, (char *)data, datalen);
+
 }
 
 ssize_t esp_tls_conn_write(esp_tls_t *tls, const void  *data, size_t datalen)
 {
-    if (!tls || !data) {
-        return -1;
-    }
     return tls->write(tls, (char *)data, datalen);
+
 }
 
 /**
@@ -159,7 +151,6 @@ int esp_tls_conn_destroy(esp_tls_t *tls)
         }
         esp_tls_internal_event_tracker_destroy(tls->error_handle);
         free(tls);
-        tls = NULL;
         return ret;
     }
     return -1; // invalid argument
@@ -291,7 +282,6 @@ static esp_err_t esp_tls_set_socket_options(int fd, const esp_tls_cfg_t *cfg)
                 ESP_LOGE(TAG, "Fail to setsockopt SO_KEEPALIVE");
                 return ESP_ERR_ESP_TLS_SOCKET_SETOPT_FAILED;
             }
-#ifndef __APPLE__
             if (setsockopt(fd, IPPROTO_TCP, TCP_KEEPIDLE, &keep_alive_idle, sizeof(keep_alive_idle)) != 0) {
                 ESP_LOGE(TAG, "Fail to setsockopt TCP_KEEPIDLE");
                 return ESP_ERR_ESP_TLS_SOCKET_SETOPT_FAILED;
@@ -304,22 +294,11 @@ static esp_err_t esp_tls_set_socket_options(int fd, const esp_tls_cfg_t *cfg)
                 ESP_LOGE(TAG, "Fail to setsockopt TCP_KEEPCNT");
                 return ESP_ERR_ESP_TLS_SOCKET_SETOPT_FAILED;
             }
-#else // __APPLE__
-            if (setsockopt(fd, IPPROTO_TCP, TCP_KEEPALIVE, &keep_alive_idle, sizeof(keep_alive_idle)) != 0) {
-                ESP_LOGE(TAG, "Fail to setsockopt TCP_KEEPALIVE");
-                return ESP_ERR_ESP_TLS_SOCKET_SETOPT_FAILED;
-            }
-#endif // __APPLE__
         }
         if (cfg->if_name) {
             if (cfg->if_name->ifr_name[0] != 0) {
                 ESP_LOGD(TAG, "Bind [sock=%d] to interface %s", fd, cfg->if_name->ifr_name);
-#ifndef __APPLE__
                 if (setsockopt(fd, SOL_SOCKET, SO_BINDTODEVICE,  cfg->if_name, sizeof(struct ifreq)) != 0) {
-#else
-                int idx = if_nametoindex(cfg->if_name->ifr_name);
-                if (setsockopt(fd, IPPROTO_IP, IP_BOUND_IF, &idx, sizeof(idx)) != 0) {
-#endif
                     ESP_LOGE(TAG, "Bind [sock=%d] to interface %s fail", fd, cfg->if_name->ifr_name);
                     return ESP_ERR_ESP_TLS_SOCKET_SETOPT_FAILED;
                 }
@@ -442,7 +421,10 @@ err:
 
 static int esp_tls_low_level_conn(const char *hostname, int hostlen, int port, const esp_tls_cfg_t *cfg, esp_tls_t *tls)
 {
-
+    if (!tls) {
+        ESP_LOGE(TAG, "empty esp_tls parameter");
+        return -1;
+    }
     esp_err_t esp_ret;
     /* These states are used to keep a tab on connection progress in case of non-blocking connect,
     and in case of blocking connect these cases will get executed one after the other */
@@ -564,9 +546,6 @@ int esp_tls_conn_new_sync(const char *hostname, int hostlen, int port, const esp
  */
 int esp_tls_conn_new_async(const char *hostname, int hostlen, int port, const esp_tls_cfg_t *cfg, esp_tls_t *tls)
 {
-    if (!cfg || !tls || !hostname || hostlen < 0) {
-        return -1;
-    }
     return esp_tls_low_level_conn(hostname, hostlen, port, cfg, tls);
 }
 
@@ -586,10 +565,6 @@ static int get_port(const char *url, struct http_parser_url *u)
 
 esp_tls_t *esp_tls_conn_http_new(const char *url, const esp_tls_cfg_t *cfg)
 {
-    if (!url || !cfg) {
-        return NULL;
-    }
-
     /* Parse URI */
     struct http_parser_url u;
     http_parser_url_init(&u);
@@ -612,10 +587,6 @@ esp_tls_t *esp_tls_conn_http_new(const char *url, const esp_tls_cfg_t *cfg)
  */
 int esp_tls_conn_http_new_sync(const char *url, const esp_tls_cfg_t *cfg, esp_tls_t *tls)
 {
-    if (!url || !cfg || !tls) {
-        return -1;
-    }
-
     /* Parse URI */
     struct http_parser_url u;
     http_parser_url_init(&u);
@@ -648,10 +619,6 @@ mbedtls_x509_crt *esp_tls_get_global_ca_store(void)
     return _esp_tls_get_global_ca_store();
 }
 
-const int *esp_tls_get_ciphersuites_list(void)
-{
-    return _esp_tls_get_ciphersuites_list();
-}
 #endif /* CONFIG_ESP_TLS_USING_MBEDTLS */
 
 #ifdef CONFIG_ESP_TLS_CLIENT_SESSION_TICKETS
@@ -667,6 +634,7 @@ void esp_tls_free_client_session(esp_tls_client_session_t *client_session)
 #endif /* CONFIG_ESP_TLS_CLIENT_SESSION_TICKETS */
 
 
+#ifdef CONFIG_ESP_TLS_SERVER
 esp_err_t esp_tls_cfg_server_session_tickets_init(esp_tls_cfg_server_t *cfg)
 {
 #if defined(CONFIG_ESP_TLS_SERVER_SESSION_TICKETS)
@@ -710,6 +678,7 @@ void esp_tls_server_session_delete(esp_tls_t *tls)
 {
     return _esp_tls_server_session_delete(tls);
 }
+#endif /* CONFIG_ESP_TLS_SERVER */
 
 ssize_t esp_tls_get_bytes_avail(esp_tls_t *tls)
 {

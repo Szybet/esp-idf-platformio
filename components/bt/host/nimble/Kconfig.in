@@ -164,6 +164,16 @@ config BT_NIMBLE_NVS_PERSIST
     help
             Enable this flag to make bonding persistent across device reboots
 
+config BT_NIMBLE_SMP_ID_RESET
+    bool "Reset device identity when all bonding records are deleted"
+    default n
+    help
+        There are tracking risks associated with using a fixed or static IRK.
+        If enabled this option, Bluedroid will assign a new randomly-generated IRK
+        when all pairing and bonding records are deleted. This would decrease the ability
+        of a previously paired peer to be used to determine whether a device
+        with which it previously shared an IRK is within range.
+
 menuconfig BT_NIMBLE_SECURITY_ENABLE
     bool "Enable BLE SM feature"
     depends on BT_NIMBLE_ENABLED
@@ -201,7 +211,7 @@ config BT_NIMBLE_LL_CFG_FEAT_LE_ENCRYPTION
     help
             Enable encryption connection
 
-config BT_NIMBLE_SM_LVL
+config BT_NIMBLE_SM_SC_LVL
     int "Security level"
     depends on BT_NIMBLE_SECURITY_ENABLE
     default 0
@@ -224,7 +234,6 @@ config BT_NIMBLE_DYNAMIC_SERVICE
     depends on BT_NIMBLE_ENABLED
     help
         This enables user to add/remove Gatt services at runtime
-
 
 config BT_NIMBLE_SVC_GAP_DEVICE_NAME
     string "BLE GAP default device name"
@@ -340,13 +349,6 @@ menu "Memory Settings"
             buffers are only used for advertising reports. If there are no free
             low-priority event buffers, then an incoming advertising report will
             get dropped
-
-    config BT_NIMBLE_L2CAP_COC_SDU_BUFF_COUNT
-        int "L2cap coc Service Data Unit Buffer count"
-        depends on BT_NIMBLE_ENABLED
-        default 1
-        help
-            This is the service data unit buffer count for l2cap coc.
 
 endmenu
 

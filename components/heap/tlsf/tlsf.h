@@ -33,7 +33,6 @@ void tlsf_remove_pool(tlsf_t tlsf, pool_t pool);
 void* tlsf_malloc(tlsf_t tlsf, size_t size);
 void* tlsf_memalign(tlsf_t tlsf, size_t align, size_t size);
 void* tlsf_memalign_offs(tlsf_t tlsf, size_t align, size_t size, size_t offset);
-void* tlsf_malloc_addr(tlsf_t tlsf, size_t size, void *address);
 void* tlsf_realloc(tlsf_t tlsf, void* ptr, size_t size);
 void tlsf_free(tlsf_t tlsf, void* ptr);
 
@@ -59,7 +58,7 @@ size_t tlsf_alloc_overhead(void);
 size_t tlsf_fit_size(tlsf_t tlsf, size_t size);
 
 /* Debugging. */
-typedef bool (*tlsf_walker)(void* ptr, size_t size, int used, void* user);
+typedef void (*tlsf_walker)(void* ptr, size_t size, int used, void* user);
 void tlsf_walk_pool(pool_t pool, tlsf_walker walker, void* user);
 /* Returns nonzero if any internal consistency check fails. */
 int tlsf_check(tlsf_t tlsf);

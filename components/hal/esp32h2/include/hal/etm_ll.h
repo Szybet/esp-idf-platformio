@@ -12,34 +12,20 @@
 #include "hal/assert.h"
 #include "hal/misc.h"
 #include "soc/soc_etm_struct.h"
-#include "soc/pcr_struct.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 /**
- * @brief Enable the clock for ETM register
+ * @brief Enable the clock for ETM module
  *
- * @param group_id Group ID
+ * @param hw ETM register base address
  * @param enable true to enable, false to disable
  */
-static inline void etm_ll_enable_bus_clock(int group_id, bool enable)
+static inline void etm_ll_enable_clock(soc_etm_dev_t *hw, bool enable)
 {
-    (void)group_id;
-    PCR.etm_conf.etm_clk_en = enable;
-}
-
-/**
- * @brief Reset the ETM register
- *
- * @param group_id Group ID
- */
-static inline void etm_ll_reset_register(int group_id)
-{
-    (void)group_id;
-    PCR.etm_conf.etm_rst_en = 1;
-    PCR.etm_conf.etm_rst_en = 0;
+    hw->clk_en.clk_en = enable;
 }
 
 /**

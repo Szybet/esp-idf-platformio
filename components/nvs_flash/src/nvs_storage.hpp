@@ -74,8 +74,6 @@ public:
 
     esp_err_t readItem(uint8_t nsIndex, ItemType datatype, const char* key, void* data, size_t dataSize);
 
-    esp_err_t findKey(const uint8_t nsIndex, const char* key, ItemType* datatype);
-
     esp_err_t getItemDataSize(uint8_t nsIndex, ItemType datatype, const char* key, size_t& dataSize);
 
     esp_err_t eraseItem(uint8_t nsIndex, ItemType datatype, const char* key);
@@ -130,9 +128,7 @@ public:
 
     esp_err_t calcEntriesInNamespace(uint8_t nsIndex, size_t& usedEntries);
 
-    bool findEntry(nvs_opaque_iterator_t* it, const char* name);
-
-    bool findEntryNs(nvs_opaque_iterator_t* it, uint8_t nsIndex);
+    bool findEntry(nvs_opaque_iterator_t*, const char* name);
 
     bool nextEntry(nvs_opaque_iterator_t* it);
 

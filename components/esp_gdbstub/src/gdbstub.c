@@ -11,7 +11,6 @@
 #include "sdkconfig.h"
 #include <sys/param.h>
 
-#include "soc/soc_caps.h"
 #include "soc/uart_reg.h"
 #include "soc/periph_defs.h"
 #include "esp_attr.h"
@@ -188,25 +187,6 @@ static inline void enable_all_wdts(void)
     }
 }
 
-int getActiveTaskNum(void);
-int __swrite(struct _reent *, void *, const char *, int);
-int gdbstub__swrite(struct _reent *data1, void *data2, const char *buff, int len);
-
-volatile esp_gdbstub_frame_t *temp_regs_frame;
-
-#ifdef CONFIG_ESP_SYSTEM_GDBSTUB_RUNTIME
-static int bp_count = 0;
-static int wp_count = 0;
-static uint32_t bp_list[SOC_CPU_BREAKPOINTS_NUM] = {0};
-static uint32_t wp_list[SOC_CPU_WATCHPOINTS_NUM] = {0};
-static uint32_t wp_size[SOC_CPU_WATCHPOINTS_NUM] = {0};
-static esp_cpu_watchpoint_trigger_t wp_access[SOC_CPU_WATCHPOINTS_NUM] = {0};
-
-static volatile bool step_in_progress = false;
-static bool not_send_reason = false;
-static bool process_gdb_kill = false;
-static bool gdb_debug_int = false;
-
 /**
  * @breef Handle UART interrupt
  *
@@ -216,7 +196,24 @@ static bool gdb_debug_int = false;
  *
  * @param curr_regs - actual registers frame
  *
- */
+*/
+static int bp_count = 0;
+static int wp_count = 0;
+static uint32_t bp_list[GDB_BP_SIZE] = {0};
+static uint32_t wp_list[GDB_WP_SIZE] = {0};
+static uint32_t wp_size[GDB_WP_SIZE] = {0};
+static esp_cpu_watchpoint_trigger_t wp_access[GDB_WP_SIZE] = {0};
+
+static volatile bool step_in_progress = false;
+static bool not_send_reason = false;
+static bool process_gdb_kill = false;
+static bool gdb_debug_int = false;
+int getActiveTaskNum(void);
+int __swrite(struct _reent *, void *, const char *, int);
+int gdbstub__swrite(struct _reent *data1, void *data2, const char *buff, int len);
+
+volatile esp_gdbstub_frame_t *temp_regs_frame;
+
 void gdbstub_handle_uart_int(esp_gdbstub_frame_t *regs_frame)
 {
     temp_regs_frame = regs_frame;
@@ -267,9 +264,11 @@ void gdbstub_handle_uart_int(esp_gdbstub_frame_t *regs_frame)
             if (res == -2) {
                 esp_gdbstub_send_str_packet(NULL);
             }
+#ifdef CONFIG_ESP_SYSTEM_GDBSTUB_RUNTIME
             if (res == GDBSTUB_ST_CONT) {
                 break;
             }
+#endif /* CONFIG_ESP_SYSTEM_GDBSTUB_RUNTIME */
         }
         {
             /* Resume other core */
@@ -357,12 +356,16 @@ void gdbstub_handle_debug_int(esp_gdbstub_frame_t *regs_frame)
     gdb_debug_int = false;
 }
 
+intr_handle_t intr_handle_;
+extern void _xt_gdbstub_int(void * );
+
+#ifdef CONFIG_ESP_SYSTEM_GDBSTUB_RUNTIME
 /** @brief Init gdbstub
  * Init uart interrupt for gdbstub
  * */
 void esp_gdbstub_init(void)
 {
-    esp_intr_alloc(ETS_UART0_INTR_SOURCE, 0, esp_gdbstub_int, NULL, NULL);
+    esp_intr_alloc(ETS_UART0_INTR_SOURCE, 0, _xt_gdbstub_int, NULL, &intr_handle_);
     esp_gdbstub_init_dports();
 }
 #endif /* CONFIG_ESP_SYSTEM_GDBSTUB_RUNTIME */
@@ -471,71 +474,45 @@ static void handle_M_command(const unsigned char *cmd, int len)
     esp_gdbstub_send_end();
 }
 
-#ifdef CONFIG_ESP_SYSTEM_GDBSTUB_RUNTIME
 void update_breakpoints(void)
 {
-#if CONFIG_IDF_TARGET_ARCH_XTENSA
-    for (size_t i = 0; i < SOC_CPU_BREAKPOINTS_NUM; i++) {
+    for (size_t i = 0; i < GDB_BP_SIZE; i++) {
         if (bp_list[i] != 0) {
             esp_cpu_set_breakpoint(i, (const void *)bp_list[i]);
         } else {
             esp_cpu_clear_breakpoint(i);
         }
     }
-    for (size_t i = 0; i < SOC_CPU_WATCHPOINTS_NUM; i++) {
+    for (size_t i = 0; i < GDB_WP_SIZE; i++) {
         if (wp_list[i] != 0) {
             esp_cpu_set_watchpoint(i, (void *)wp_list[i], wp_size[i], wp_access[i]);
         } else {
             esp_cpu_clear_watchpoint(i);
         }
     }
-#else  // CONFIG_IDF_TARGET_ARCH_XTENSA
-#if (SOC_CPU_BREAKPOINTS_NUM != SOC_CPU_WATCHPOINTS_NUM)
-#error "riscv have a common number of BP and WP"
-#endif
-    /*
-     * On riscv we have no separated registers for setting BP and WP as we have for xtensa.
-     * Instead we have common registers which could be configured as BP or WP.
-     */
-    size_t i = 0;
-    for (size_t b = 0; b < SOC_CPU_BREAKPOINTS_NUM; b++) {
-        if (bp_list[b] != 0) {
-            esp_cpu_set_breakpoint(i, (const void *)bp_list[b]);
-            i++;
-        }
-    }
-    for (size_t w = 0; w < SOC_CPU_WATCHPOINTS_NUM && i < SOC_CPU_WATCHPOINTS_NUM; w++) {
-        if (wp_list[w] != 0) {
-            esp_cpu_set_watchpoint(i, (void *)wp_list[w], wp_size[w], wp_access[w]);
-            i++;
-        }
-    }
-    for (; i < SOC_CPU_BREAKPOINTS_NUM; i++) {
-        esp_cpu_clear_breakpoint(i);
-    }
-#endif // CONFIG_IDF_TARGET_ARCH_XTENSA
 }
 
+#ifdef CONFIG_ESP_SYSTEM_GDBSTUB_RUNTIME
 /** Write breakpoint */
 static void handle_Z0_command(const unsigned char *cmd, int len)
 {
     cmd++; /* skip 'Z' */
     cmd++; /* skip '0' */
     uint32_t addr = esp_gdbstub_gethex(&cmd, -1);
-    if (bp_count >= SOC_CPU_BREAKPOINTS_NUM) {
+    if (bp_count >= GDB_BP_SIZE) {
         esp_gdbstub_send_str_packet("E02");
         return;
     }
     bool add_bp = true;
     /* Check if bp already exist */
-    for (size_t i = 0; i < SOC_CPU_BREAKPOINTS_NUM; i++) {
+    for (size_t i = 0; i < GDB_BP_SIZE; i++) {
         if (bp_list[i] == addr) {
             add_bp = false;
             break;
         }
     }
     if (true == add_bp) {
-        for (size_t i = 0; i < SOC_CPU_BREAKPOINTS_NUM; i++) {
+        for (size_t i = 0; i < GDB_BP_SIZE; i++) {
             if (bp_list[i] == 0) {
                 bp_list[i] = (uint32_t)addr;
                 bp_count++;
@@ -554,7 +531,7 @@ static void handle_z0_command(const unsigned char *cmd, int len)
     cmd++; /* skip 'z' */
     cmd++; /* skip '0' */
     uint32_t addr = esp_gdbstub_gethex(&cmd, -1);
-    for (size_t i = 0; i < SOC_CPU_BREAKPOINTS_NUM; i++) {
+    for (size_t i = 0; i < GDB_BP_SIZE; i++) {
         if (bp_list[i] == addr) {
             bp_list[i] = 0;
             bp_count--;
@@ -573,7 +550,7 @@ static void handle_Z2_command(const unsigned char *cmd, int len)
     cmd++;
     uint32_t size = esp_gdbstub_gethex(&cmd, -1);
 
-    if (wp_count >= SOC_CPU_WATCHPOINTS_NUM) {
+    if (wp_count >= GDB_WP_SIZE) {
         esp_gdbstub_send_str_packet("E02");
         return;
     }
@@ -592,7 +569,7 @@ static void handle_Z3_command(const unsigned char *cmd, int len)
     uint32_t addr = esp_gdbstub_gethex(&cmd, -1);
     cmd++;
     uint32_t size = esp_gdbstub_gethex(&cmd, -1);
-    if (wp_count >= SOC_CPU_WATCHPOINTS_NUM) {
+    if (wp_count >= GDB_WP_SIZE) {
         esp_gdbstub_send_str_packet("E02");
         return;
     }
@@ -611,7 +588,7 @@ static void handle_Z4_command(const unsigned char *cmd, int len)
     uint32_t addr = esp_gdbstub_gethex(&cmd, -1);
     cmd++;
     uint32_t size = esp_gdbstub_gethex(&cmd, -1);
-    if (wp_count >= SOC_CPU_WATCHPOINTS_NUM) {
+    if (wp_count >= GDB_WP_SIZE) {
         esp_gdbstub_send_str_packet("E02");
         return;
     }
@@ -628,7 +605,7 @@ static void handle_zx_command(const unsigned char *cmd, int len)
     cmd++; /* skip 'z' */
     cmd++; /* skip 'x' */
     uint32_t addr = esp_gdbstub_gethex(&cmd, -1);
-    for (size_t i = 0; i < SOC_CPU_WATCHPOINTS_NUM; i++) {
+    for (size_t i = 0; i < GDB_WP_SIZE; i++) {
         if (wp_list[i] == addr) {
             wp_access[i] = 0;
             wp_list[i] = 0;
@@ -649,7 +626,7 @@ static void handle_S_command(const unsigned char *cmd, int len)
 static void handle_s_command(const unsigned char *cmd, int len)
 {
     step_in_progress = true;
-    esp_gdbstub_do_step((esp_gdbstub_frame_t *)temp_regs_frame);
+    esp_gdbstub_do_step();
 }
 
 /** Step ... */
@@ -911,11 +888,9 @@ static eTaskState get_task_state(size_t index)
     eTaskState result = eReady;
     TaskHandle_t handle = NULL;
     get_task_handle(index, &handle);
-#if CONFIG_ESP_SYSTEM_GDBSTUB_RUNTIME
     if (gdb_debug_int == false) {
         result = eTaskGetState(handle);
     }
-#endif
     return result;
 }
 
@@ -925,14 +900,14 @@ static int get_task_cpu_id(size_t index)
     if (!get_task_handle(index, &handle)) {
         return -1;
     }
-    BaseType_t core_id = xTaskGetCoreID(handle);
+    BaseType_t core_id = xTaskGetAffinity(handle);
     return (int)core_id;
 }
 
 /** Get the index of the task running on the current CPU, and save the result */
 static void find_paniced_task_index(void)
 {
-    TaskHandle_t cur_handle = (TaskHandle_t)xTaskGetCurrentTaskHandleForCore(xPortGetCoreID());
+    TaskHandle_t cur_handle = (TaskHandle_t)xTaskGetCurrentTaskHandleForCPU(xPortGetCoreID());
     TaskHandle_t handle;
     for (int i = 0; i < s_scratch.task_count; i++) {
         if (get_task_handle(i, &handle) && cur_handle == handle) {

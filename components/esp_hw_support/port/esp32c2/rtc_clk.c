@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2020-2024 Espressif Systems (Shanghai) CO LTD
+ * SPDX-FileCopyrightText: 2020-2022 Espressif Systems (Shanghai) CO LTD
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -12,8 +12,10 @@
 #include "sdkconfig.h"
 #include "esp32c2/rom/rtc.h"
 #include "esp32c2/rom/uart.h"
+#include "esp32c2/rom/gpio.h"
 #include "soc/rtc.h"
 #include "esp_private/rtc_clk.h"
+#include "hal/gpio_ll.h"
 #include "soc/io_mux_reg.h"
 #include "soc/soc.h"
 #include "esp_hw_log.h"
@@ -117,7 +119,7 @@ static void rtc_clk_bbpll_enable(void)
     clk_ll_bbpll_enable();
 }
 
-static void rtc_clk_bbpll_configure(soc_xtal_freq_t xtal_freq, int pll_freq)
+static void rtc_clk_bbpll_configure(rtc_xtal_freq_t xtal_freq, int pll_freq)
 {
     /* Digital part */
     clk_ll_bbpll_set_freq_mhz(pll_freq);
@@ -304,17 +306,17 @@ static void rtc_clk_cpu_freq_to_8m(void)
     rtc_clk_apb_freq_update(SOC_CLK_RC_FAST_FREQ_APPROX);
 }
 
-soc_xtal_freq_t rtc_clk_xtal_freq_get(void)
+rtc_xtal_freq_t rtc_clk_xtal_freq_get(void)
 {
     uint32_t xtal_freq_mhz = clk_ll_xtal_load_freq_mhz();
     if (xtal_freq_mhz == 0) {
         ESP_HW_LOGW(TAG, "invalid RTC_XTAL_FREQ_REG value, assume %dMHz", CONFIG_XTAL_FREQ);
         return CONFIG_XTAL_FREQ;
     }
-    return (soc_xtal_freq_t)xtal_freq_mhz;
+    return (rtc_xtal_freq_t)xtal_freq_mhz;
 }
 
-void rtc_clk_xtal_freq_update(soc_xtal_freq_t xtal_freq)
+void rtc_clk_xtal_freq_update(rtc_xtal_freq_t xtal_freq)
 {
     clk_ll_xtal_store_freq_mhz(xtal_freq);
 }

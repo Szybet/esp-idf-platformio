@@ -92,6 +92,7 @@ static void adc_hal_onetime_start(adc_unit_t unit, uint32_t clk_src_freq_hz, uin
      */
     uint32_t adc_ctrl_clk = clk_src_freq_hz / (ADC_LL_CLKM_DIV_NUM_DEFAULT + ADC_LL_CLKM_DIV_A_DEFAULT / ADC_LL_CLKM_DIV_B_DEFAULT + 1);
     //Convert frequency to time (us). Since decimals are removed by this division operation. Add 1 here in case of the fact that delay is not enough.
+
     uint32_t sample_delay_us = ((1000 * 1000) / adc_ctrl_clk + 1) * 3;
     HAL_EARLY_LOGD("adc_hal", "clk_src_freq_hz: %"PRIu32", adc_ctrl_clk: %"PRIu32", sample_delay_us: %"PRIu32"", clk_src_freq_hz, adc_ctrl_clk, sample_delay_us);
 
@@ -142,7 +143,7 @@ bool adc_oneshot_hal_convert(adc_oneshot_hal_ctx_t *hal, int *out_raw)
     }
     esp_rom_delay_us(read_delay_us);
     *out_raw = adc_oneshot_ll_get_raw_result(hal->unit);
-#if SOC_ADC_ARBITER_SUPPORTED
+#if (SOC_ADC_PERIPH_NUM == 2)
     if (hal->unit == ADC_UNIT_2) {
         valid = adc_oneshot_ll_raw_check_valid(ADC_UNIT_2, *out_raw);
         if (!valid) {
@@ -154,6 +155,7 @@ bool adc_oneshot_hal_convert(adc_oneshot_hal_ctx_t *hal, int *out_raw)
     adc_oneshot_ll_disable_all_unit();
     return valid;
 }
+
 
 /*---------------------------------------------------------------
                     Workarounds

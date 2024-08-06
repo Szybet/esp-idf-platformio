@@ -13,15 +13,11 @@
 #include "esp_hmac.h"
 #include "esp_log.h"
 #include "esp_crypto_lock.h"
-#include "esp_private/esp_crypto_lock_internal.h"
 #include "soc/hwcrypto_reg.h"
 #include "soc/system_reg.h"
 
 #if !CONFIG_IDF_TARGET_ESP32S2
-#include "hal/ds_ll.h"
 #include "hal/hmac_hal.h"
-#include "hal/hmac_ll.h"
-#include "hal/sha_ll.h"
 #include "esp_private/periph_ctrl.h"
 #endif
 
@@ -31,7 +27,7 @@
 #if defined(CONFIG_IDF_TARGET_ESP32S3) || defined(CONFIG_IDF_TARGET_ESP32S2)
 #define JTAG_STATUS_BIT ESP_EFUSE_HARD_DIS_JTAG
 #else
-/* For ESP32C3, ESP32C6, ESP32H2, ESP32P4 */
+/* For ESP32C3, ESP32C6, ESP32H2 */
 #define JTAG_STATUS_BIT ESP_EFUSE_DIS_PAD_JTAG
 #endif
 static const char *TAG = "esp_hmac";
@@ -71,20 +67,9 @@ esp_err_t esp_hmac_calculate(hmac_key_id_t key_id,
     esp_crypto_hmac_lock_acquire();
 
     // We also enable SHA and DS here. SHA is used by HMAC, DS will otherwise hold SHA in reset state.
-    HMAC_RCC_ATOMIC() {
-        hmac_ll_enable_bus_clock(true);
-        hmac_ll_reset_register();
-    }
-
-    SHA_RCC_ATOMIC() {
-        sha_ll_enable_bus_clock(true);
-        sha_ll_reset_register();
-    }
-
-    DS_RCC_ATOMIC() {
-        ds_ll_enable_bus_clock(true);
-        ds_ll_reset_register();
-    }
+    periph_module_enable(PERIPH_HMAC_MODULE);
+    periph_module_enable(PERIPH_SHA_MODULE);
+    periph_module_enable(PERIPH_DS_MODULE);
 
     hmac_hal_start();
 
@@ -146,17 +131,9 @@ esp_err_t esp_hmac_calculate(hmac_key_id_t key_id,
     // Read back result (bit swapped)
     hmac_hal_read_result_256(hmac);
 
-    DS_RCC_ATOMIC() {
-        ds_ll_enable_bus_clock(false);
-    }
-
-    SHA_RCC_ATOMIC() {
-        sha_ll_enable_bus_clock(false);
-    }
-
-    HMAC_RCC_ATOMIC() {
-        hmac_ll_enable_bus_clock(false);
-    }
+    periph_module_disable(PERIPH_DS_MODULE);
+    periph_module_disable(PERIPH_SHA_MODULE);
+    periph_module_disable(PERIPH_HMAC_MODULE);
 
     esp_crypto_hmac_lock_release();
 
@@ -193,9 +170,7 @@ esp_err_t esp_hmac_jtag_enable(hmac_key_id_t key_id, const uint8_t *token)
 
     ESP_LOGD(TAG, "HMAC computation in downstream mode is completed.");
 
-    HMAC_RCC_ATOMIC() {
-        hmac_ll_enable_bus_clock(false);
-    }
+    periph_module_disable(PERIPH_HMAC_MODULE);
 
     esp_crypto_hmac_lock_release();
 
@@ -205,17 +180,9 @@ esp_err_t esp_hmac_jtag_enable(hmac_key_id_t key_id, const uint8_t *token)
 esp_err_t esp_hmac_jtag_disable()
 {
     esp_crypto_hmac_lock_acquire();
-
-    HMAC_RCC_ATOMIC() {
-        hmac_ll_enable_bus_clock(true);
-    }
-
+    periph_module_enable(PERIPH_HMAC_MODULE);
     REG_WRITE(HMAC_SET_INVALIDATE_JTAG_REG, 1);
-
-    HMAC_RCC_ATOMIC() {
-        hmac_ll_enable_bus_clock(false);
-    }
-
+    periph_module_disable(PERIPH_HMAC_MODULE);
     esp_crypto_hmac_lock_release();
 
     ESP_LOGD(TAG, "Invalidate JTAG result register. JTAG disabled.");

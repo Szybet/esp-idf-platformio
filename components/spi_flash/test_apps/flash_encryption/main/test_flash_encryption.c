@@ -5,7 +5,6 @@
  */
 #include <stdio.h>
 #include <stdlib.h>
-#include <inttypes.h>
 #include "esp_log.h"
 #include "unity.h"
 #include "esp_flash.h"
@@ -20,7 +19,6 @@
 #include "test_utils.h"
 #include "ccomp_timer.h"
 #include "test_flash_utils.h"
-#include "sdkconfig.h"
 
 /*-------------------- For running this test, some configurations are necessary -------------------*/
 /*     ESP32    |           CONFIG_SECURE_FLASH_ENC_ENABLED         |             SET              */
@@ -42,13 +40,13 @@ static void setup_tests(void)
 {
     const esp_partition_t *part = get_test_data_partition();
     start = part->address;
-    printf("Test data partition @ 0x%" PRIx32 "\n", (uint32_t) start);
+    printf("Test data partition @ 0x%x\n", start);
 }
 
 static void verify_erased_flash(size_t offset, size_t length)
 {
     uint8_t *readback = (uint8_t *)heap_caps_malloc(SPI_FLASH_SEC_SIZE, MALLOC_CAP_32BIT | MALLOC_CAP_8BIT | MALLOC_CAP_INTERNAL);
-    printf("verify erased 0x%" PRIx32 " - 0x%" PRIx32 "\n", (uint32_t) offset, (uint32_t) (offset + length));
+    printf("verify erased 0x%x - 0x%x\n", offset, offset + length);
     TEST_ASSERT_EQUAL_HEX(ESP_OK,
                           esp_flash_read(NULL, readback, offset, length));
     for (int i = 0; i < length; i++) {
@@ -108,7 +106,7 @@ TEST_CASE("test 16 byte encrypted writes", "[flash_encryption]")
 static void test_encrypted_write(size_t offset, const uint8_t *data, size_t length)
 {
     uint8_t readback[length];
-    printf("encrypt %" PRIu32 " bytes at 0x%" PRIx32 "\n", (uint32_t) length, (uint32_t) offset);
+    printf("encrypt %d bytes at 0x%x\n", length, offset);
     TEST_ASSERT_EQUAL_HEX(ESP_OK,
                           esp_flash_write_encrypted(NULL, offset, data, length));
 
@@ -157,7 +155,7 @@ TEST_CASE("test read & write random encrypted data", "[flash_encryption]")
             len = SPI_FLASH_SEC_SIZE - offset;
         }
 
-        printf("write %d bytes to 0x%08" PRIx32 "...\n", len, (uint32_t) (start + offset));
+        printf("write %d bytes to 0x%08x...\n", len, start + offset);
         err = esp_flash_write_encrypted(NULL, start + offset, data_buf, len);
         TEST_ESP_OK(err);
 
@@ -175,7 +173,7 @@ TEST_CASE("test read & write random encrypted data", "[flash_encryption]")
         err = esp_flash_read_encrypted(NULL, start + offset, data_buf, len);
         TEST_ESP_OK(err);
 
-        printf("compare %d bytes at 0x%08" PRIx32 "...\n", len, (uint32_t) (start + offset));
+        printf("compare %d bytes at 0x%08x...\n", len, start + offset);
 
         TEST_ASSERT_EQUAL_HEX8_ARRAY(cmp_buf + offset, data_buf, len);
         offset += len;
@@ -190,7 +188,7 @@ static const char plainttext_data[] = "$$$$#### Welcome! This is flash encryptio
 static void test_encrypted_write_new_impl(size_t offset, const uint8_t *data, size_t length)
 {
     uint8_t *readback = (uint8_t *)heap_caps_malloc(SPI_FLASH_SEC_SIZE, MALLOC_CAP_32BIT | MALLOC_CAP_8BIT | MALLOC_CAP_INTERNAL);
-    printf("encrypt %" PRIu32 " bytes at 0x%" PRIx32 "\n", (uint32_t) length, (uint32_t) offset);
+    printf("encrypt %d bytes at 0x%x\n", length, offset);
     TEST_ASSERT_EQUAL_HEX(ESP_OK,
                           esp_flash_write_encrypted(NULL, offset, data, length));
 
@@ -286,7 +284,7 @@ TEST_CASE("test read & write encrypted data(16 bytes alianed but 32 bytes unalig
     if (start % 32 == 0) {
         start += 16;
     }
-    printf("Write data partition @ 0x%" PRIx32 "\n", (uint32_t) start);
+    printf("Write data partition @ 0x%x\n", start);
 
     ESP_LOG_BUFFER_HEXDUMP(TAG, plainttext_data, sizeof(plainttext_data), ESP_LOG_INFO);
     printf("Encrypted writing......\n");
@@ -372,14 +370,4 @@ TEST_CASE("test read & write encrypted data with large buffer in ram", "[flash_e
     free(buf);
 }
 
-TEST_CASE("test encrypted writes to dangerous regions like bootloader", "[flash_encryption]")
-{
-    TEST_ASSERT_EQUAL_HEX(ESP_ERR_INVALID_ARG, esp_flash_erase_region(NULL, CONFIG_BOOTLOADER_OFFSET_IN_FLASH, 4*4096));
-    TEST_ASSERT_EQUAL_HEX(ESP_ERR_INVALID_ARG, esp_flash_erase_region(NULL, CONFIG_PARTITION_TABLE_OFFSET, 4096));
-    char buffer[32] = {0xa5};
-    // Encrypted writes to bootloader region not allowed
-    TEST_ASSERT_EQUAL_HEX(ESP_ERR_INVALID_ARG, esp_flash_write_encrypted(NULL, CONFIG_BOOTLOADER_OFFSET_IN_FLASH, buffer, sizeof(buffer)));
-    // Encrypted writes to partition table region not allowed
-    TEST_ASSERT_EQUAL_HEX(ESP_ERR_INVALID_ARG, esp_flash_write_encrypted(NULL, CONFIG_PARTITION_TABLE_OFFSET, buffer, sizeof(buffer)));
-}
 #endif // CONFIG_SECURE_FLASH_ENC_ENABLED

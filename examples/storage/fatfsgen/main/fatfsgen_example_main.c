@@ -9,6 +9,7 @@
 #include <string.h>
 #include "esp_vfs.h"
 #include "esp_vfs_fat.h"
+#include "esp_system.h"
 #include "sdkconfig.h"
 
 #if CONFIG_EXAMPLE_FATFS_MODE_READ_ONLY
@@ -40,8 +41,7 @@ void app_main(void)
     const esp_vfs_fat_mount_config_t mount_config = {
             .max_files = 4,
             .format_if_mount_failed = false,
-            .allocation_unit_size = CONFIG_WL_SECTOR_SIZE,
-            .use_one_fat = false,
+            .allocation_unit_size = CONFIG_WL_SECTOR_SIZE
     };
     esp_err_t err;
     if (EXAMPLE_FATFS_MODE_READ_ONLY){

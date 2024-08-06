@@ -11,7 +11,6 @@
 #include "freertos/task.h"
 #include "freertos/semphr.h"
 #include "esp_heap_caps.h"
-#include "esp_dma_utils.h"
 #include "esp_intr_alloc.h"
 #include "soc/interrupts.h" // For interrupt index
 #include "esp_err.h"
@@ -22,22 +21,7 @@
 #include "usb_private.h"
 #include "usb/usb_types_ch9.h"
 
-#include "soc/soc_caps.h"
-#if SOC_CACHE_INTERNAL_MEM_VIA_L1CACHE
-#include "esp_cache.h"
-#include "esp_private/esp_cache_private.h"
-#endif // SOC_CACHE_INTERNAL_MEM_VIA_L1CACHE
-
 // ----------------------------------------------------- Macros --------------------------------------------------------
-
-// ------------------ Target specific ----------------------
-// TODO: Remove target specific section after support for multiple USB peripherals is implemented
-#include "sdkconfig.h"
-#if (CONFIG_IDF_TARGET_ESP32P4)
-#define USB_INTR ETS_USB_OTG_INTR_SOURCE
-#else
-#define USB_INTR ETS_USB_INTR_SOURCE
-#endif
 
 // --------------------- Constants -------------------------
 
@@ -60,10 +44,11 @@
 
 #define XFER_LIST_LEN_CTRL                      3   // One descriptor for each stage
 #define XFER_LIST_LEN_BULK                      2   // One descriptor for transfer, one to support an extra zero length packet
-// Same length as the frame list makes it easier to schedule. Must be power of 2
+// Periodic transfer descriptor lists: Same length as the frame list makes it easier to schedule. Must be power of 2
 // FS: Must be 2-64. HS: Must be 8-256. See USB-OTG databook Table 5-47
 #define XFER_LIST_LEN_INTR                      FRAME_LIST_LEN
-#define XFER_LIST_LEN_ISOC                      FRAME_LIST_LEN
+#define XFER_LIST_LEN_ISOC                      64  // Implement longer ISOC transfer list to give us enough space for additional timing margin
+#define XFER_LIST_ISOC_MARGIN                   2   // The 1st ISOC transfer is scheduled 2 (micro)frames later so we have enough timing margin
 
 // ------------------------ Flags --------------------------
 
@@ -102,29 +87,6 @@ const char *HCD_DWC_TAG = "HCD DWC";
             }                                                               \
 })
 
-// ----------------------- Cache sync ----------------------
-
-/**
- * @brief Cache sync macros
- *
- * This macros are relevant only for SOCs that have L1 cache for internal memory
- * For other SOCs this is no-operation
- */
-#if SOC_CACHE_INTERNAL_MEM_VIA_L1CACHE
-#define ALIGN_UP_BY(num, align)                     (((num) + ((align) - 1)) & ~((align) - 1))
-#define CACHE_SYNC_FRAME_LIST(frame_list)           cache_sync_frame_list(frame_list)
-#define CACHE_SYNC_XFER_DESCRIPTOR_LIST_M2C(buffer) cache_sync_xfer_descriptor_list(buffer, true)
-#define CACHE_SYNC_XFER_DESCRIPTOR_LIST_C2M(buffer) cache_sync_xfer_descriptor_list(buffer, false)
-#define CACHE_SYNC_DATA_BUFFER_M2C(pipe, urb)       cache_sync_data_buffer(pipe, urb, true)
-#define CACHE_SYNC_DATA_BUFFER_C2M(pipe, urb)       cache_sync_data_buffer(pipe, urb, false)
-#else // SOC_CACHE_INTERNAL_MEM_VIA_L1CACHE
-#define CACHE_SYNC_FRAME_LIST(frame_list)
-#define CACHE_SYNC_XFER_DESCRIPTOR_LIST_M2C(buffer)
-#define CACHE_SYNC_XFER_DESCRIPTOR_LIST_C2M(buffer)
-#define CACHE_SYNC_DATA_BUFFER_M2C(pipe, urb)
-#define CACHE_SYNC_DATA_BUFFER_C2M(pipe, urb)
-#endif // SOC_CACHE_INTERNAL_MEM_VIA_L1CACHE
-
 // ------------------------------------------------------ Types --------------------------------------------------------
 
 typedef struct pipe_obj pipe_t;
@@ -135,7 +97,6 @@ typedef struct port_obj port_t;
  */
 typedef struct {
     void *xfer_desc_list;
-    int xfer_desc_list_len_bytes;           // Only for cache msync
     urb_t *urb;
     union {
         struct {
@@ -214,9 +175,7 @@ struct pipe_obj {
             uint32_t waiting_halt: 1;
             uint32_t pipe_cmd_processing: 1;
             uint32_t has_urb: 1;            // Indicates there is at least one URB either pending, in-flight, or done
-            uint32_t persist: 1;            // indicates that this pipe should persist through a run-time port reset
-            uint32_t reset_lock: 1;         // Indicates that this pipe is undergoing a run-time reset
-            uint32_t reserved27: 27;
+            uint32_t reserved29: 29;
         };
         uint32_t val;
     } cs_flags;
@@ -277,83 +236,6 @@ static portMUX_TYPE hcd_lock = portMUX_INITIALIZER_UNLOCKED;
 static hcd_obj_t *s_hcd_obj = NULL;     // Note: "s_" is for the static pointer
 
 // ------------------------------------------------- Forward Declare ---------------------------------------------------
-
-// --------------------- Cache sync ------------------------
-
-#if SOC_CACHE_INTERNAL_MEM_VIA_L1CACHE
-/**
- * @brief Sync Frame List from cache to memory
- */
-static inline void cache_sync_frame_list(void *frame_list)
-{
-    esp_err_t ret = esp_cache_msync(frame_list, FRAME_LIST_LEN * sizeof(uint32_t), 0);
-    assert(ret == ESP_OK);
-}
-
-/**
- * @brief Sync Transfer Descriptor List
- *
- * @param[in] buffer       Buffer that holds the Transfer Descriptor List
- * @param[in] mem_to_cache Direction of cache sync
- */
-static inline void cache_sync_xfer_descriptor_list(dma_buffer_block_t *buffer, bool mem_to_cache)
-{
-    esp_err_t ret = esp_cache_msync(buffer->xfer_desc_list, buffer->xfer_desc_list_len_bytes, mem_to_cache ? ESP_CACHE_MSYNC_FLAG_DIR_M2C : 0);
-    assert(ret == ESP_OK);
-}
-
-/**
- * @brief Sync Transfer data buffer
- *
- * This function must be called before a URB is enqueued or dequeued.
- * Based on transfer direction (IN/OUT), this function will msync the data buffer associated with this URB.
- *
- * @note Here we also accept UNALIGNED data, for cases where the class drivers force overwrite the allocated data buffers
- *
- * @param[in] pipe Pipe belonging to this data buffer
- * @param[in] urb  URB belonging to this data buffer
- * @param[in] done Whether data buffer was just processed or is about to be processed
- */
-static inline void cache_sync_data_buffer(pipe_t *pipe, urb_t *urb, bool done)
-{
-    const bool is_in = pipe->ep_char.bEndpointAddress & USB_B_ENDPOINT_ADDRESS_EP_DIR_MASK;
-    const bool is_ctrl = (pipe->ep_char.type == USB_DWC_XFER_TYPE_CTRL);
-    if ((is_in == done) || is_ctrl) {
-        uint32_t flags = (done) ? ESP_CACHE_MSYNC_FLAG_DIR_M2C : ESP_CACHE_MSYNC_FLAG_UNALIGNED;
-        esp_err_t ret = esp_cache_msync(urb->transfer.data_buffer, urb->transfer.data_buffer_size, flags);
-        assert(ret == ESP_OK);
-    }
-}
-#endif // SOC_CACHE_INTERNAL_MEM_VIA_L1CACHE
-
-// --------------------- Allocation ------------------------
-
-/**
- * @brief Allocate Frame List
- *
- * - Frame list is allocated in DMA capable memory
- * - Frame list is aligned to 512 and cache line size
- *
- * @note Free the memory with heap_caps_free() call
- *
- * @param[in] frame_list_len Length of the Frame List
- * @return Pointer to allocated frame list
- */
-static void *frame_list_alloc(size_t frame_list_len);
-
-/**
- * @brief Allocate Transfer Descriptor List
- *
- * - Frame list is allocated in DMA capable memory
- * - Frame list is aligned to 512 and cache line size
- *
- * @note Free the memory with heap_caps_free() call
- *
- * @param[in]  list_len           Required length
- * @param[out] list_len_bytes_out Allocated length in bytes (can be greater than required)
- * @return Pointer to allocated transfer descriptor list
- */
-static void *transfer_descriptor_list_alloc(size_t list_len, size_t *list_len_bytes_out);
 
 // ------------------- Buffer Control ----------------------
 
@@ -559,28 +441,6 @@ static esp_err_t _pipe_cmd_flush(pipe_t *pipe);
 static esp_err_t _pipe_cmd_clear(pipe_t *pipe);
 
 // ------------------------ Port ---------------------------
-
-/**
- * @brief Prepare persistent pipes for reset
- *
- * This function checks if all pipes are reset persistent and proceeds to free their underlying HAL channels for the
- * persistent pipes. This should be called before a run time reset
- *
- * @param port Port object
- * @return true All pipes are persistent and their channels are freed
- * @return false Not all pipes are persistent
- */
-static bool _port_persist_all_pipes(port_t *port);
-
-/**
- * @brief Recovers all persistent pipes after a reset
- *
- * This function will recover all persistent pipes after a reset and reallocate their underlying HAl channels. This
- * function should be called after a reset.
- *
- * @param port Port object
- */
-static void _port_recover_all_pipes(port_t *port);
 
 /**
  * @brief Checks if all pipes are in the halted state
@@ -1010,7 +870,7 @@ static port_t *port_obj_alloc(void)
 {
     port_t *port = calloc(1, sizeof(port_t));
     usb_dwc_hal_context_t *hal = malloc(sizeof(usb_dwc_hal_context_t));
-    void *frame_list = frame_list_alloc(FRAME_LIST_LEN);
+    void *frame_list = heap_caps_aligned_calloc(USB_DWC_FRAME_LIST_MEM_ALIGN, FRAME_LIST_LEN, sizeof(uint32_t), MALLOC_CAP_DMA);
     SemaphoreHandle_t port_mux = xSemaphoreCreateMutex();
     if (port == NULL || hal == NULL || frame_list == NULL || port_mux == NULL) {
         free(port);
@@ -1038,59 +898,6 @@ static void port_obj_free(port_t *port)
     free(port);
 }
 
-void *frame_list_alloc(size_t frame_list_len)
-{
-    esp_err_t ret;
-    void *frame_list = NULL;
-    size_t actual_size = 0;
-    esp_dma_mem_info_t dma_mem_info = {
-        .dma_alignment_bytes = USB_DWC_FRAME_LIST_MEM_ALIGN,
-    };
-    ret = esp_dma_capable_calloc(frame_list_len, sizeof(uint32_t), &dma_mem_info, &frame_list, &actual_size);
-    assert(ret == ESP_OK);
-
-    // Both Frame List start address and size should be already cache aligned so this is only a sanity check
-    if (frame_list) {
-        if (!esp_dma_is_buffer_alignment_satisfied(frame_list, actual_size, dma_mem_info)) {
-            // This should never happen
-            heap_caps_free(frame_list);
-            frame_list = NULL;
-        }
-    }
-    return frame_list;
-}
-
-void *transfer_descriptor_list_alloc(size_t list_len, size_t *list_len_bytes_out)
-{
-#if SOC_CACHE_INTERNAL_MEM_VIA_L1CACHE
-    // Required Transfer Descriptor List size (in bytes) might not be aligned to cache line size, align the size up
-    size_t data_cache_line_size = 0;
-    esp_cache_get_alignment(MALLOC_CAP_DMA, &data_cache_line_size);
-    const size_t required_list_len_bytes = list_len * sizeof(usb_dwc_ll_dma_qtd_t);
-    *list_len_bytes_out = ALIGN_UP_BY(required_list_len_bytes, data_cache_line_size);
-#else
-    *list_len_bytes_out = list_len * sizeof(usb_dwc_ll_dma_qtd_t);
-#endif // SOC_CACHE_INTERNAL_MEM_VIA_L1CACHE
-
-    esp_err_t ret;
-    void *qtd_list = NULL;
-    size_t actual_size = 0;
-    esp_dma_mem_info_t dma_mem_info = {
-        .dma_alignment_bytes = USB_DWC_QTD_LIST_MEM_ALIGN,
-    };
-    ret = esp_dma_capable_calloc(*list_len_bytes_out, 1, &dma_mem_info, &qtd_list, &actual_size);
-    assert(ret == ESP_OK);
-
-    if (qtd_list) {
-        if (!esp_dma_is_buffer_alignment_satisfied(qtd_list, actual_size, dma_mem_info)) {
-            // This should never happen
-            heap_caps_free(qtd_list);
-            qtd_list = NULL;
-        }
-    }
-    return qtd_list;
-}
-
 // ----------------------- Public --------------------------
 
 esp_err_t hcd_install(const hcd_config_t *config)
@@ -1112,7 +919,7 @@ esp_err_t hcd_install(const hcd_config_t *config)
         goto port_alloc_err;
     }
     // Allocate interrupt
-    err_ret = esp_intr_alloc(USB_INTR,
+    err_ret = esp_intr_alloc(ETS_USB_INTR_SOURCE,
                              config->intr_flags | ESP_INTR_FLAG_INTRDISABLED,  // The interrupt must be disabled until the port is initialized
                              intr_hdlr_main,
                              (void *)p_hcd_obj_dmy->port_obj,
@@ -1120,6 +927,7 @@ esp_err_t hcd_install(const hcd_config_t *config)
     if (err_ret != ESP_OK) {
         goto intr_alloc_err;
     }
+    // Assign the
     HCD_ENTER_CRITICAL();
     if (s_hcd_obj != NULL) {
         HCD_EXIT_CRITICAL();
@@ -1161,44 +969,6 @@ esp_err_t hcd_uninstall(void)
 // ------------------------------------------------------ Port ---------------------------------------------------------
 
 // ----------------------- Helpers -------------------------
-
-static bool _port_persist_all_pipes(port_t *port)
-{
-    if (port->num_pipes_queued > 0) {
-        // All pipes must be idle before we run-time reset
-        return false;
-    }
-    bool all_persist = true;
-    pipe_t *pipe;
-    // Check that each pipe is persistent
-    TAILQ_FOREACH(pipe, &port->pipes_idle_tailq, tailq_entry) {
-        if (!pipe->cs_flags.persist) {
-            all_persist = false;
-            break;
-        }
-    }
-    if (!all_persist) {
-        // At least one pipe is not persistent. All pipes must be freed or made persistent before we can reset
-        return false;
-    }
-    TAILQ_FOREACH(pipe, &port->pipes_idle_tailq, tailq_entry) {
-        pipe->cs_flags.reset_lock = 1;
-        usb_dwc_hal_chan_free(port->hal, pipe->chan_obj);
-    }
-    return true;
-}
-
-static void _port_recover_all_pipes(port_t *port)
-{
-    pipe_t *pipe;
-    TAILQ_FOREACH(pipe, &port->pipes_idle_tailq, tailq_entry) {
-        pipe->cs_flags.persist = 0;
-        pipe->cs_flags.reset_lock = 0;
-        usb_dwc_hal_chan_alloc(port->hal, pipe->chan_obj, (void *)pipe);
-        usb_dwc_hal_chan_set_ep_char(port->hal, pipe->chan_obj, &pipe->ep_char);
-    }
-    CACHE_SYNC_FRAME_LIST(port->frame_list);
-}
 
 static bool _port_check_all_pipes_halted(port_t *port)
 {
@@ -1276,20 +1046,26 @@ static esp_err_t _port_cmd_power_off(port_t *port)
 static esp_err_t _port_cmd_reset(port_t *port)
 {
     esp_err_t ret;
-    // Port can only a reset when it is in the enabled or disabled states (in case of new connection)
+
+    // Port can only a reset when it is in the enabled or disabled (in the case of a new connection)states.
     if (port->state != HCD_PORT_STATE_ENABLED && port->state != HCD_PORT_STATE_DISABLED) {
         ret = ESP_ERR_INVALID_STATE;
         goto exit;
     }
-    bool is_runtime_reset = (port->state == HCD_PORT_STATE_ENABLED) ? true : false;
-    if (is_runtime_reset && !_port_persist_all_pipes(port)) {
-        // If this is a run time reset, check all pipes that are still allocated can persist the reset
+    // Port can only be reset if all pipes are idle
+    if (port->num_pipes_queued > 0) {
         ret = ESP_ERR_INVALID_STATE;
         goto exit;
     }
-    // All pipes (if any_) are guaranteed to be persistent at this point. Proceed to resetting the bus
+    /*
+    Proceed to resetting the bus
+    - Update the port's state variable
+    - Hold the bus in the reset state for RESET_HOLD_MS.
+    - Return the bus to the idle state for RESET_RECOVERY_MS
+    */
     port->state = HCD_PORT_STATE_RESETTING;
-    // Put and hold the bus in the reset state. If the port was previously enabled, a disabled event will occur after this
+
+    // Place the bus into the reset state. If the port was previously enabled, a disabled event will occur after this
     usb_dwc_hal_port_toggle_reset(port->hal, true);
     HCD_EXIT_CRITICAL();
     vTaskDelay(pdMS_TO_TICKS(RESET_HOLD_MS));
@@ -1299,7 +1075,8 @@ static esp_err_t _port_cmd_reset(port_t *port)
         ret = ESP_ERR_INVALID_RESPONSE;
         goto bailout;
     }
-    // Return the bus to the idle state and hold it for the required reset recovery time. Port enabled event should occur
+
+    // Return the bus to the idle state. Port enabled event should occur
     usb_dwc_hal_port_toggle_reset(port->hal, false);
     HCD_EXIT_CRITICAL();
     vTaskDelay(pdMS_TO_TICKS(RESET_RECOVERY_MS));
@@ -1309,15 +1086,25 @@ static esp_err_t _port_cmd_reset(port_t *port)
         ret = ESP_ERR_INVALID_RESPONSE;
         goto bailout;
     }
-    // Set FIFO sizes based on the selected biasing
-    usb_dwc_hal_set_fifo_bias(port->hal, port->fifo_bias);
-    // We start periodic scheduling only after a RESET command since SOFs only start after a reset
-    usb_dwc_hal_port_set_frame_list(port->hal, port->frame_list, FRAME_LIST_LEN);
-    usb_dwc_hal_port_periodic_enable(port->hal);
+
+    // Reinitialize port registers.
+    usb_dwc_hal_set_fifo_bias(port->hal, port->fifo_bias);  // Set FIFO biases
+    usb_dwc_hal_port_set_frame_list(port->hal, port->frame_list, FRAME_LIST_LEN);   // Set periodic frame list
+    usb_dwc_hal_port_periodic_enable(port->hal);    // Enable periodic scheduling
+
     ret = ESP_OK;
 bailout:
-    if (is_runtime_reset) {
-        _port_recover_all_pipes(port);
+    /*
+    We add a blank statement here to work around a quirk in the C language where a label can only be followed by
+    statements, thus generating this warning when building with "-Wpedantic":
+
+    "warning: a label can only be part of a statement and a declaration is not a statement"
+    */
+    {};
+    // Reinitialize channel registers
+    pipe_t *pipe;
+    TAILQ_FOREACH(pipe, &port->pipes_idle_tailq, tailq_entry) {
+        usb_dwc_hal_chan_set_ep_char(port->hal, pipe->chan_obj, &pipe->ep_char);
     }
 exit:
     return ret;
@@ -1644,15 +1431,13 @@ static dma_buffer_block_t *buffer_block_alloc(usb_transfer_type_t type)
         break;
     }
     dma_buffer_block_t *buffer = calloc(1, sizeof(dma_buffer_block_t));
-    size_t real_len = 0;
-    void *xfer_desc_list = transfer_descriptor_list_alloc(desc_list_len, &real_len);
+    void *xfer_desc_list = heap_caps_aligned_calloc(USB_DWC_QTD_LIST_MEM_ALIGN, desc_list_len, sizeof(usb_dwc_ll_dma_qtd_t), MALLOC_CAP_DMA);
     if (buffer == NULL || xfer_desc_list == NULL) {
         free(buffer);
         heap_caps_free(xfer_desc_list);
         return NULL;
     }
     buffer->xfer_desc_list = xfer_desc_list;
-    buffer->xfer_desc_list_len_bytes = real_len;
     return buffer;
 }
 
@@ -1953,7 +1738,6 @@ esp_err_t hcd_pipe_alloc(hcd_port_handle_t port_hdl, const hcd_pipe_config_t *pi
         goto err;
     }
     usb_dwc_hal_chan_set_ep_char(port->hal, pipe->chan_obj, &pipe->ep_char);
-    CACHE_SYNC_FRAME_LIST(port->frame_list);
     // Add the pipe to the list of idle pipes in the port object
     TAILQ_INSERT_TAIL(&port->pipes_idle_tailq, pipe, tailq_entry);
     port->num_pipes_idle++;
@@ -1987,8 +1771,7 @@ esp_err_t hcd_pipe_free(hcd_pipe_handle_t pipe_hdl)
     HCD_ENTER_CRITICAL();
     // Check that all URBs have been removed and pipe has no pending events
     HCD_CHECK_FROM_CRIT(!pipe->multi_buffer_control.buffer_is_executing
-                        && !pipe->cs_flags.has_urb
-                        && !pipe->cs_flags.reset_lock,
+                        && !pipe->cs_flags.has_urb,
                         ESP_ERR_INVALID_STATE);
     // Remove pipe from the list of idle pipes (it must be in the idle list because it should have no queued URBs)
     TAILQ_REMOVE(&pipe->port->pipes_idle_tailq, pipe, tailq_entry);
@@ -2011,8 +1794,7 @@ esp_err_t hcd_pipe_update_mps(hcd_pipe_handle_t pipe_hdl, int mps)
     HCD_ENTER_CRITICAL();
     // Check if pipe is in the correct state to be updated
     HCD_CHECK_FROM_CRIT(!pipe->cs_flags.pipe_cmd_processing &&
-                        !pipe->cs_flags.has_urb &&
-                        !pipe->cs_flags.reset_lock,
+                        !pipe->cs_flags.has_urb,
                         ESP_ERR_INVALID_STATE);
     pipe->ep_char.mps = mps;
     // Update the underlying channel's registers
@@ -2027,41 +1809,11 @@ esp_err_t hcd_pipe_update_dev_addr(hcd_pipe_handle_t pipe_hdl, uint8_t dev_addr)
     HCD_ENTER_CRITICAL();
     // Check if pipe is in the correct state to be updated
     HCD_CHECK_FROM_CRIT(!pipe->cs_flags.pipe_cmd_processing &&
-                        !pipe->cs_flags.has_urb &&
-                        !pipe->cs_flags.reset_lock,
+                        !pipe->cs_flags.has_urb,
                         ESP_ERR_INVALID_STATE);
     pipe->ep_char.dev_addr = dev_addr;
     // Update the underlying channel's registers
     usb_dwc_hal_chan_set_ep_char(pipe->port->hal, pipe->chan_obj, &pipe->ep_char);
-    HCD_EXIT_CRITICAL();
-    return ESP_OK;
-}
-
-esp_err_t hcd_pipe_update_callback(hcd_pipe_handle_t pipe_hdl, hcd_pipe_callback_t callback, void *user_arg)
-{
-    pipe_t *pipe = (pipe_t *)pipe_hdl;
-    HCD_ENTER_CRITICAL();
-    // Check if pipe is in the correct state to be updated
-    HCD_CHECK_FROM_CRIT(!pipe->cs_flags.pipe_cmd_processing &&
-                        !pipe->cs_flags.has_urb &&
-                        !pipe->cs_flags.reset_lock,
-                        ESP_ERR_INVALID_STATE);
-    pipe->callback = callback;
-    pipe->callback_arg = user_arg;
-    HCD_EXIT_CRITICAL();
-    return ESP_OK;
-}
-
-esp_err_t hcd_pipe_set_persist_reset(hcd_pipe_handle_t pipe_hdl)
-{
-    pipe_t *pipe = (pipe_t *)pipe_hdl;
-    HCD_ENTER_CRITICAL();
-    // Check if pipe is in the correct state to be updated
-    HCD_CHECK_FROM_CRIT(!pipe->cs_flags.pipe_cmd_processing &&
-                        !pipe->cs_flags.has_urb &&
-                        !pipe->cs_flags.reset_lock,
-                        ESP_ERR_INVALID_STATE);
-    pipe->cs_flags.persist = 1;
     HCD_EXIT_CRITICAL();
     return ESP_OK;
 }
@@ -2102,27 +1854,22 @@ esp_err_t hcd_pipe_command(hcd_pipe_handle_t pipe_hdl, hcd_pipe_cmd_t command)
     esp_err_t ret = ESP_OK;
 
     HCD_ENTER_CRITICAL();
-    // Cannot execute pipe commands the pipe is already executing a command, or if the pipe or its port are no longer valid
-    if (pipe->cs_flags.reset_lock) {
-        ret = ESP_ERR_INVALID_STATE;
-    } else {
-        pipe->cs_flags.pipe_cmd_processing = 1;
-        switch (command) {
-        case HCD_PIPE_CMD_HALT: {
-            ret = _pipe_cmd_halt(pipe);
-            break;
-        }
-        case HCD_PIPE_CMD_FLUSH: {
-            ret = _pipe_cmd_flush(pipe);
-            break;
-        }
-        case HCD_PIPE_CMD_CLEAR: {
-            ret = _pipe_cmd_clear(pipe);
-            break;
-        }
-        }
-        pipe->cs_flags.pipe_cmd_processing = 0;
+    pipe->cs_flags.pipe_cmd_processing = 1;
+    switch (command) {
+    case HCD_PIPE_CMD_HALT: {
+        ret = _pipe_cmd_halt(pipe);
+        break;
     }
+    case HCD_PIPE_CMD_FLUSH: {
+        ret = _pipe_cmd_flush(pipe);
+        break;
+    }
+    case HCD_PIPE_CMD_CLEAR: {
+        ret = _pipe_cmd_clear(pipe);
+        break;
+    }
+    }
+    pipe->cs_flags.pipe_cmd_processing = 0;
     HCD_EXIT_CRITICAL();
     return ret;
 }
@@ -2236,7 +1983,7 @@ static inline void IRAM_ATTR _buffer_fill_isoc(dma_buffer_block_t *buffer, usb_t
     assert(interval > 0);
     assert(__builtin_popcount(interval) == 1); // Isochronous interval must be power of 2 according to USB2.0 specification
     int total_num_desc = transfer->num_isoc_packets * interval;
-    assert(total_num_desc <= XFER_LIST_LEN_ISOC);
+    assert(total_num_desc <= XFER_LIST_LEN_ISOC - XFER_LIST_ISOC_MARGIN); // Some space in the qTD list is reserved for timing margin
     int desc_idx = start_idx;
     int bytes_filled = 0;
     // Zeroize the whole QTD, so we can focus only on the active descriptors
@@ -2292,19 +2039,8 @@ static void IRAM_ATTR _buffer_fill(pipe_t *pipe)
         if (pipe->multi_buffer_control.buffer_num_to_exec == 0) {
             // There are no more previously filled buffers to execute. We need to calculate a new start index based on HFNUM and the pipe's schedule
             uint16_t cur_frame_num = usb_dwc_hal_port_get_cur_frame_num(pipe->port->hal);
-            start_idx = cur_frame_num + 1; // This is the next frame that the periodic scheduler will fetch
-            uint16_t rem_time = usb_dwc_ll_hfnum_get_frame_time_rem(pipe->port->hal->dev);
-
-            // If there is not enough time remaining in this frame, consider the next frame as start index
-            // The remaining time is in USB PHY clocks. The threshold value is time between buffer fill and execute (6-11us) = 180 + 5 x num_packets
-            if (rem_time < 195 + 5 * transfer->num_isoc_packets) {
-                if (rem_time > 165 + 5 * transfer->num_isoc_packets) {
-                    // If the remaining time is +-15 PHY clocks around the threshold value we cannot be certain whether we will schedule it in time for this frame
-                    // Busy wait 10us to be sure that we are at the beginning of next frame/microframe
-                    esp_rom_delay_us(10);
-                }
-                start_idx++;
-            }
+            start_idx = cur_frame_num + 1;      // This is the next frame that the periodic scheduler will fetch
+            start_idx += XFER_LIST_ISOC_MARGIN; // Start scheduling with a little delay. This will get us enough timing margin so no transfer is skipped
 
             // Only every (interval + offset) transfer belongs to this channel
             // Following calculation effectively rounds up to nearest (interval + offset)
@@ -2337,8 +2073,6 @@ static void IRAM_ATTR _buffer_fill(pipe_t *pipe)
         break;
     }
     }
-    // Sync transfer descriptor list to memory
-    CACHE_SYNC_XFER_DESCRIPTOR_LIST_C2M(buffer_to_fill);
     buffer_to_fill->urb = urb;
     urb->hcd_var = URB_HCD_STATE_INFLIGHT;
     // Update multi buffer flags
@@ -2522,18 +2256,31 @@ static inline void _buffer_parse_isoc(dma_buffer_block_t *buffer, bool is_in)
         int desc_status;
         usb_dwc_hal_xfer_desc_parse(buffer->xfer_desc_list, desc_idx, &rem_len, &desc_status);
         usb_dwc_hal_xfer_desc_clear(buffer->xfer_desc_list, desc_idx);
-        assert(rem_len == 0 || is_in);
-        assert(desc_status == USB_DWC_HAL_XFER_DESC_STS_SUCCESS || desc_status == USB_DWC_HAL_XFER_DESC_STS_NOT_EXECUTED);
+        switch (desc_status) {
+        case USB_DWC_HAL_XFER_DESC_STS_SUCCESS:
+            transfer->isoc_packet_desc[pkt_idx].status = USB_TRANSFER_STATUS_COMPLETED;
+            break;
+        case USB_DWC_HAL_XFER_DESC_STS_NOT_EXECUTED:
+            transfer->isoc_packet_desc[pkt_idx].status = USB_TRANSFER_STATUS_SKIPPED;
+            break;
+        case USB_DWC_HAL_XFER_DESC_STS_PKTERR:
+            transfer->isoc_packet_desc[pkt_idx].status = USB_TRANSFER_STATUS_ERROR;
+            break;
+        case USB_DWC_HAL_XFER_DESC_STS_BUFFER_ERR:
+            transfer->isoc_packet_desc[pkt_idx].status = USB_TRANSFER_STATUS_ERROR;
+            break;
+        default:
+            assert(false);
+            break;
+        }
+
         assert(rem_len <= transfer->isoc_packet_desc[pkt_idx].num_bytes);    // Check for DMA errata
         // Update ISO packet actual length and status
         transfer->isoc_packet_desc[pkt_idx].actual_num_bytes = transfer->isoc_packet_desc[pkt_idx].num_bytes - rem_len;
         total_actual_num_bytes += transfer->isoc_packet_desc[pkt_idx].actual_num_bytes;
-        transfer->isoc_packet_desc[pkt_idx].status = (desc_status == USB_DWC_HAL_XFER_DESC_STS_NOT_EXECUTED) ? USB_TRANSFER_STATUS_SKIPPED : USB_TRANSFER_STATUS_COMPLETED;
         // A descriptor is also allocated for unscheduled frames. We need to skip over them
         desc_idx += buffer->flags.isoc.interval;
-        if (desc_idx >= XFER_LIST_LEN_INTR) {
-            desc_idx -= XFER_LIST_LEN_INTR;
-        }
+        desc_idx %= XFER_LIST_LEN_ISOC;
     }
     // Write back the actual_num_bytes and statue of entire transfer
     assert(total_actual_num_bytes <= transfer->num_bytes);
@@ -2574,9 +2321,6 @@ static void _buffer_parse(pipe_t *pipe)
     assert(buffer_to_parse->urb != NULL);
     bool is_in = pipe->ep_char.bEndpointAddress & USB_B_ENDPOINT_ADDRESS_EP_DIR_MASK;
     int mps = pipe->ep_char.mps;
-
-    // Sync transfer descriptor list to cache
-    CACHE_SYNC_XFER_DESCRIPTOR_LIST_M2C(buffer_to_parse);
 
     // Parsing the buffer will update the buffer's corresponding URB
     if (buffer_to_parse->status_flags.pipe_event == HCD_PIPE_EVENT_URB_DONE) {
@@ -2651,15 +2395,11 @@ esp_err_t hcd_urb_enqueue(hcd_pipe_handle_t pipe_hdl, urb_t *urb)
         ESP_ERR_INVALID_SIZE
     );
 
-    // Sync user's data from cache to memory. For OUT and CTRL transfers
-    CACHE_SYNC_DATA_BUFFER_C2M(pipe, urb);
-
     HCD_ENTER_CRITICAL();
     // Check that pipe and port are in the correct state to receive URBs
     HCD_CHECK_FROM_CRIT(pipe->port->state == HCD_PORT_STATE_ENABLED         // The pipe's port must be in the correct state
                         && pipe->state == HCD_PIPE_STATE_ACTIVE             // The pipe must be in the correct state
-                        && !pipe->cs_flags.pipe_cmd_processing              // Pipe cannot currently be processing a pipe command
-                        && !pipe->cs_flags.reset_lock,                      // Pipe cannot be persisting through a port reset
+                        && !pipe->cs_flags.pipe_cmd_processing,             // Pipe cannot currently be processing a pipe command
                         ESP_ERR_INVALID_STATE);
     // Use the URB's reserved_ptr to store the pipe's
     urb->hcd_ptr = (void *)pipe;
@@ -2710,8 +2450,6 @@ urb_t *hcd_urb_dequeue(hcd_pipe_handle_t pipe_hdl)
             pipe->port->num_pipes_queued--;
             pipe->cs_flags.has_urb = 0;
         }
-        // Sync user's data in memory to cache. For IN and CTRL transfers
-        CACHE_SYNC_DATA_BUFFER_M2C(pipe, urb);
     } else {
         // No more URBs to dequeue from this pipe
         urb = NULL;

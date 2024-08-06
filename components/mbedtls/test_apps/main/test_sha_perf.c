@@ -18,7 +18,7 @@
 #include "ccomp_timer.h"
 #include "test_mbedtls_utils.h"
 
-TEST_CASE("mbedtls SHA performance", "[mbedtls]")
+TEST_CASE("mbedtls SHA performance", "[aes]")
 {
     const unsigned CALLS = 256;
     const unsigned CALL_SZ = 16 * 1024;

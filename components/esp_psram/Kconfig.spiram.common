@@ -23,7 +23,8 @@ config SPIRAM_IGNORE_NOTFOUND
         ESP_WIFI_CACHE_TX_BUFFER_NUM and use static WiFi Tx buffer may cause potential memory exhaustion issues.
         Suggest disable SPIRAM_TRY_ALLOCATE_WIFI_LWIP.
         Suggest disable ESP_WIFI_AMSDU_TX_ENABLED.
-        Suggest disable ESP_WIFI_CACHE_TX_BUFFER_NUM, need clear CONFIG_FEATURE_CACHE_TX_BUF_BIT of config->feature_caps.
+        Suggest disable ESP_WIFI_CACHE_TX_BUFFER_NUM, need clear CONFIG_FEATURE_CACHE_TX_BUF_BIT of
+        config->feature_caps.
         Suggest change ESP_WIFI_TX_BUFFER from static to dynamic. Also suggest to adjust some buffer numbers to the
         values used without PSRAM case. Such as, ESP_WIFI_STATIC_TX_BUFFER_NUM, ESP_WIFI_DYNAMIC_TX_BUFFER_NUM.
 
@@ -115,3 +116,12 @@ config SPIRAM_ALLOW_NOINIT_SEG_EXTERNAL_MEMORY
 
         Note the values placed into this section will not be initialized at startup and should keep its value
         after software restart.
+
+config SPIRAM_ECC_ENABLE
+    bool "Enable SPI RAM ECC"
+    default n
+    depends on SPIRAM_MODE_OCT && IDF_TARGET_ESP32S3
+    help
+        Enable MSPI Error-Correcting Code function when accessing SPIRAM.
+
+        If enabled, 1/16 of the SPI RAM total size will be reserved for error-correcting code.

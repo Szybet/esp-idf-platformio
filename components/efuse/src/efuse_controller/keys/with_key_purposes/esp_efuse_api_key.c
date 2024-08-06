@@ -288,7 +288,7 @@ esp_err_t esp_efuse_write_key(esp_efuse_block_t block, esp_efuse_purpose_t purpo
             purpose == ESP_EFUSE_KEY_PURPOSE_XTS_AES_256_KEY_1 ||
             purpose == ESP_EFUSE_KEY_PURPOSE_XTS_AES_256_KEY_2 ||
 #endif
-#if SOC_EFUSE_ECDSA_KEY
+#if SOC_ECDSA_SUPPORTED
             purpose == ESP_EFUSE_KEY_PURPOSE_ECDSA_KEY ||
 #endif
             purpose == ESP_EFUSE_KEY_PURPOSE_XTS_AES_128_KEY)) {
@@ -303,11 +303,8 @@ esp_err_t esp_efuse_write_key(esp_efuse_block_t block, esp_efuse_purpose_t purpo
             purpose == ESP_EFUSE_KEY_PURPOSE_XTS_AES_256_KEY_1 ||
             purpose == ESP_EFUSE_KEY_PURPOSE_XTS_AES_256_KEY_2 ||
 #endif //#ifdef SOC_EFUSE_SUPPORT_XTS_AES_256_KEYS
-#if SOC_EFUSE_ECDSA_KEY
+#if SOC_ECDSA_SUPPORTED
             purpose == ESP_EFUSE_KEY_PURPOSE_ECDSA_KEY ||
-#endif
-#if SOC_KEY_MANAGER_SUPPORTED
-            purpose == ESP_EFUSE_KEY_PURPOSE_KM_INIT_KEY ||
 #endif
             purpose == ESP_EFUSE_KEY_PURPOSE_HMAC_DOWN_ALL ||
             purpose == ESP_EFUSE_KEY_PURPOSE_HMAC_DOWN_JTAG ||

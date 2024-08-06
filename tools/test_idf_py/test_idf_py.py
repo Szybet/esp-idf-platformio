@@ -1,17 +1,13 @@
 #!/usr/bin/env python
 #
-# SPDX-FileCopyrightText: 2019-2024 Espressif Systems (Shanghai) CO LTD
+# SPDX-FileCopyrightText: 2019-2022 Espressif Systems (Shanghai) CO LTD
 # SPDX-License-Identifier: Apache-2.0
+
 import json
 import os
-import shutil
 import subprocess
 import sys
-from typing import Any
-from typing import List
-from unittest import main
-from unittest import mock
-from unittest import TestCase
+from unittest import TestCase, main, mock
 
 import elftools.common.utils as ecu
 import jsonschema
@@ -238,31 +234,19 @@ class TestDeprecations(TestWithoutExtensions):
 
 
 class TestHelpOutput(TestWithoutExtensions):
-    def action_test_idf_py(self, commands: List[str], schema: Any) -> None:
-        env = dict(**os.environ)
-        python = shutil.which('python', path=env['PATH'])
-        if python is None:
-            raise ValueError('python not found')
-        idf_path = env.get('IDF_PATH')
-        if idf_path is None:
-            raise ValueError('Empty IDF_PATH')
-        idf_py_cmd = [
-            python,
-            os.path.join(idf_path, 'tools', 'idf.py')
-        ]
-        commands = idf_py_cmd + commands
-        output_file = 'idf_py_help_output.json'
-        with open(output_file, 'w') as outfile:
-            subprocess.run(commands, env=env, stdout=outfile)
-        with open(output_file, 'r') as outfile:
-            help_obj = json.load(outfile)
-        self.assertIsNone(jsonschema.validate(help_obj, schema))
-
     def test_output(self):
+        def action_test(commands, schema):
+            output_file = 'idf_py_help_output.json'
+            with open(output_file, 'w') as outfile:
+                subprocess.run(commands, env=os.environ, stdout=outfile)
+            with open(output_file, 'r') as outfile:
+                help_obj = json.load(outfile)
+            self.assertIsNone(jsonschema.validate(help_obj, schema))
+
         with open(os.path.join(current_dir, 'idf_py_help_schema.json'), 'r') as schema_file:
             schema_json = json.load(schema_file)
-        self.action_test_idf_py(['help', '--json'], schema_json)
-        self.action_test_idf_py(['help', '--json', '--add-options'], schema_json)
+        action_test(['idf.py', 'help', '--json'], schema_json)
+        action_test(['idf.py', 'help', '--json', '--add-options'], schema_json)
 
 
 class TestROMs(TestWithoutExtensions):
@@ -305,59 +289,6 @@ class TestROMs(TestWithoutExtensions):
                 build_date_str = self.get_string_from_elf_by_addr(rom_file, int(k['build_date_str_addr'], base=16))
                 self.assertTrue(len(build_date_str) == 11)
                 self.assertTrue(build_date_str == k['build_date_str'])
-
-
-class TestFileArgumentExpansion(TestCase):
-    def test_file_expansion(self):
-        """Test @filename expansion functionality"""
-        try:
-            output = subprocess.check_output(
-                [sys.executable, idf_py_path, '--version', '@file_args_expansion_inputs/args_a'],
-                env=os.environ,
-                stderr=subprocess.STDOUT).decode('utf-8', 'ignore')
-            self.assertIn('Running: idf.py --version DAAA DBBB', output)
-        except subprocess.CalledProcessError as e:
-            self.fail(f'Process should have exited normally, but it exited with a return code of {e.returncode}')
-
-    def test_multiple_file_arguments(self):
-        """Test multiple @filename arguments"""
-        try:
-            output = subprocess.check_output(
-                [sys.executable, idf_py_path, '--version', '@file_args_expansion_inputs/args_a', '@file_args_expansion_inputs/args_b'],
-                env=os.environ,
-                stderr=subprocess.STDOUT).decode('utf-8', 'ignore')
-            self.assertIn('Running: idf.py --version DAAA DBBB DCCC DDDD', output)
-        except subprocess.CalledProcessError as e:
-            self.fail(f'Process should have exited normally, but it exited with a return code of {e.returncode}')
-
-    def test_recursive_expansion(self):
-        """Test recursive expansion of @filename arguments"""
-        try:
-            output = subprocess.check_output(
-                [sys.executable, idf_py_path, '--version', '@file_args_expansion_inputs/args_recursive'],
-                env=os.environ,
-                stderr=subprocess.STDOUT).decode('utf-8', 'ignore')
-            self.assertIn('Running: idf.py --version DAAA DBBB DEEE DFFF', output)
-        except subprocess.CalledProcessError as e:
-            self.fail(f'Process should have exited normally, but it exited with a return code of {e.returncode}')
-
-    def test_circular_dependency(self):
-        """Test circular dependency detection in file argument expansion"""
-        with self.assertRaises(subprocess.CalledProcessError) as cm:
-            subprocess.check_output(
-                [sys.executable, idf_py_path, '--version', '@file_args_expansion_inputs/args_circular_a'],
-                env=os.environ,
-                stderr=subprocess.STDOUT).decode('utf-8', 'ignore')
-        self.assertIn('Circular dependency in file argument expansion', cm.exception.output.decode('utf-8', 'ignore'))
-
-    def test_missing_file(self):
-        """Test missing file detection in file argument expansion"""
-        with self.assertRaises(subprocess.CalledProcessError) as cm:
-            subprocess.check_output(
-                [sys.executable, idf_py_path, '--version', '@args_non_existent'],
-                env=os.environ,
-                stderr=subprocess.STDOUT).decode('utf-8', 'ignore')
-        self.assertIn('(expansion of @args_non_existent) could not be opened', cm.exception.output.decode('utf-8', 'ignore'))
 
 
 if __name__ == '__main__':

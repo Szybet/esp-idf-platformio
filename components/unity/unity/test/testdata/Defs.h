@@ -4,6 +4,5 @@
 #define EXTERN_DECL
 
 extern int CounterSuiteSetup;
-extern int isArgumentOne(int i);
 
-#endif
+#endif //DEF_H

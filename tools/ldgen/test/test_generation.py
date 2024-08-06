@@ -1,8 +1,9 @@
 #!/usr/bin/env python
 #
-# SPDX-FileCopyrightText: 2021-2024 Espressif Systems (Shanghai) CO LTD
+# SPDX-FileCopyrightText: 2021-2022 Espressif Systems (Shanghai) CO LTD
 # SPDX-License-Identifier: Apache-2.0
 #
+
 import collections
 import fnmatch
 import os
@@ -122,7 +123,7 @@ class DefaultMappingTest(GenerationTest):
         # Checks that default rules are generated from
         # the default scheme properly and even if no mappings
         # are defined.
-        actual = self.generation.generate(self.entities, False)
+        actual = self.generation.generate(self.entities)
         expected = self.generate_default_rules()
 
         self.compare_rules(expected, actual)
@@ -233,7 +234,7 @@ entries:
     * (noflash)                     #1
 """
         self.add_fragments(alt if alt else mapping)
-        actual = self.generation.generate(self.entities, False)
+        actual = self.generation.generate(self.entities)
         expected = self.generate_default_rules()
 
         flash_text = expected['flash_text']
@@ -271,7 +272,7 @@ entries:
 """
 
         self.add_fragments(alt if alt else mapping)
-        actual = self.generation.generate(self.entities, False)
+        actual = self.generation.generate(self.entities)
         expected = self.generate_default_rules()
 
         flash_text = expected['flash_text']
@@ -310,7 +311,7 @@ entries:
     croutine:prvCheckPendingReadyList (noflash)         #1
 """
         self.add_fragments(mapping)
-        actual = self.generation.generate(self.entities, False)
+        actual = self.generation.generate(self.entities)
         expected = self.generate_default_rules()
 
         flash_text = expected['flash_text']
@@ -366,7 +367,7 @@ entries:
 """
 
         self.add_fragments(mapping)
-        actual = self.generation.generate(self.entities, False)
+        actual = self.generation.generate(self.entities)
         expected = self.generate_default_rules()
 
         flash_text = expected['flash_text']
@@ -427,7 +428,7 @@ entries:
     croutine:prvCheckPendingReadyList (default)         #2
 """
         self.add_fragments(mapping)
-        actual = self.generation.generate(self.entities, False)
+        actual = self.generation.generate(self.entities)
         expected = self.generate_default_rules()
 
         flash_text = expected['flash_text']
@@ -496,7 +497,7 @@ entries:
 """
 
         self.add_fragments(mapping)
-        actual = self.generation.generate(self.entities, False)
+        actual = self.generation.generate(self.entities)
         expected = self.generate_default_rules()
 
         flash_text = expected['flash_text']
@@ -590,7 +591,7 @@ entries:
 """
 
         self.add_fragments(mapping)
-        actual = self.generation.generate(self.entities, False)
+        actual = self.generation.generate(self.entities)
         expected = self.generate_default_rules()
 
         flash_text = expected['flash_text']
@@ -641,7 +642,7 @@ entries:
 """
 
         self.add_fragments(mapping)
-        actual = self.generation.generate(self.entities, False)
+        actual = self.generation.generate(self.entities)
         expected = self.generate_default_rules()
 
         # Generate default command                              A
@@ -689,7 +690,7 @@ entries:
     croutine (noflash_data)                         #2
 """
         self.add_fragments(mapping)
-        actual = self.generation.generate(self.entities, False)
+        actual = self.generation.generate(self.entities)
         expected = self.generate_default_rules()
 
         flash_text = expected['flash_text']
@@ -743,7 +744,7 @@ entries:
     croutine (noflash_data)                         #2
 """
         self.add_fragments(mapping)
-        actual = self.generation.generate(self.entities, False)
+        actual = self.generation.generate(self.entities)
         expected = self.generate_default_rules()
 
         flash_text = expected['flash_text']
@@ -782,7 +783,7 @@ entries:
         self.add_fragments(alt if alt else mapping)
 
         with self.assertRaises(GenerationException):
-            self.generation.generate(self.entities, False)
+            self.generation.generate(self.entities)
 
     def test_same_entity_conflicting_section(self):
         # Test same entity being mapped by scheme conflicting with another.
@@ -861,7 +862,7 @@ entries:
 """
 
         self.add_fragments(alt if alt else mapping)
-        actual = self.generation.generate(self.entities, False)
+        actual = self.generation.generate(self.entities)
         expected = self.generate_default_rules()
 
         flash_text = expected['flash_text']
@@ -950,7 +951,7 @@ entries:
 """
 
         self.add_fragments(mapping)
-        actual = self.generation.generate(self.entities, False)
+        actual = self.generation.generate(self.entities)
         expected = self.generate_default_rules()
 
         flash_text = expected['flash_text']
@@ -1047,7 +1048,7 @@ entries:
 """
 
         self.add_fragments(mapping)
-        actual = self.generation.generate(self.entities, False)
+        actual = self.generation.generate(self.entities)
         expected = self.generate_default_rules()
 
         flash_text = expected['flash_text']
@@ -1089,7 +1090,7 @@ entries:
         self.add_fragments(mapping)
 
         with self.assertRaises(GenerationException):
-            self.generation.generate(self.entities, False)
+            self.generation.generate(self.entities)
 
     def test_root_mapping_fragment_conflict(self):
         # Test that root mapping fragments are also checked for
@@ -1110,7 +1111,7 @@ entries:
 
         self.add_fragments(mapping)
         with self.assertRaises(GenerationException):
-            self.generation.generate(self.entities, False)
+            self.generation.generate(self.entities)
 
     def test_root_mapping_fragment_duplicate(self):
         # Same root mappings have no effect.
@@ -1134,7 +1135,7 @@ entries:
 """
 
         self.add_fragments(mapping)
-        actual = self.generation.generate(self.entities, False)
+        actual = self.generation.generate(self.entities)
         expected = self.generate_default_rules()
 
         # Generate default command                              A
@@ -1179,7 +1180,7 @@ entries:
         self.add_fragments(scheme)
         self.add_fragments(alt if alt else mapping)
 
-        actual = self.generation.generate(self.entities, False)
+        actual = self.generation.generate(self.entities)
         expected = self.generate_default_rules()
 
         if perf >= 1:
@@ -1230,7 +1231,7 @@ entries:
             self.generation.mappings = {}
             self.add_fragments(alt if alt else mapping)
 
-            actual = self.generation.generate(self.entities, False)
+            actual = self.generation.generate(self.entities)
             expected = self.generate_default_rules()
 
             if perf_level < 4 and perf_level > 0:
@@ -1330,7 +1331,7 @@ entries:
 
         self.add_fragments(mapping)
 
-        actual = self.generation.generate(self.entities, False)
+        actual = self.generation.generate(self.entities)
         expected = self.generate_default_rules()
 
         flash_text = expected['flash_text']
@@ -1393,7 +1394,7 @@ entries:
         self.generation.mappings = {}
         self.add_fragments(mapping)
 
-        actual = self.generation.generate(self.entities, False)
+        actual = self.generation.generate(self.entities)
         expected = self.generate_default_rules()
 
         flash_text = expected['flash_text']
@@ -1450,7 +1451,7 @@ entries:
 
         self.add_fragments(mapping)
 
-        actual = self.generation.generate(self.entities, False)
+        actual = self.generation.generate(self.entities)
         expected = self.generate_default_rules()
 
         flash_text = expected['flash_text']
@@ -1506,7 +1507,7 @@ entries:
 
         self.add_fragments(mapping)
 
-        actual = self.generation.generate(self.entities, False)
+        actual = self.generation.generate(self.entities)
         expected = self.generate_default_rules()
 
         flash_text = expected['flash_text']
@@ -1563,7 +1564,7 @@ entries:
         self.generation.mappings = {}
         self.add_fragments(mapping)
 
-        actual = self.generation.generate(self.entities, False)
+        actual = self.generation.generate(self.entities)
         expected = self.generate_default_rules()
 
         flash_text = expected['flash_text']
@@ -1620,7 +1621,7 @@ entries:
 
         self.add_fragments(mapping)
 
-        actual = self.generation.generate(self.entities, False)
+        actual = self.generation.generate(self.entities)
         expected = self.generate_default_rules()
 
         flash_text = expected['flash_text']
@@ -1664,7 +1665,7 @@ entries:
 
         self.add_fragments(mapping)
 
-        actual = self.generation.generate(self.entities, False)
+        actual = self.generation.generate(self.entities)
         expected = self.generate_default_rules()
 
         flash_text = expected['flash_text']
@@ -1691,7 +1692,7 @@ entries:
 
         self.add_fragments(mapping)
 
-        actual = self.generation.generate(self.entities, False)
+        actual = self.generation.generate(self.entities)
         expected = self.generate_default_rules()
 
         flash_text = expected['flash_text']
@@ -1718,7 +1719,7 @@ entries:
         self.add_fragments(mapping)
 
         with self.assertRaises(GenerationException):
-            self.generation.generate(self.entities, False)
+            self.generation.generate(self.entities)
 
 
 if __name__ == '__main__':

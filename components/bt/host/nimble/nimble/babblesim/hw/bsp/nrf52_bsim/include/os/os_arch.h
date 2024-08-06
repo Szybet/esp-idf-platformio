@@ -48,8 +48,11 @@ void os_arch_frame_init(struct stack_frame *sf);
 #define OS_IDLE_STACK_SIZE (4000)
 #endif
 
-/* Implemented in irq_handler */
-int os_arch_in_isr(void);
+static inline int
+os_arch_in_isr(void)
+{
+	return hw_irq_ctrl_get_irq_status();
+}
 
 /* Include common arch definitions and APIs */
 #include "os/arch/common.h"

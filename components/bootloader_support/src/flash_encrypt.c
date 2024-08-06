@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2015-2024 Espressif Systems (Shanghai) CO LTD
+ * SPDX-FileCopyrightText: 2015-2021 Espressif Systems (Shanghai) CO LTD
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -12,8 +12,6 @@
 #include "esp_flash_encrypt.h"
 #include "esp_secure_boot.h"
 #include "hal/efuse_hal.h"
-
-//TODO:[ESP32C61] IDf-9232
 
 #if CONFIG_IDF_TARGET_ESP32
 #define CRYPT_CNT ESP_EFUSE_FLASH_CRYPT_CNT
@@ -139,9 +137,6 @@ esp_flash_enc_mode_t esp_get_flash_encryption_mode(void)
             }
 #else
             if (esp_efuse_read_field_bit(ESP_EFUSE_DIS_DOWNLOAD_MANUAL_ENCRYPT)
-#if SOC_EFUSE_DIS_DOWNLOAD_MSPI
-                && esp_efuse_read_field_bit(ESP_EFUSE_SPI_DOWNLOAD_MSPI_DIS)
-#endif
 #if SOC_EFUSE_DIS_DOWNLOAD_ICACHE
                 && esp_efuse_read_field_bit(ESP_EFUSE_DIS_DOWNLOAD_ICACHE)
 #endif
@@ -192,9 +187,6 @@ void esp_flash_encryption_set_release_mode(void)
     esp_efuse_write_field_bit(ESP_EFUSE_DISABLE_DL_DECRYPT);
 #else
     esp_efuse_write_field_bit(ESP_EFUSE_DIS_DOWNLOAD_MANUAL_ENCRYPT);
-#if SOC_EFUSE_DIS_DOWNLOAD_MSPI
-    esp_efuse_write_field_bit(ESP_EFUSE_SPI_DOWNLOAD_MSPI_DIS);
-#endif
 #if SOC_EFUSE_DIS_DOWNLOAD_ICACHE
     esp_efuse_write_field_bit(ESP_EFUSE_DIS_DOWNLOAD_ICACHE);
 #endif
@@ -343,13 +335,6 @@ bool esp_flash_encryption_cfg_verify_release_mode(void)
     }
 #endif
 
-#if SOC_EFUSE_DIS_DOWNLOAD_MSPI
-    secure = esp_efuse_read_field_bit(ESP_EFUSE_SPI_DOWNLOAD_MSPI_DIS);
-    result &= secure;
-    if (!secure) {
-        ESP_LOGW(TAG, "Not disabled UART bootloader download mspi (set DIS_DOWNLOAD_MSPI->1)");
-    }
-#endif
 #if SOC_EFUSE_DIS_DOWNLOAD_ICACHE
     secure = esp_efuse_read_field_bit(ESP_EFUSE_DIS_DOWNLOAD_ICACHE);
     result &= secure;

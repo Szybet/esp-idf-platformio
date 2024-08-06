@@ -388,6 +388,12 @@ void BTM_BleUpdateAdvFilterPolicy(tBTM_BLE_AFP adv_policy)
                              &p_cb->adv_addr_type);
         }
 
+        uint8_t null_addr[BD_ADDR_LEN] = {0};
+        if ((p_cb->evt_type == 0x01 || p_cb->evt_type == 0x04) && memcmp(p_addr_ptr, null_addr, BD_ADDR_LEN) == 0) {
+            /* directed advertising */
+            return;
+        }
+
         btsnd_hcic_ble_write_adv_params ((UINT16)(p_cb->adv_interval_min ? p_cb->adv_interval_min :
                                          BTM_BLE_GAP_ADV_SLOW_INT),
                                          (UINT16)(p_cb->adv_interval_max ? p_cb->adv_interval_max :
@@ -2250,16 +2256,16 @@ UINT8 *btm_ble_build_adv_data(tBTM_BLE_AD_MASK *p_data_mask, UINT8 **p_dst,
         /* device name */
 #if BTM_MAX_LOC_BD_NAME_LEN > 0
         if (len > MIN_ADV_LENGTH && data_mask & BTM_BLE_AD_BIT_DEV_NAME) {
-            if (strlen(btm_cb.cfg.ble_bd_name) > (UINT16)(len - MIN_ADV_LENGTH)) {
+            if (strlen(btm_cb.cfg.bd_name) > (UINT16)(len - MIN_ADV_LENGTH)) {
                 cp_len = (UINT16)(len - MIN_ADV_LENGTH);
                 *p++ = cp_len + 1;
                 *p++ = BTM_BLE_AD_TYPE_NAME_SHORT;
-                ARRAY_TO_STREAM(p, btm_cb.cfg.ble_bd_name, cp_len);
+                ARRAY_TO_STREAM(p, btm_cb.cfg.bd_name, cp_len);
             } else {
-                cp_len = (UINT16)strlen(btm_cb.cfg.ble_bd_name);
+                cp_len = (UINT16)strlen(btm_cb.cfg.bd_name);
                 *p++ = cp_len + 1;
                 *p++ = BTM_BLE_AD_TYPE_NAME_CMPL;
-                ARRAY_TO_STREAM(p, btm_cb.cfg.ble_bd_name, cp_len);
+                ARRAY_TO_STREAM(p, btm_cb.cfg.bd_name, cp_len);
             }
             len -= (cp_len + MIN_ADV_LENGTH);
             data_mask &= ~BTM_BLE_AD_BIT_DEV_NAME;
@@ -4003,6 +4009,9 @@ static void btm_ble_stop_discover(void)
         if(btsnd_hcic_ble_set_scan_enable (BTM_BLE_SCAN_DISABLE, BTM_BLE_DUPLICATE_ENABLE)) {
             osi_sem_take(&scan_enable_sem, OSI_SEM_MAX_TIMEOUT);
         }
+        /* reset status */
+        btm_ble_clear_topology_mask(BTM_BLE_STATE_ACTIVE_SCAN_BIT);
+        btm_ble_clear_topology_mask(BTM_BLE_STATE_PASSIVE_SCAN_BIT);
     }
 
     if (p_scan_cb) {
@@ -4379,7 +4388,7 @@ void btm_ble_read_remote_features_complete(UINT8 *p)
 *******************************************************************************/
 void btm_ble_write_adv_enable_complete(UINT8 *p)
 {
-    /* if write adv enable/disable not succeed */
+    /* if write adv enable/disbale not succeed */
     if (*p != HCI_SUCCESS) {
         BTM_TRACE_ERROR("%s failed", __func__);
     }

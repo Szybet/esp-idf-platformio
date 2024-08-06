@@ -4,7 +4,6 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#include "sdkconfig.h"
 #include "FreeRTOS.h"
 #include "task.h"
 #include "unity.h"
@@ -29,7 +28,7 @@ Expected:
     - task_B should never have run
 */
 
-#if ( CONFIG_FREERTOS_NUMBER_OF_CORES == 1 )
+#if ( configNUM_CORES == 1 )
 
 #define UNITY_TASK_DELAY_TICKS      10
 
@@ -80,4 +79,4 @@ TEST_CASE("Tasks: Test priority scheduling", "[freertos]")
     vTaskPrioritySet(NULL, configTEST_UNITY_TASK_PRIORITY);
 }
 
-#endif /* CONFIG_FREERTOS_NUMBER_OF_CORES == 1 */
+#endif /* configNUM_CORES == 1 */

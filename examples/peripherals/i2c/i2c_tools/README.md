@@ -1,5 +1,5 @@
-| Supported Targets | ESP32 | ESP32-C2 | ESP32-C3 | ESP32-C6 | ESP32-H2 | ESP32-P4 | ESP32-S2 | ESP32-S3 |
-| ----------------- | ----- | -------- | -------- | -------- | -------- | -------- | -------- | -------- |
+| Supported Targets | ESP32 | ESP32-C2 | ESP32-C3 | ESP32-C6 | ESP32-H2 | ESP32-S2 | ESP32-S3 |
+| ----------------- | ----- | -------- | -------- | -------- | -------- | -------- | -------- |
 
 # I2C Tools Example
 
@@ -21,20 +21,20 @@ If you have some trouble in developing I2C related applications, or just want to
 
 ### Hardware Required
 
-To run this example, you should have any ESP32, ESP32-S, ESP32-C, ESP32-H, ESP32-P based development board. For test purpose, you should have a kind of device with I2C interface as well. Here we will take the CCS811 sensor as an example to show how to test the function of this sensor without writing any code (just use the command-line tools supported by this example). For more information about CCS811, you can consult the [online datasheet](http://ams.com/ccs811).
+To run this example, you should have any ESP32, ESP32-S and ESP32-C based development board. For test purpose, you should have a kind of device with I2C interface as well. Here we will take the CCS811 sensor as an example to show how to test the function of this sensor without writing any code (just use the command-line tools supported by this example). For more information about CCS811, you can consult the [online datasheet](http://ams.com/ccs811).
 
 #### Pin Assignment:
 
-**Note:** The following pin assignments are used by default according to `CONFIG_I2C_MASTER_SCL` and `CONFIG_I2C_MASTER_SDA` , you can change them with `i2cconfig` command at any time.
+**Note:** The following pin assignments are used by default, you can change them with `i2cconfig` command at any time.
 
 |                     | SDA    | SCL    | GND  | Other | VCC  |
 | ------------------- | ------ | ------ | ---- | ----- | ---- |
 | ESP32 I2C Master    | GPIO18 | GPIO19 | GND  | GND   | 3.3V |
-| ESP32-S2 I2C Master | GPIO5  | GPIO4  | GND  | GND   | 3.3V |
-| ESP32-S3 I2C Master | GPIO5  | GPIO4  | GND  | GND   | 3.3V |
-| ESP32-C3 I2C Master | GPIO5  | GPIO4  | GND  | GND   | 3.3V |
-| ESP32-C2 I2C Master | GPIO5  | GPIO4  | GND  | GND   | 3.3V |
-| ESP32-H2 I2C Master | GPIO5  | GPIO4  | GND  | GND   | 3.3V |
+| ESP32-S2 I2C Master | GPIO18 | GPIO19 | GND  | GND   | 3.3V |
+| ESP32-S3 I2C Master | GPIO1  | GPIO2  | GND  | GND   | 3.3V |
+| ESP32-C3 I2C Master | GPIO5  | GPIO6  | GND  | GND   | 3.3V |
+| ESP32-C2 I2C Master | GPIO5  | GPIO6  | GND  | GND   | 3.3V |
+| ESP32-H2 I2C Master | GPIO1  | GPIO2  | GND  | GND   | 3.3V |
 | Sensor              | SDA    | SCL    | GND  | WAK   | VCC  |
 
 **Note:** It is recommended to add external pull-up resistors for SDA/SCL pins to make the communication more stable, though the driver will enable internal pull-up resistors.
@@ -59,7 +59,7 @@ See the [Getting Started Guide](https://docs.espressif.com/projects/esp-idf/en/l
 
 ```bash
  ==============================================================
- |             Steps to Use i2c-tools                         |
+ |       Steps to Use i2c-tools on ESP32                      |
  |                                                            |
  |  1. Try 'help', check all supported commands               |
  |  2. Try 'i2cconfig' to configure your I2C bus              |
@@ -70,11 +70,6 @@ See the [Getting Started Guide](https://docs.espressif.com/projects/esp-idf/en/l
  |                                                            |
  ==============================================================
 
-
-Type 'help' to get the list of commands.
-Use UP/DOWN arrows to navigate through command history.
-Press TAB when typing command name to auto-complete.
-I (379) main_task: Returned from app_main()
 i2c-tools> help
 help
   Print the list of registered commands
@@ -141,7 +136,7 @@ tasks
 ### Configure the I2C bus
 
 ```bash
-i2c-tools> i2cconfig --port=0 --sda=18 --scl=19 --freq=100000
+esp32> i2cconfig --port=0 --sda=18 --scl=19 --freq=100000
 ```
 
 * `--port` option to specify the port of I2C, here we choose port 0 for test.
@@ -151,7 +146,7 @@ i2c-tools> i2cconfig --port=0 --sda=18 --scl=19 --freq=100000
 ### Check the I2C address (7 bits) on the I2C bus
 
 ```bash
-i2c-tools> i2cdetect
+esp32> i2cdetect
      0  1  2  3  4  5  6  7  8  9  a  b  c  d  e  f
 00: -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
 10: -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
@@ -168,7 +163,7 @@ i2c-tools> i2cdetect
 ### Get the value of status register
 
 ```bash
-i2c-tools> i2cget -c 0x5b -r 0x00 -l 1
+esp32> i2cget -c 0x5b -r 0x00 -l 1
 0x10
 ```
 
@@ -180,11 +175,11 @@ i2c-tools> i2cget -c 0x5b -r 0x00 -l 1
 ### Change the working mode
 
 ```bash
-i2c-tools> i2cset -c 0x5b -r 0xF4
+esp32> i2cset -c 0x5b -r 0xF4
 I (734717) cmd_i2ctools: Write OK
-i2c-tools> i2cset -c 0x5b -r 0x01 0x10
+esp32> i2cset -c 0x5b -r 0x01 0x10
 I (1072047) cmd_i2ctools: Write OK
-i2c-tools> i2cget -c 0x5b -r 0x00 -l 1
+esp32> i2cget -c 0x5b -r 0x00 -l 1
 0x98
 ```
 
@@ -194,7 +189,7 @@ i2c-tools> i2cget -c 0x5b -r 0x00 -l 1
 ### Read the sensor data
 
 ```bash
-i2c-tools> i2cget -c 0x5b -r 0x02 -l 8
+esp32> i2cget -c 0x5b -r 0x02 -l 8
 0x01 0xb0 0x00 0x04 0x98 0x00 0x19 0x8f
 ```
 

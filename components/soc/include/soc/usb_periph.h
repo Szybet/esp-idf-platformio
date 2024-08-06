@@ -9,7 +9,6 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include "soc/soc_pins.h"
-#include "soc/soc_caps.h"
 #include "soc/gpio_sig_map.h"
 
 #ifdef __cplusplus

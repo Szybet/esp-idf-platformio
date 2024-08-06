@@ -195,8 +195,7 @@ TEST(spiffs, format_disk_open_file_write_and_read_file)
     // Generate data
     spiffs_file file = spiffs_res;
 
-    uint32_t data_count = 5000;
-    uint32_t data_size = data_count * sizeof(uint32_t);
+    uint32_t data_size = 100000;
 
     char *data = (char *) malloc(data_size);
     char *read = (char *) malloc(data_size);

@@ -21,6 +21,7 @@
 #define _NPL_OS_TYPES_H
 
 #include <time.h>
+#include <signal.h>
 #include <stdbool.h>
 #include <pthread.h>
 #include <semaphore.h>

@@ -34,6 +34,7 @@
 #include "esp_rom_sys.h"
 #include "esp_cpu.h"
 
+
 struct source_location {
     const char *file_name;
     uint32_t line;
@@ -108,6 +109,7 @@ struct invalid_builtin_data {
     struct source_location loc;
     unsigned char kind;
 };
+
 
 static void __ubsan_default_handler(struct source_location *loc, const char *func) __attribute__((noreturn));
 

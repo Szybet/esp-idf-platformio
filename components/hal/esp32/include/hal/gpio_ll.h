@@ -355,7 +355,7 @@ static inline void gpio_ll_input_disable(gpio_dev_t *hw, uint32_t gpio_num)
   */
 static inline void gpio_ll_input_enable(gpio_dev_t *hw, uint32_t gpio_num)
 {
-    PIN_INPUT_ENABLE(DR_REG_IO_MUX_BASE + GPIO_PIN_MUX_REG_OFFSET[gpio_num]);
+    PIN_INPUT_ENABLE(GPIO_PIN_MUX_REG[gpio_num]);
 }
 
 /**
@@ -508,7 +508,6 @@ static inline void gpio_ll_set_level(gpio_dev_t *hw, uint32_t gpio_num, uint32_t
  *     - 0 the GPIO input level is 0
  *     - 1 the GPIO input level is 1
  */
-__attribute__((always_inline))
 static inline int gpio_ll_get_level(gpio_dev_t *hw, uint32_t gpio_num)
 {
     if (gpio_num < 32) {
@@ -526,7 +525,7 @@ static inline int gpio_ll_get_level(gpio_dev_t *hw, uint32_t gpio_num)
  */
 static inline void gpio_ll_wakeup_enable(gpio_dev_t *hw, uint32_t gpio_num)
 {
-    hw->pin[gpio_num].wakeup_enable = 1;
+    hw->pin[gpio_num].wakeup_enable = 0x1;
 }
 
 /**
@@ -680,13 +679,11 @@ static inline __attribute__((always_inline)) void gpio_ll_iomux_func_sel(uint32_
 /**
  * @brief  Control the pin in the IOMUX
  *
- * @param  bmap   write mask of control value
- * @param  val    Control value
- * @param  shift  write mask shift of control value
+ * @param  val Control value
  */
-static inline __attribute__((always_inline)) void gpio_ll_set_pin_ctrl(uint32_t val, uint32_t bmap, uint32_t shift)
+static inline __attribute__((always_inline)) void gpio_ll_iomux_pin_ctrl(uint32_t val)
 {
-    SET_PERI_REG_BITS(PIN_CTRL, bmap, val, shift);
+    WRITE_PERI_REG(PIN_CTRL, val);
 }
 
 /**
@@ -702,7 +699,7 @@ static inline void gpio_ll_iomux_out(gpio_dev_t *hw, uint8_t gpio_num, int func,
 {
     hw->func_out_sel_cfg[gpio_num].oen_sel = 0;
     hw->func_out_sel_cfg[gpio_num].oen_inv_sel = oen_inv;
-    gpio_ll_func_sel(hw, gpio_num, func);
+    gpio_ll_iomux_func_sel(GPIO_PIN_MUX_REG[gpio_num], func);
 }
 
 /**

@@ -1,19 +1,8 @@
-idf_build_get_property(target IDF_TARGET)
-
-set(srcs "test_event_main.c" "test_event_common.cpp")
-set(priv_requires "esp_event unity")
-
-if(NOT ${target} STREQUAL "linux")
-    list(APPEND srcs
-        "test_event_target.c")
-
-    list(APPEND priv_requires
-        "driver"
-        "esp_timer"
-        "test_utils")
-endif()
+set(srcs "test_event_main.c"
+         "test_default_loop.c"
+         "test_event.c")
 
 idf_component_register(SRCS ${srcs}
                        PRIV_INCLUDE_DIRS . ../../private_include
-                       PRIV_REQUIRES ${priv_requires}
+                       PRIV_REQUIRES esp_event driver esp_timer unity test_utils
                        WHOLE_ARCHIVE)

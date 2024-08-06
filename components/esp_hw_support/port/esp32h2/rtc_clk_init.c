@@ -41,7 +41,6 @@ void rtc_clk_init(rtc_clk_config_t cfg)
     REG_SET_FIELD(LP_CLKRST_FOSC_CNTL_REG, LP_CLKRST_FOSC_DFREQ, cfg.clk_8m_dfreq);
     REGI2C_WRITE_MASK(I2C_PMU, I2C_PMU_OC_SCK_DCAP, cfg.slow_clk_dcap);
     REG_SET_FIELD(LP_CLKRST_RC32K_CNTL_REG, LP_CLKRST_RC32K_DFREQ, cfg.rc32k_dfreq);
-
     REGI2C_WRITE_MASK(I2C_PMU, I2C_PMU_EN_I2C_RTC_DREG, 0);
     REGI2C_WRITE_MASK(I2C_PMU, I2C_PMU_EN_I2C_DIG_DREG, 0);
 
@@ -54,8 +53,8 @@ void rtc_clk_init(rtc_clk_config_t cfg)
 
     clk_ll_rc_fast_tick_conf();
 
-    soc_xtal_freq_t xtal_freq = cfg.xtal_freq;
-    esp_rom_output_tx_wait_idle(0);
+    rtc_xtal_freq_t xtal_freq = cfg.xtal_freq;
+    esp_rom_uart_tx_wait_idle(0);
     rtc_clk_xtal_freq_update(xtal_freq);
 
     /* Set CPU frequency */

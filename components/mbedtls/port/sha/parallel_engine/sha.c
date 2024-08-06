@@ -35,11 +35,9 @@
 #include "esp_cpu.h"
 
 #include "hal/sha_hal.h"
-#include "hal/sha_ll.h"
 #include "hal/sha_types.h"
 #include "sha/sha_parallel_engine.h"
 #include "soc/hwcrypto_periph.h"
-#include "esp_private/esp_crypto_lock_internal.h"
 #include "esp_private/periph_ctrl.h"
 
 /*
@@ -153,10 +151,7 @@ static bool esp_sha_lock_engine_common(esp_sha_type sha_type, TickType_t ticks_t
     if (engines_in_use == 0) {
         /* Just locked first engine,
            so enable SHA hardware */
-        SHA_RCC_ATOMIC() {
-            sha_ll_enable_bus_clock(true);
-            sha_ll_reset_register();
-        }
+        periph_module_enable(PERIPH_SHA_MODULE);
     }
 
     engines_in_use++;
@@ -179,9 +174,7 @@ void esp_sha_unlock_engine(esp_sha_type sha_type)
     if (engines_in_use == 0) {
         /* About to release last engine, so
            disable SHA hardware */
-        SHA_RCC_ATOMIC() {
-           sha_ll_enable_bus_clock(false);
-        }
+        periph_module_disable(PERIPH_SHA_MODULE);
     }
 
     portEXIT_CRITICAL(&engines_in_use_lock);

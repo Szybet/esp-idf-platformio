@@ -11,7 +11,7 @@ Little info about the EXT_ADV_IND , AUX_ADV_IND and AUX_SYNC_IND with scanner su
 ADV_EXT_IND is over primary advertising channels and is used to indicate that an advertisement will be sent on a secondary advertisement channel. The information in ADV_EXT_IND will inform the scanner:
 
 * Which secondary advertising channel will be used by AUX_ADV_IND
-* Which PHY will be used by AUX_ADV_IND, 1M PHY, 2M PHY, or 1M Coded PHY
+* Which PHY will be used by AUX_ADV_IND, 1M PHY, 2M PHY, or 1M Coded PHY  
 * When AUX_ADV_IND will be presented on that specified secondary advertising channel
 
 If the scanner is capable of periodic advertising, it will enable its receiver at a specific channel and PHY at a specific time slot.
@@ -49,8 +49,8 @@ With this information, the scanner can synchronize with the advertiser and they 
 #include "freertos/semphr.h"
 ```
 
-These `includes` are required for the FreeRTOS and underlying system components to run, including the logging functionality and a library to store data in non-volatile flash memory. We are interested in `“bt.h”`, `“esp_bt_main.h”`, `"esp_gap_ble_api.h"` and `“esp_gattc_api.h”`, which expose the BLE APIs required to implement this example.
-
+These `includes` are required for the FreeRTOS and underlaying system components to run, including the logging functionality and a library to store data in non-volatile flash memory. We are interested in `“bt.h”`, `“esp_bt_main.h”`, `"esp_gap_ble_api.h"` and `“esp_gattc_api.h”`, which expose the BLE APIs required to implement this example.
+ 
 * `esp_bt.h`: configures the BT controller and VHCI from the host side.
 * `esp_bt_main.h`: initializes and enables the Bluedroid stack.
 * `esp_gap_ble_api.h`: implements the GAP configuration, such as advertising and connection parameters.
@@ -76,25 +76,24 @@ void app_main(void)
     esp_bt_controller_config_t bt_cfg = BT_CONTROLLER_INIT_CONFIG_DEFAULT();
     ret = esp_bt_controller_init(&bt_cfg);
     if (ret) {
-        ESP_LOGE(LOG_TAG, "%s initialize controller failed: %s", __func__, esp_err_to_name(ret)
+        ESP_LOGE(LOG_TAG, "%s initialize controller failed: %s\n", __func__, esp_err_to_name(ret)
 );
         return;
     }
 
     ret = esp_bt_controller_enable(ESP_BT_MODE_BLE);
     if (ret) {
-        ESP_LOGE(LOG_TAG, "%s enable controller failed: %s", __func__, esp_err_to_name(ret));
+        ESP_LOGE(LOG_TAG, "%s enable controller failed: %s\n", __func__, esp_err_to_name(ret));
         return;
     }
-
     ret = esp_bluedroid_init();
     if (ret) {
-        ESP_LOGE(LOG_TAG, "%s init bluetooth failed: %s", __func__, esp_err_to_name(ret));
+        ESP_LOGE(LOG_TAG, "%s init bluetooth failed: %s\n", __func__, esp_err_to_name(ret));
         return;
     }
     ret = esp_bluedroid_enable();
     if (ret) {
-        ESP_LOGE(LOG_TAG, "%s enable bluetooth failed: %s", __func__, esp_err_to_name(ret));
+        ESP_LOGE(LOG_TAG, "%s enable bluetooth failed: %s\n", __func__, esp_err_to_name(ret));
         return;
     }
     ret = esp_ble_gap_register_callback(gap_event_handler);
@@ -139,7 +138,7 @@ Next, the controller is enabled in BLE Mode.
 ```c
 ret = esp_bt_controller_enable(ESP_BT_MODE_BLE);
 ```
-> The controller should be enabled in `ESP_BT_MODE_BTDM`, if you want to use the dual mode (BLE +
+> The controller should be enabled in `ESP_BT_MODE_BTDM`, if you want to use the dual mode (BLE + 
 BT).
 
 There are four Bluetooth modes supported:
@@ -189,14 +188,14 @@ The func will be called in the context of bin semaphore esp_ble_gap_set_ext_scan
 * @brief ext scan parameters
 */
 typedef struct {
-    esp_ble_addr_type_t own_addr_type;        /*!< ext scan own address type */
+    esp_ble_addr_type_t own_addr_type;        /*!< ext scan own addresss type */
     esp_ble_scan_filter_t filter_policy;      /*!< ext scan filter policy */
     esp_ble_scan_duplicate_t  scan_duplicate; /*!< ext scan duplicate scan */
     esp_ble_ext_scan_cfg_mask_t cfg_mask;     /*!< ext scan config mask */
     esp_ble_ext_scan_cfg_t uncoded_cfg;       /*!< ext scan uncoded config parameters */
     esp_ble_ext_scan_cfg_t coded_cfg;         /*!< ext scan coded config parameters */
 } esp_ble_ext_scan_params_t;
-
+   
  /**
  * @brief ext scan config
  */
@@ -212,13 +211,13 @@ can.*/
 
      uint16_t scan_window;          /*!< ext scan window. The duration of the LE scan
 . LE_Scan_Window shall be less than or equal to LE_Scan_Interval*/
-    //Range: 0x0004 to 0x4000                                                            //Default
+    //Range: 0x0004 to 0x4000                                                            //Defaul
 t: 0x0010 (10 ms)
     //Time = N * 0.625 msec
     //Time Range: 2.5 msec to 10240 msec
 
  } esp_ble_ext_scan_cfg_t;
-
+ 
 ```
 An it is initialized as :
 
@@ -257,7 +256,7 @@ typedef struct {
     uint16_t skip;                          /*!< Maximum number of periodic advertising events that can be skipped */
     uint16_t sync_timeout;                  /*!< Synchronization timeout */
 } esp_ble_gap_periodic_adv_sync_params_t;
-
+   
 ```
 An it is initialized as:
 ```c
@@ -267,7 +266,7 @@ static esp_ble_gap_periodic_adv_sync_params_t periodic_adv_sync_params = {
      .addr_type = BLE_ADDR_TYPE_RANDOM,
      .skip = 10,
      .sync_timeout = 1000,
- };
+ };   
 ```
  The BLE scan parameters are configured so that the type of scanning is active (includes reading he scanning response), it is of public type, allows any advertising device to be read and has a scanning interval of 80 ms (1.25 ms * 0x40) and a scanning window of 80 ms (1.25 ms * 0x40).
 
@@ -344,9 +343,9 @@ dv_sync_estab.status);
         ESP_LOGI(LOG_TAG, "periodic adv report, sync handle %d data status %d data len %d rssi %d
 ", param->period_adv_report.params.sync_handle,
    param->period_adv_report.params.data_status,
-
+                                                                                              
    param->period_adv_report.params.data_length,
-
+                                                                                                 
    param->period_adv_report.params.rssi);
         break;
 

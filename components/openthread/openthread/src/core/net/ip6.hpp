@@ -350,6 +350,26 @@ public:
     void ResetBorderRoutingCounters(void) { ClearAllBytes(mBorderRoutingCounters); }
 #endif
 
+#if OPENTHREAD_CONFIG_REFERENCE_DEVICE_ENABLE
+
+    /**
+     * Enables or disables the filter that drops TMF UDP messages from untrusted origin.
+     *
+     * @param[in]  aEnabled  TRUE to enable filter, FALSE otherwise.
+     *
+     */
+    void SetTmfOriginFilterEnabled(bool aEnabled) { mTmfOriginFilterEnabled = aEnabled; }
+
+    /**
+     * Indicates whether the filter that drops TMF UDP messages from untrusted origin is enabled or not.
+     *
+     * @returns TRUE if the filter is enabled, FALSE otherwise.
+     *
+     */
+    bool IsTmfOriginFilterEnabled(void) { return mTmfOriginFilterEnabled; }
+
+#endif
+
 private:
     static constexpr uint8_t kDefaultHopLimit      = OPENTHREAD_CONFIG_IP6_HOP_LIMIT_DEFAULT;
     static constexpr uint8_t kIp6ReassemblyTimeout = OPENTHREAD_CONFIG_IP6_REASSEMBLY_TIMEOUT;
@@ -382,6 +402,7 @@ private:
     void UpdateReassemblyList(void);
     void SendIcmpError(Message &aMessage, Icmp::Header::Type aIcmpType, Icmp::Header::Code aIcmpCode);
 #endif
+    Error ReadHopByHopHeader(const Message &aMessage, OffsetRange &aOffsetRange, HopByHopHeader &aHbhHeader) const;
     Error AddMplOption(Message &aMessage, Header &aHeader);
     Error PrepareMulticastToLargerThanRealmLocal(Message &aMessage, const Header &aHeader);
     Error InsertMplOption(Message &aMessage, Header &aHeader);
@@ -401,6 +422,10 @@ private:
     using SendQueueTask = TaskletIn<Ip6, &Ip6::HandleSendQueue>;
 
     bool mIsReceiveIp6FilterEnabled;
+
+#if OPENTHREAD_CONFIG_REFERENCE_DEVICE_ENABLE
+    bool mTmfOriginFilterEnabled : 1;
+#endif
 
     Callback<otIp6ReceiveCallback> mReceiveIp6DatagramCallback;
 

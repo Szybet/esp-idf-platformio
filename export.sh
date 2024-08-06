@@ -19,7 +19,7 @@ __verbose() {
 
 __script_dir(){
     # shellcheck disable=SC2169,SC2169,SC2039,SC3010,SC3028  # unreachable with 'dash'
-    if [ "$(uname -s)" = "Darwin" ]; then
+    if [[ "$OSTYPE" == "darwin"* ]]; then
         # convert possibly relative path to absolute
         script_dir="$(__realpath "${self_path}")"
         # resolve any ../ references to make the path shorter
@@ -65,7 +65,6 @@ __main() {
         self_path="${BASH_SOURCE}"
     elif [ -n "${ZSH_VERSION-}" ]
     then
-    # shellcheck disable=SC2296  # ignore parameter starts with '{' because it's zsh
         self_path="${(%):-%x}"
     fi
 
@@ -139,7 +138,7 @@ __main() {
 
     if [ -n "$BASH" ]
     then
-        path_prefix="${PATH%%"${old_path}"}"
+        path_prefix=${PATH%%${old_path}}
         # shellcheck disable=SC2169,SC2039  # unreachable with 'dash'
         if [ -n "${path_prefix}" ]; then
             __verbose "Added the following directories to PATH:"
@@ -202,7 +201,7 @@ __cleanup() {
     # Not unsetting IDF_PYTHON_ENV_PATH, it can be used by IDF build system
     # to check whether we are using a private Python environment
 
-    return "$1"
+    return $1
 }
 
 
@@ -223,7 +222,7 @@ __enable_autocomplete() {
     elif [ -n "${BASH_SOURCE-}" ]
     then
         WARNING_MSG="WARNING: Failed to load shell autocompletion for bash version: $BASH_VERSION!"
-        # shellcheck disable=SC3028,SC3054,SC2086,SC2169  # code block for 'bash' only
+        # shellcheck disable=SC3028,SC3054,SC2086  # code block for 'bash' only
         [ ${BASH_VERSINFO[0]} -lt 4 ] && { echo "$WARNING_MSG"; return; }
         eval "$(env LANG=en _IDF.PY_COMPLETE=$SOURCE_BASH idf.py)"  || echo "$WARNING_MSG"
     fi

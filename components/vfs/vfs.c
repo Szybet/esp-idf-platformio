@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2015-2024 Espressif Systems (Shanghai) CO LTD
+ * SPDX-FileCopyrightText: 2015-2022 Espressif Systems (Shanghai) CO LTD
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -270,49 +270,6 @@ esp_err_t esp_vfs_unregister_fd(esp_vfs_id_t vfs_id, int fd)
     return ret;
 }
 
-void esp_vfs_dump_fds(FILE *fp)
-{
-    const vfs_entry_t* vfs;
-    fprintf(fp, "------------------------------------------------------\n");
-    fprintf(fp, "<VFS Path Prefix>-<FD seen by App>-<FD seen by driver>\n");
-    fprintf(fp, "------------------------------------------------------\n");
-    _lock_acquire(&s_fd_table_lock);
-    for (int index = 0; index < MAX_FDS; index++) {
-        if (s_fd_table[index].vfs_index != -1) {
-            vfs = s_vfs[s_fd_table[index].vfs_index];
-            if (strcmp(vfs->path_prefix, "")) {
-                fprintf(fp, "(%s) - 0x%x - 0x%x\n", vfs->path_prefix, index, s_fd_table[index].local_fd);
-            } else {
-                fprintf(fp, "(socket) - 0x%x - 0x%x\n", index, s_fd_table[index].local_fd);
-            }
-        }
-    }
-    _lock_release(&s_fd_table_lock);
-}
-
-/*
- * Set ESP_VFS_FLAG_READONLY_FS read-only flag for a registered virtual filesystem
- * for given path prefix. Should be only called from the esp_vfs_*filesystem* register
- * or helper mount functions where vfs_t is not available to set the read-only
- * flag directly (e.g. esp_vfs_fat_spiflash_mount_rw_wl).
- */
-esp_err_t esp_vfs_set_readonly_flag(const char* base_path)
-{
-    const size_t base_path_len = strlen(base_path);
-    for (size_t i = 0; i < s_vfs_count; ++i) {
-        vfs_entry_t* vfs = s_vfs[i];
-        if (vfs == NULL) {
-            continue;
-        }
-        if (base_path_len == vfs->path_prefix_len &&
-                memcmp(base_path, vfs->path_prefix, vfs->path_prefix_len) == 0) {
-            vfs->vfs.flags |= ESP_VFS_FLAG_READONLY_FS;
-            return ESP_OK;
-        }
-    }
-    return ESP_ERR_INVALID_STATE;
-}
-
 const vfs_entry_t *get_vfs_for_index(int index)
 {
     if (index < 0 || index >= s_vfs_count) {
@@ -444,12 +401,6 @@ const vfs_entry_t* get_vfs_for_path(const char* path)
         ret = (*pvfs->vfs.func)(__VA_ARGS__);\
     }
 
-#define CHECK_VFS_READONLY_FLAG(flags) \
-    if (flags & ESP_VFS_FLAG_READONLY_FS) { \
-        __errno_r(r) = EROFS; \
-        return -1; \
-    }
-
 int esp_vfs_open(struct _reent *r, const char * path, int flags, int mode)
 {
     const vfs_entry_t *vfs = get_vfs_for_path(path);
@@ -457,14 +408,6 @@ int esp_vfs_open(struct _reent *r, const char * path, int flags, int mode)
         __errno_r(r) = ENOENT;
         return -1;
     }
-
-    int acc_mode = flags & O_ACCMODE;
-    int ro_filesystem = vfs->vfs.flags & ESP_VFS_FLAG_READONLY_FS;
-    if (acc_mode != O_RDONLY && ro_filesystem) {
-        __errno_r(r) = EROFS;
-        return -1;
-    }
-
     const char *path_within_vfs = translate_path(vfs, path);
     int fd_within_vfs;
     CHECK_AND_CALL(fd_within_vfs, r, vfs, open, path_within_vfs, flags, mode);
@@ -678,9 +621,6 @@ int esp_vfs_link(struct _reent *r, const char* n1, const char* n2)
         __errno_r(r) = EXDEV;
         return -1;
     }
-
-    CHECK_VFS_READONLY_FLAG(vfs2->vfs.flags);
-
     const char* path1_within_vfs = translate_path(vfs, n1);
     const char* path2_within_vfs = translate_path(vfs, n2);
     int ret;
@@ -695,9 +635,6 @@ int esp_vfs_unlink(struct _reent *r, const char *path)
         __errno_r(r) = ENOENT;
         return -1;
     }
-
-    CHECK_VFS_READONLY_FLAG(vfs->vfs.flags);
-
     const char* path_within_vfs = translate_path(vfs, path);
     int ret;
     CHECK_AND_CALL(ret, r, vfs, unlink, path_within_vfs);
@@ -711,17 +648,11 @@ int esp_vfs_rename(struct _reent *r, const char *src, const char *dst)
         __errno_r(r) = ENOENT;
         return -1;
     }
-
-    CHECK_VFS_READONLY_FLAG(vfs->vfs.flags);
-
     const vfs_entry_t* vfs_dst = get_vfs_for_path(dst);
     if (vfs != vfs_dst) {
         __errno_r(r) = EXDEV;
         return -1;
     }
-
-    CHECK_VFS_READONLY_FLAG(vfs_dst->vfs.flags);
-
     const char* src_within_vfs = translate_path(vfs, src);
     const char* dst_within_vfs = translate_path(vfs, dst);
     int ret;
@@ -822,9 +753,6 @@ int esp_vfs_mkdir(const char* name, mode_t mode)
         __errno_r(r) = ENOENT;
         return -1;
     }
-
-    CHECK_VFS_READONLY_FLAG(vfs->vfs.flags);
-
     const char* path_within_vfs = translate_path(vfs, name);
     int ret;
     CHECK_AND_CALL(ret, r, vfs, mkdir, path_within_vfs, mode);
@@ -839,9 +767,6 @@ int esp_vfs_rmdir(const char* name)
         __errno_r(r) = ENOENT;
         return -1;
     }
-
-    CHECK_VFS_READONLY_FLAG(vfs->vfs.flags);
-
     const char* path_within_vfs = translate_path(vfs, name);
     int ret;
     CHECK_AND_CALL(ret, r, vfs, rmdir, path_within_vfs);
@@ -871,9 +796,6 @@ int esp_vfs_truncate(const char *path, off_t length)
         __errno_r(r) = ENOENT;
         return -1;
     }
-
-    CHECK_VFS_READONLY_FLAG(vfs->vfs.flags);
-
     const char* path_within_vfs = translate_path(vfs, path);
     CHECK_AND_CALL(ret, r, vfs, truncate, path_within_vfs, length);
     return ret;
@@ -888,9 +810,6 @@ int esp_vfs_ftruncate(int fd, off_t length)
         __errno_r(r) = EBADF;
         return -1;
     }
-
-    CHECK_VFS_READONLY_FLAG(vfs->vfs.flags);
-
     int ret;
     CHECK_AND_CALL(ret, r, vfs, ftruncate, local_fd, length);
     return ret;
@@ -1401,5 +1320,5 @@ void rewinddir(DIR* pdir)
 
 void vfs_include_syscalls_impl(void)
 {
-    // Linker hook function, exists to make the linker examine this file
+    // Linker hook function, exists to make the linker examine this fine
 }

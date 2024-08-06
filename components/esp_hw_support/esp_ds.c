@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2020-2024 Espressif Systems (Shanghai) CO LTD
+ * SPDX-FileCopyrightText: 2020-2022 Espressif Systems (Shanghai) CO LTD
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -14,7 +14,6 @@
 #include "esp_timer.h"
 #include "esp_ds.h"
 #include "esp_crypto_lock.h"
-#include "esp_private/esp_crypto_lock_internal.h"
 #include "esp_hmac.h"
 #include "esp_memory_utils.h"
 #if CONFIG_IDF_TARGET_ESP32S2
@@ -24,12 +23,9 @@
 #include "soc/soc_memory_layout.h"
 #else /* CONFIG_IDF_TARGET_ESP32S2 */
 #include "esp_private/periph_ctrl.h"
-#include "hal/aes_ll.h"
 #include "hal/ds_hal.h"
 #include "hal/ds_ll.h"
 #include "hal/hmac_hal.h"
-#include "hal/hmac_ll.h"
-#include "hal/sha_ll.h"
 #endif /* !CONFIG_IDF_TARGET_ESP32S2 */
 
 #if CONFIG_IDF_TARGET_ESP32S2
@@ -48,17 +44,10 @@
 #include "esp32c6/rom/digital_signature.h"
 #endif
 
-#if CONFIG_IDF_TARGET_ESP32C5
-#include "esp32c5/rom/digital_signature.h"
-#endif
-
 #if CONFIG_IDF_TARGET_ESP32H2
 #include "esp32h2/rom/digital_signature.h"
 #endif
 
-#if CONFIG_IDF_TARGET_ESP32P4
-#include "esp32p4/rom/digital_signature.h"
-#endif
 
 struct esp_ds_context {
     const ets_ds_data_t *data;
@@ -266,20 +255,9 @@ static void ds_acquire_enable(void)
     esp_crypto_mpi_lock_acquire();
 #endif
     // We also enable SHA and HMAC here. SHA is used by HMAC, HMAC is used by DS.
-    HMAC_RCC_ATOMIC() {
-        hmac_ll_enable_bus_clock(true);
-        hmac_ll_reset_register();
-    }
-
-    SHA_RCC_ATOMIC() {
-        sha_ll_enable_bus_clock(true);
-        sha_ll_reset_register();
-    }
-
-    DS_RCC_ATOMIC() {
-        ds_ll_enable_bus_clock(true);
-        ds_ll_reset_register();
-    }
+    periph_module_enable(PERIPH_HMAC_MODULE);
+    periph_module_enable(PERIPH_SHA_MODULE);
+    periph_module_enable(PERIPH_DS_MODULE);
 
     hmac_hal_start();
 }
@@ -288,17 +266,9 @@ static void ds_disable_release(void)
 {
     ds_hal_finish();
 
-    DS_RCC_ATOMIC() {
-        ds_ll_enable_bus_clock(false);
-    }
-
-    SHA_RCC_ATOMIC() {
-        sha_ll_enable_bus_clock(false);
-    }
-
-    HMAC_RCC_ATOMIC() {
-        hmac_ll_enable_bus_clock(false);
-    }
+    periph_module_disable(PERIPH_DS_MODULE);
+    periph_module_disable(PERIPH_SHA_MODULE);
+    periph_module_disable(PERIPH_HMAC_MODULE);
 
 #if CONFIG_IDF_TARGET_ESP32S3
     esp_crypto_mpi_lock_release();
@@ -441,20 +411,12 @@ esp_err_t esp_ds_encrypt_params(esp_ds_data_t *data,
 
     esp_err_t result = ESP_OK;
 
-    // The `esp_ds_encrypt_params` operation does not use the Digital Signature peripheral,
-    // but just the AES and SHA peripherals, so acquiring locks just for these peripherals
-    // would be enough rather than acquiring a lock for the Digital Signature peripheral.
-    esp_crypto_sha_aes_lock_acquire();
-
-    AES_RCC_ATOMIC() {
-        aes_ll_enable_bus_clock(true);
-        aes_ll_reset_register();
-    }
-
-    SHA_RCC_ATOMIC() {
-        sha_ll_enable_bus_clock(true);
-        sha_ll_reset_register();
-    }
+    esp_crypto_ds_lock_acquire();
+    periph_module_enable(PERIPH_AES_MODULE);
+    periph_module_enable(PERIPH_DS_MODULE);
+    periph_module_enable(PERIPH_SHA_MODULE);
+    periph_module_enable(PERIPH_HMAC_MODULE);
+    periph_module_enable(PERIPH_RSA_MODULE);
 
     ets_ds_data_t *ds_data = (ets_ds_data_t *) data;
     const ets_ds_p_data_t *ds_plain_data = (const ets_ds_p_data_t *) p_data;
@@ -465,15 +427,12 @@ esp_err_t esp_ds_encrypt_params(esp_ds_data_t *data,
         result = ESP_ERR_INVALID_ARG;
     }
 
-    SHA_RCC_ATOMIC() {
-        sha_ll_enable_bus_clock(false);
-    }
-
-    AES_RCC_ATOMIC() {
-        aes_ll_enable_bus_clock(false);
-    }
-
-    esp_crypto_sha_aes_lock_release();
+    periph_module_disable(PERIPH_RSA_MODULE);
+    periph_module_disable(PERIPH_HMAC_MODULE);
+    periph_module_disable(PERIPH_SHA_MODULE);
+    periph_module_disable(PERIPH_DS_MODULE);
+    periph_module_disable(PERIPH_AES_MODULE);
+    esp_crypto_ds_lock_release();
 
     return result;
 }

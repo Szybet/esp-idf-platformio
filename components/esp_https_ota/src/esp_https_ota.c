@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2017-2024 Espressif Systems (Shanghai) CO LTD
+ * SPDX-FileCopyrightText: 2017-2023 Espressif Systems (Shanghai) CO LTD
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -374,11 +374,7 @@ esp_err_t esp_https_ota_begin(const esp_https_ota_config_t *ota_config, esp_http
         https_ota_handle->update_partition->subtype, https_ota_handle->update_partition->address);
 
     const int alloc_size = MAX(ota_config->http_config->buffer_size, DEFAULT_OTA_BUF_SIZE);
-    if (ota_config->buffer_caps != 0) {
-        https_ota_handle->ota_upgrade_buf = (char *)heap_caps_malloc(alloc_size, ota_config->buffer_caps);
-    } else {
-        https_ota_handle->ota_upgrade_buf = (char *)malloc(alloc_size);
-    }
+    https_ota_handle->ota_upgrade_buf = (char *)malloc(alloc_size);
     if (!https_ota_handle->ota_upgrade_buf) {
         ESP_LOGE(TAG, "Couldn't allocate memory to upgrade data buffer");
         err = ESP_ERR_NO_MEM;
@@ -455,11 +451,11 @@ esp_err_t esp_https_ota_get_img_desc(esp_https_ota_handle_t https_ota_handle, es
 
     esp_https_ota_t *handle = (esp_https_ota_t *)https_ota_handle;
     if (handle == NULL || new_app_info == NULL)  {
-        ESP_LOGE(TAG, "esp_https_ota_get_img_desc: Invalid argument");
+        ESP_LOGE(TAG, "esp_https_ota_read_img_desc: Invalid argument");
         return ESP_ERR_INVALID_ARG;
     }
     if (handle->state < ESP_HTTPS_OTA_BEGIN) {
-        ESP_LOGE(TAG, "esp_https_ota_get_img_desc: Invalid state");
+        ESP_LOGE(TAG, "esp_https_ota_read_img_desc: Invalid state");
         return ESP_ERR_INVALID_STATE;
     }
     if (read_header(handle) != ESP_OK) {
@@ -503,7 +499,7 @@ esp_err_t esp_https_ota_perform(esp_https_ota_handle_t https_ota_handle)
 
     esp_err_t err;
     int data_read;
-    const int erase_size = handle->bulk_flash_erase ? (handle->image_length > 0 ? handle->image_length : OTA_SIZE_UNKNOWN) : OTA_WITH_SEQUENTIAL_WRITES;
+    const int erase_size = handle->bulk_flash_erase ? OTA_SIZE_UNKNOWN : OTA_WITH_SEQUENTIAL_WRITES;
     switch (handle->state) {
         case ESP_HTTPS_OTA_BEGIN:
             err = esp_ota_begin(handle->update_partition, erase_size, &handle->update_handle);
@@ -512,7 +508,7 @@ esp_err_t esp_https_ota_perform(esp_https_ota_handle_t https_ota_handle)
                 return err;
             }
             handle->state = ESP_HTTPS_OTA_IN_PROGRESS;
-            /* In case `esp_https_ota_get_img_desc` was invoked first,
+            /* In case `esp_https_ota_read_img_desc` was invoked first,
                then the image data read there should be written to OTA partition
                */
             int binary_file_len = 0;

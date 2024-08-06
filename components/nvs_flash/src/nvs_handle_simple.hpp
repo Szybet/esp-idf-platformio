@@ -51,8 +51,6 @@ public:
 
     esp_err_t get_item_size(ItemType datatype, const char *key, size_t &size) override;
 
-    esp_err_t find_key(const char *key, nvs_type_t &nvstype) override;
-
     esp_err_t erase_item(const char *key) override;
 
     esp_err_t erase_all() override;
@@ -71,13 +69,9 @@ public:
 
     bool findEntry(nvs_opaque_iterator_t *it, const char *name);
 
-    bool findEntryNs(nvs_opaque_iterator_t *it);
-
     bool nextEntry(nvs_opaque_iterator_t *it);
 
     const char *get_partition_name() const;
-
-    Storage *get_storage() const;
 
 private:
     /**

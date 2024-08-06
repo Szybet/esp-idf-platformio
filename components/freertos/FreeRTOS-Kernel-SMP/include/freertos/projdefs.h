@@ -1,12 +1,6 @@
 /*
- * FreeRTOS Kernel V11.0.1
- * Copyright (C) 2021 Amazon.com, Inc. or its affiliates.  All Rights Reserved.
- *
- * SPDX-FileCopyrightText: 2021 Amazon.com, Inc. or its affiliates
- *
- * SPDX-License-Identifier: MIT
- *
- * SPDX-FileContributor: 2023-2024 Espressif Systems (Shanghai) CO LTD
+ * FreeRTOS SMP Kernel V202110.00
+ * Copyright (C) 2020 Amazon.com, Inc. or its affiliates.  All Rights Reserved.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy of
  * this software and associated documentation files (the "Software"), to deal in
@@ -37,28 +31,17 @@
  * Defines the prototype to which task functions must conform.  Defined in this
  * file to ensure the type is known before portable.h is included.
  */
-typedef void (* TaskFunction_t)( void * arg );
+typedef void (* TaskFunction_t)( void * );
 
 /* Converts a time in milliseconds to a time in ticks.  This macro can be
  * overridden by a macro of the same name defined in FreeRTOSConfig.h in case the
  * definition here is not suitable for your application. */
 #ifndef pdMS_TO_TICKS
-    #define pdMS_TO_TICKS( xTimeInMs )    ( ( TickType_t ) ( ( ( uint64_t ) ( xTimeInMs ) * ( uint64_t ) configTICK_RATE_HZ ) / ( uint64_t ) 1000U ) )
-#endif
-
-/* Converts a time in ticks to a time in milliseconds.  This macro can be
- * overridden by a macro of the same name defined in FreeRTOSConfig.h in case the
- * definition here is not suitable for your application. */
-#ifndef pdTICKS_TO_MS
-    #define pdTICKS_TO_MS( xTimeInTicks )    ( ( TickType_t ) ( ( ( uint64_t ) ( xTimeInTicks ) * ( uint64_t ) 1000U ) / ( uint64_t ) configTICK_RATE_HZ ) )
+    #define pdMS_TO_TICKS( xTimeInMs )    ( ( TickType_t ) ( ( ( TickType_t ) ( xTimeInMs ) * ( TickType_t ) configTICK_RATE_HZ ) / ( TickType_t ) 1000U ) )
 #endif
 
 #define pdFALSE                                  ( ( BaseType_t ) 0 )
 #define pdTRUE                                   ( ( BaseType_t ) 1 )
-#define pdFALSE_SIGNED                           ( ( BaseType_t ) 0 )
-#define pdTRUE_SIGNED                            ( ( BaseType_t ) 1 )
-#define pdFALSE_UNSIGNED                         ( ( UBaseType_t ) 0 )
-#define pdTRUE_UNSIGNED                          ( ( UBaseType_t ) 1 )
 
 #define pdPASS                                   ( pdTRUE )
 #define pdFAIL                                   ( pdFALSE )
@@ -75,14 +58,10 @@ typedef void (* TaskFunction_t)( void * arg );
     #define configUSE_LIST_DATA_INTEGRITY_CHECK_BYTES    0
 #endif
 
-#if ( configTICK_TYPE_WIDTH_IN_BITS == TICK_TYPE_WIDTH_16_BITS )
+#if ( configUSE_16_BIT_TICKS == 1 )
     #define pdINTEGRITY_CHECK_VALUE    0x5a5a
-#elif ( configTICK_TYPE_WIDTH_IN_BITS == TICK_TYPE_WIDTH_32_BITS )
-    #define pdINTEGRITY_CHECK_VALUE    0x5a5a5a5aUL
-#elif ( configTICK_TYPE_WIDTH_IN_BITS == TICK_TYPE_WIDTH_64_BITS )
-    #define pdINTEGRITY_CHECK_VALUE    0x5a5a5a5a5a5a5a5aULL
 #else
-    #error configTICK_TYPE_WIDTH_IN_BITS set to unsupported tick type width.
+    #define pdINTEGRITY_CHECK_VALUE    0x5a5a5a5aUL
 #endif
 
 /* The following errno values are used by FreeRTOS+ components, not FreeRTOS
@@ -115,7 +94,6 @@ typedef void (* TaskFunction_t)( void * arg );
 #define pdFREERTOS_ERRNO_ENOTEMPTY        90  /* Directory not empty */
 #define pdFREERTOS_ERRNO_ENAMETOOLONG     91  /* File or path name too long */
 #define pdFREERTOS_ERRNO_EOPNOTSUPP       95  /* Operation not supported on transport endpoint */
-#define pdFREERTOS_ERRNO_EAFNOSUPPORT     97  /* Address family not supported by protocol */
 #define pdFREERTOS_ERRNO_ENOBUFS          105 /* No buffer space available */
 #define pdFREERTOS_ERRNO_ENOPROTOOPT      109 /* Protocol not available */
 #define pdFREERTOS_ERRNO_EADDRINUSE       112 /* Address already in use */
@@ -138,5 +116,17 @@ typedef void (* TaskFunction_t)( void * arg );
 #define pdLITTLE_ENDIAN                   pdFREERTOS_LITTLE_ENDIAN
 #define pdBIG_ENDIAN                      pdFREERTOS_BIG_ENDIAN
 
+
+/* ------------------------------------------------ IDF Compatibility --------------------------------------------------
+ *
+ * ------------------------------------------------------------------------------------------------------------------ */
+
+#ifdef ESP_PLATFORM
+
+#ifndef pdTICKS_TO_MS
+    #define pdTICKS_TO_MS( xTicks )   ( ( TickType_t ) ( ( uint64_t ) ( xTicks ) * 1000 / configTICK_RATE_HZ ) )
+#endif
+
+#endif // ESP_PLATFORM
 
 #endif /* PROJDEFS_H */

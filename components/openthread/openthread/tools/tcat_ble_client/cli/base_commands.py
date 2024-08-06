@@ -27,7 +27,7 @@
 """
 
 from ble.ble_connection_constants import BBTC_SERVICE_UUID, BBTC_TX_CHAR_UUID, \
-    BBTC_RX_CHAR_UUID, SERVER_COMMON_NAME
+    BBTC_RX_CHAR_UUID
 from ble.ble_stream import BleStream
 from ble.ble_stream_secure import BleStreamSecure
 from ble import ble_scanner
@@ -37,6 +37,8 @@ from cli.command import Command, CommandResultNone, CommandResultTLV
 from dataset.dataset import ThreadDataset
 from utils import select_device_by_user_input
 from os import path
+from time import time
+from secrets import token_bytes
 
 
 class HelpCommand(Command):
@@ -84,6 +86,53 @@ class CommissionCommand(Command):
         if not response:
             return
         tlv_response = TLV.from_bytes(response)
+        return CommandResultTLV(tlv_response)
+
+
+class DecommissionCommand(Command):
+
+    def get_help_string(self) -> str:
+        return 'Stop Thread interface and decommission device from current network.'
+
+    async def execute_default(self, args, context):
+        bless: BleStreamSecure = context['ble_sstream']
+        print('Disabling Thread and decommissioning device...')
+        data = (TLV(TcatTLVType.DECOMMISSION.value, bytes()).to_bytes())
+        response = await bless.send_with_resp(data)
+        if not response:
+            return
+        tlv_response = TLV.from_bytes(response)
+        return CommandResultTLV(tlv_response)
+
+
+class PingCommand(Command):
+
+    def get_help_string(self) -> str:
+        return 'Send echo request to TCAT device.'
+
+    async def execute_default(self, args, context):
+        bless: BleStreamSecure = context['ble_sstream']
+        payload_size = 10
+        max_payload = 512
+        if len(args) > 0:
+            payload_size = int(args[0])
+            if payload_size > max_payload:
+                print(f'Payload size too large. Maximum supported value is {max_payload}')
+                return
+        to_send = token_bytes(payload_size)
+        data = TLV(TcatTLVType.PING.value, to_send).to_bytes()
+        elapsed_time = time()
+        response = await bless.send_with_resp(data)
+        elapsed_time = time() - elapsed_time
+        if not response:
+            return
+
+        tlv_response = TLV.from_bytes(response)
+        if tlv_response.value != to_send:
+            print("Received malformed response.")
+
+        print(f"Roundtrip time {elapsed_time} s.")
+
         return CommandResultTLV(tlv_response)
 
 
@@ -160,6 +209,6 @@ class ScanCommand(Command):
         )
 
         print('Setting up secure channel...')
-        await ble_sstream.do_handshake(hostname=SERVER_COMMON_NAME)
+        await ble_sstream.do_handshake()
         print('Done')
         context['ble_sstream'] = ble_sstream

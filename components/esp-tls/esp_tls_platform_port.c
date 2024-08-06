@@ -4,8 +4,9 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#include "sdkconfig.h"
 #include <stdint.h>
+#include "sdkconfig.h"
+
 #if CONFIG_IDF_TARGET_LINUX
 #include <sys/time.h>
 #include <time.h>

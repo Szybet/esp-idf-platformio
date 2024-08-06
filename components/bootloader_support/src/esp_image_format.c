@@ -7,10 +7,12 @@
 #include <sys/param.h>
 #include <esp_cpu.h>
 #include <bootloader_utility.h>
+#include <bootloader_signature.h>
 #include <esp_secure_boot.h>
 #include <esp_fault.h>
 #include <esp_log.h>
 #include <esp_attr.h>
+#include <spi_flash_mmap.h>
 #include <bootloader_flash_priv.h>
 #include <bootloader_random.h>
 #include <bootloader_sha.h>
@@ -21,7 +23,24 @@
 #include "esp_app_desc.h"
 #include "bootloader_memory_utils.h"
 #include "soc/soc_caps.h"
-#include "hal/cache_ll.h"
+#if CONFIG_IDF_TARGET_ESP32
+#include "esp32/rom/secure_boot.h"
+#elif CONFIG_IDF_TARGET_ESP32S2
+#include "esp32s2/rom/secure_boot.h"
+#elif CONFIG_IDF_TARGET_ESP32S3
+#include "esp32s3/rom/secure_boot.h"
+#elif CONFIG_IDF_TARGET_ESP32C3
+#include "esp32c3/rom/secure_boot.h"
+#elif CONFIG_IDF_TARGET_ESP32C2
+#include "esp32c2/rom/rtc.h"
+#include "esp32c2/rom/secure_boot.h"
+#elif CONFIG_IDF_TARGET_ESP32C6
+#include "esp32c6/rom/rtc.h"
+#include "esp32c6/rom/secure_boot.h"
+#elif CONFIG_IDF_TARGET_ESP32H2
+#include "esp32h2/rom/rtc.h"
+#include "esp32h2/rom/secure_boot.h"
+#endif
 
 #define ALIGN_UP(num, align) (((num) + ((align) - 1)) & ~((align) - 1))
 
@@ -215,11 +234,6 @@ static esp_err_t image_load(esp_image_load_mode_t mode, const esp_partition_pos_
                 }
             }
         }
-#if SOC_CACHE_INTERNAL_MEM_VIA_L1CACHE
-        /* We have manipulated data over dcache that will be read over icache and need
-           to writeback, else the data read might be invalid */
-        cache_ll_writeback_all(CACHE_LL_LEVEL_INT_MEM, CACHE_TYPE_DATA, CACHE_LL_ID_ALL);
-#endif
     }
 
 #if CONFIG_BOOTLOADER_APP_ANTI_ROLLBACK
@@ -462,12 +476,6 @@ static bool verify_load_addresses(int segment_index, intptr_t load_addr, intptr_
     }
 #endif
 
-#if SOC_MEM_TCM_SUPPORTED
-    else if (esp_ptr_in_tcm(load_addr_p) && esp_ptr_in_tcm(load_inclusive_end_p)) {
-        return true;
-    }
-#endif
-
     else { /* Not a DRAM or an IRAM or RTC Fast IRAM, RTC Fast DRAM or RTC Slow address */
         reason = "bad load address range";
         goto invalid;
@@ -665,13 +673,6 @@ static esp_err_t process_segment_data(int segment, intptr_t load_addr, uint32_t 
 
     if (checksum == NULL && sha_handle == NULL) {
         memcpy((void *)load_addr, data, data_len);
-#if SOC_CACHE_INTERNAL_MEM_VIA_L1CACHE
-        if (esp_ptr_in_iram((uint32_t *)load_addr)) {
-            /* If we have manipulated data over dcache that will be read over icache then we need
-               to writeback, else the data read might be invalid */
-            cache_ll_writeback_all(CACHE_LL_LEVEL_INT_MEM, CACHE_TYPE_DATA, CACHE_LL_ID_ALL);
-        }
-#endif
         bootloader_munmap(data);
         return ESP_OK;
     }
@@ -726,13 +727,6 @@ static esp_err_t process_segment_data(int segment, intptr_t load_addr, uint32_t 
                                    MIN(SHA_CHUNK, data_len - i));
         }
     }
-#if SOC_CACHE_INTERNAL_MEM_VIA_L1CACHE
-    if (do_load && esp_ptr_in_iram((uint32_t *)load_addr)) {
-        /* If we have manipulated data over dcache that will be read over icache then we need
-           to writeback, else the data read might be invalid */
-        cache_ll_writeback_all(CACHE_LL_LEVEL_INT_MEM, CACHE_TYPE_DATA, CACHE_LL_ID_ALL);
-    }
-#endif
 
     bootloader_munmap(data);
 
@@ -771,14 +765,8 @@ static esp_err_t verify_segment_header(int index, const esp_image_segment_header
 
 static bool should_map(uint32_t load_addr)
 {
-    bool is_irom = (load_addr >= SOC_IROM_LOW) && (load_addr < SOC_IROM_HIGH);
-    bool is_drom = (load_addr >= SOC_DROM_LOW) && (load_addr < SOC_DROM_HIGH);
-    bool is_psram = false;
-#if SOC_MMU_PER_EXT_MEM_TARGET
-    is_psram = (load_addr >= SOC_EXTRAM_LOW) && (load_addr < SOC_EXTRAM_HIGH);
-#endif
-
-    return (is_irom || is_drom || is_psram);
+    return (load_addr >= SOC_IROM_LOW && load_addr < SOC_IROM_HIGH)
+           || (load_addr >= SOC_DROM_LOW && load_addr < SOC_DROM_HIGH);
 }
 
 static bool should_load(uint32_t load_addr)
@@ -863,7 +851,7 @@ static esp_err_t process_appended_hash_and_sig(esp_image_metadata_t *data, uint3
 
     // Case I: Bootloader part
     if (part_offset == ESP_BOOTLOADER_OFFSET) {
-        // For bootloader with secure boot v1, signature stays in an independent flash
+        // For bootloader with secure boot v1, signature stays in an independant flash
         // sector (offset 0x0)  and does not get appended to the image.
 #if CONFIG_SECURE_BOOT_V2_ENABLED
         // Sanity check - secure boot v2 signature block starts on 4K boundary
@@ -1017,8 +1005,8 @@ static esp_err_t verify_simple_hash(bootloader_sha256_handle_t sha_handle, esp_i
     if (memcmp(data->image_digest, image_hash, HASH_LEN) != 0) {
         ESP_LOGE(TAG, "Image hash failed - image is corrupt");
         bootloader_debug_buffer(data->image_digest, HASH_LEN, "Expected hash");
-#if CONFIG_IDF_ENV_FPGA || CONFIG_IDF_ENV_BRINGUP
-        ESP_LOGW(TAG, "Ignoring invalid SHA-256 as running on FPGA / doing bringup");
+#ifdef CONFIG_IDF_ENV_FPGA
+        ESP_LOGW(TAG, "Ignoring invalid SHA-256 as running on FPGA");
         return ESP_OK;
 #endif
         return ESP_ERR_IMAGE_INVALID;

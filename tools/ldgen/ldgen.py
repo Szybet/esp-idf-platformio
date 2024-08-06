@@ -1,8 +1,9 @@
 #!/usr/bin/env python
 #
-# SPDX-FileCopyrightText: 2021-2024 Espressif Systems (Shanghai) CO LTD
+# SPDX-FileCopyrightText: 2021-2022 Espressif Systems (Shanghai) CO LTD
 # SPDX-License-Identifier: Apache-2.0
 #
+
 import argparse
 import errno
 import json
@@ -18,8 +19,7 @@ from ldgen.generation import Generation
 from ldgen.ldgen_common import LdGenFailure
 from ldgen.linker_script import LinkerScript
 from ldgen.sdkconfig import SDKConfig
-from pyparsing import ParseException
-from pyparsing import ParseFatalException
+from pyparsing import ParseException, ParseFatalException
 
 
 def _update_environment(args):
@@ -148,8 +148,7 @@ def main():
                 raise LdGenFailure('failed to parse %s\n%s' % (fragment_file, str(e)))
             generation_model.add_fragments_from_file(fragment_file)
 
-        non_contiguous_sram = sdkconfig.evaluate_expression('SOC_MEM_NON_CONTIGUOUS_SRAM')
-        mapping_rules = generation_model.generate(sections_infos, non_contiguous_sram)
+        mapping_rules = generation_model.generate(sections_infos)
 
         script_model = LinkerScript(input_file)
         script_model.fill(mapping_rules)

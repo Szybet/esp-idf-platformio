@@ -148,6 +148,35 @@ void Mdns::OutputKey(const otMdnsKey &aKey)
     OutputLine(kIndentSize, "ttl: %lu", ToUlong(aKey.mTtl));
 }
 
+void Mdns::OutputState(otMdnsEntryState aState)
+{
+    const char *stateString = "";
+
+    switch (aState)
+    {
+    case OT_MDNS_ENTRY_STATE_PROBING:
+        stateString = "probing";
+        break;
+    case OT_MDNS_ENTRY_STATE_REGISTERED:
+        stateString = "registered";
+        break;
+    case OT_MDNS_ENTRY_STATE_CONFLICT:
+        stateString = "conflict";
+        break;
+    case OT_MDNS_ENTRY_STATE_REMOVING:
+        stateString = "removing";
+        break;
+    }
+
+    OutputLine(kIndentSize, "state: %s", stateString);
+}
+
+void Mdns::OutputCacheInfo(const otMdnsCacheInfo &aInfo)
+{
+    OutputLine(kIndentSize, "active: %s", aInfo.mIsActive ? "yes" : "no");
+    OutputLine(kIndentSize, "cached-results: %s", aInfo.mHasCachedResults ? "yes" : "no");
+}
+
 template <> otError Mdns::Process<Cmd("register")>(Arg aArgs[])
 {
     // mdns [async] [host|service|key] <entry specific args>
@@ -458,6 +487,121 @@ exit:
     return error;
 }
 
+#if OPENTHREAD_CONFIG_MULTICAST_DNS_ENTRY_ITERATION_API_ENABLE
+
+template <> otError Mdns::Process<Cmd("hosts")>(Arg aArgs[])
+{
+    otError          error    = OT_ERROR_NONE;
+    otMdnsIterator  *iterator = nullptr;
+    otMdnsHost       host;
+    otMdnsEntryState state;
+
+    VerifyOrExit(aArgs[0].IsEmpty(), error = OT_ERROR_INVALID_ARGS);
+
+    iterator = otMdnsAllocateIterator(GetInstancePtr());
+    VerifyOrExit(iterator != nullptr, error = OT_ERROR_NO_BUFS);
+
+    while (true)
+    {
+        error = otMdnsGetNextHost(GetInstancePtr(), iterator, &host, &state);
+
+        if (error == OT_ERROR_NOT_FOUND)
+        {
+            error = OT_ERROR_NONE;
+            ExitNow();
+        }
+
+        SuccessOrExit(error);
+
+        OutputHost(host);
+        OutputState(state);
+    }
+
+exit:
+    if (iterator != nullptr)
+    {
+        otMdnsFreeIterator(GetInstancePtr(), iterator);
+    }
+
+    return error;
+}
+
+template <> otError Mdns::Process<Cmd("services")>(Arg aArgs[])
+{
+    otError          error    = OT_ERROR_NONE;
+    otMdnsIterator  *iterator = nullptr;
+    otMdnsService    service;
+    otMdnsEntryState state;
+
+    VerifyOrExit(aArgs[0].IsEmpty(), error = OT_ERROR_INVALID_ARGS);
+
+    iterator = otMdnsAllocateIterator(GetInstancePtr());
+    VerifyOrExit(iterator != nullptr, error = OT_ERROR_NO_BUFS);
+
+    while (true)
+    {
+        error = otMdnsGetNextService(GetInstancePtr(), iterator, &service, &state);
+
+        if (error == OT_ERROR_NOT_FOUND)
+        {
+            error = OT_ERROR_NONE;
+            ExitNow();
+        }
+
+        SuccessOrExit(error);
+
+        OutputService(service);
+        OutputState(state);
+    }
+
+exit:
+    if (iterator != nullptr)
+    {
+        otMdnsFreeIterator(GetInstancePtr(), iterator);
+    }
+
+    return error;
+}
+
+template <> otError Mdns::Process<Cmd("keys")>(Arg aArgs[])
+{
+    otError          error    = OT_ERROR_NONE;
+    otMdnsIterator  *iterator = nullptr;
+    otMdnsKey        key;
+    otMdnsEntryState state;
+
+    VerifyOrExit(aArgs[0].IsEmpty(), error = OT_ERROR_INVALID_ARGS);
+
+    iterator = otMdnsAllocateIterator(GetInstancePtr());
+    VerifyOrExit(iterator != nullptr, error = OT_ERROR_NO_BUFS);
+
+    while (true)
+    {
+        error = otMdnsGetNextKey(GetInstancePtr(), iterator, &key, &state);
+
+        if (error == OT_ERROR_NOT_FOUND)
+        {
+            error = OT_ERROR_NONE;
+            ExitNow();
+        }
+
+        SuccessOrExit(error);
+
+        OutputKey(key);
+        OutputState(state);
+    }
+
+exit:
+    if (iterator != nullptr)
+    {
+        otMdnsFreeIterator(GetInstancePtr(), iterator);
+    }
+
+    return error;
+}
+
+#endif // OPENTHREAD_CONFIG_MULTICAST_DNS_ENTRY_ITERATION_API_ENABLE
+
 otError Mdns::ParseStartOrStop(const Arg &aArg, bool &aIsStart)
 {
     otError error = OT_ERROR_NONE;
@@ -735,6 +879,212 @@ void Mdns::HandleIp4AddressResult(otInstance *aInstance, const otMdnsAddressResu
     Interpreter::GetInterpreter().mMdns.HandleAddressResult(*aResult, kIp4Address);
 }
 
+#if OPENTHREAD_CONFIG_MULTICAST_DNS_ENTRY_ITERATION_API_ENABLE
+
+template <> otError Mdns::Process<Cmd("browsers")>(Arg aArgs[])
+{
+    // mdns browsers
+
+    otError         error;
+    otMdnsIterator *iterator = nullptr;
+    otMdnsCacheInfo info;
+    otMdnsBrowser   browser;
+
+    VerifyOrExit(aArgs[0].IsEmpty(), error = OT_ERROR_INVALID_ARGS);
+
+    iterator = otMdnsAllocateIterator(GetInstancePtr());
+    VerifyOrExit(iterator != nullptr, error = OT_ERROR_NO_BUFS);
+
+    while (true)
+    {
+        error = otMdnsGetNextBrowser(GetInstancePtr(), iterator, &browser, &info);
+
+        if (error == OT_ERROR_NOT_FOUND)
+        {
+            error = OT_ERROR_NONE;
+            ExitNow();
+        }
+
+        SuccessOrExit(error);
+
+        OutputFormat("Browser %s", browser.mServiceType);
+
+        if (browser.mSubTypeLabel != nullptr)
+        {
+            OutputFormat(" for sub-type %s", browser.mSubTypeLabel);
+        }
+
+        OutputNewLine();
+        OutputCacheInfo(info);
+    }
+
+exit:
+    if (iterator != nullptr)
+    {
+        otMdnsFreeIterator(GetInstancePtr(), iterator);
+    }
+
+    return error;
+}
+
+template <> otError Mdns::Process<Cmd("srvresolvers")>(Arg aArgs[])
+{
+    // mdns srvresolvers
+
+    otError           error;
+    otMdnsIterator   *iterator = nullptr;
+    otMdnsCacheInfo   info;
+    otMdnsSrvResolver resolver;
+
+    VerifyOrExit(aArgs[0].IsEmpty(), error = OT_ERROR_INVALID_ARGS);
+
+    iterator = otMdnsAllocateIterator(GetInstancePtr());
+    VerifyOrExit(iterator != nullptr, error = OT_ERROR_NO_BUFS);
+
+    while (true)
+    {
+        error = otMdnsGetNextSrvResolver(GetInstancePtr(), iterator, &resolver, &info);
+
+        if (error == OT_ERROR_NOT_FOUND)
+        {
+            error = OT_ERROR_NONE;
+            ExitNow();
+        }
+
+        SuccessOrExit(error);
+
+        OutputLine("SRV resolver %s for %s", resolver.mServiceInstance, resolver.mServiceType);
+        OutputCacheInfo(info);
+    }
+
+exit:
+    if (iterator != nullptr)
+    {
+        otMdnsFreeIterator(GetInstancePtr(), iterator);
+    }
+
+    return error;
+}
+
+template <> otError Mdns::Process<Cmd("txtresolvers")>(Arg aArgs[])
+{
+    // mdns txtresolvers
+
+    otError           error;
+    otMdnsIterator   *iterator = nullptr;
+    otMdnsCacheInfo   info;
+    otMdnsTxtResolver resolver;
+
+    VerifyOrExit(aArgs[0].IsEmpty(), error = OT_ERROR_INVALID_ARGS);
+
+    iterator = otMdnsAllocateIterator(GetInstancePtr());
+    VerifyOrExit(iterator != nullptr, error = OT_ERROR_NO_BUFS);
+
+    while (true)
+    {
+        error = otMdnsGetNextTxtResolver(GetInstancePtr(), iterator, &resolver, &info);
+
+        if (error == OT_ERROR_NOT_FOUND)
+        {
+            error = OT_ERROR_NONE;
+            ExitNow();
+        }
+
+        SuccessOrExit(error);
+
+        OutputLine("TXT resolver %s for %s", resolver.mServiceInstance, resolver.mServiceType);
+        OutputCacheInfo(info);
+    }
+
+exit:
+    if (iterator != nullptr)
+    {
+        otMdnsFreeIterator(GetInstancePtr(), iterator);
+    }
+
+    return error;
+}
+
+template <> otError Mdns::Process<Cmd("ip6resolvers")>(Arg aArgs[])
+{
+    // mdns ip6resolvers
+
+    otError               error;
+    otMdnsIterator       *iterator = nullptr;
+    otMdnsCacheInfo       info;
+    otMdnsAddressResolver resolver;
+
+    VerifyOrExit(aArgs[0].IsEmpty(), error = OT_ERROR_INVALID_ARGS);
+
+    iterator = otMdnsAllocateIterator(GetInstancePtr());
+    VerifyOrExit(iterator != nullptr, error = OT_ERROR_NO_BUFS);
+
+    while (true)
+    {
+        error = otMdnsGetNextIp6AddressResolver(GetInstancePtr(), iterator, &resolver, &info);
+
+        if (error == OT_ERROR_NOT_FOUND)
+        {
+            error = OT_ERROR_NONE;
+            ExitNow();
+        }
+
+        SuccessOrExit(error);
+
+        OutputLine("IPv6 address resolver %s", resolver.mHostName);
+        OutputCacheInfo(info);
+    }
+
+exit:
+    if (iterator != nullptr)
+    {
+        otMdnsFreeIterator(GetInstancePtr(), iterator);
+    }
+
+    return error;
+}
+
+template <> otError Mdns::Process<Cmd("ip4resolvers")>(Arg aArgs[])
+{
+    // mdns ip4resolvers
+
+    otError               error;
+    otMdnsIterator       *iterator = nullptr;
+    otMdnsCacheInfo       info;
+    otMdnsAddressResolver resolver;
+
+    VerifyOrExit(aArgs[0].IsEmpty(), error = OT_ERROR_INVALID_ARGS);
+
+    iterator = otMdnsAllocateIterator(GetInstancePtr());
+    VerifyOrExit(iterator != nullptr, error = OT_ERROR_NO_BUFS);
+
+    while (true)
+    {
+        error = otMdnsGetNextIp4AddressResolver(GetInstancePtr(), iterator, &resolver, &info);
+
+        if (error == OT_ERROR_NOT_FOUND)
+        {
+            error = OT_ERROR_NONE;
+            ExitNow();
+        }
+
+        SuccessOrExit(error);
+
+        OutputLine("IPv4 address resolver %s", resolver.mHostName);
+        OutputCacheInfo(info);
+    }
+
+exit:
+    if (iterator != nullptr)
+    {
+        otMdnsFreeIterator(GetInstancePtr(), iterator);
+    }
+
+    return error;
+}
+
+#endif // OPENTHREAD_CONFIG_MULTICAST_DNS_ENTRY_ITERATION_API_ENABLE
+
 otError Mdns::Process(Arg aArgs[])
 {
 #define CmdEntry(aCommandString)                            \
@@ -743,9 +1093,39 @@ otError Mdns::Process(Arg aArgs[])
     }
 
     static constexpr Command kCommands[] = {
-        CmdEntry("browser"),     CmdEntry("disable"),         CmdEntry("enable"),      CmdEntry("ip4resolver"),
-        CmdEntry("ip6resolver"), CmdEntry("register"),        CmdEntry("srvresolver"), CmdEntry("state"),
-        CmdEntry("txtresolver"), CmdEntry("unicastquestion"), CmdEntry("unregister"),
+        CmdEntry("browser"),
+#if OPENTHREAD_CONFIG_MULTICAST_DNS_ENTRY_ITERATION_API_ENABLE
+        CmdEntry("browsers"),
+#endif
+        CmdEntry("disable"),
+        CmdEntry("enable"),
+#if OPENTHREAD_CONFIG_MULTICAST_DNS_ENTRY_ITERATION_API_ENABLE
+        CmdEntry("hosts"),
+#endif
+        CmdEntry("ip4resolver"),
+#if OPENTHREAD_CONFIG_MULTICAST_DNS_ENTRY_ITERATION_API_ENABLE
+        CmdEntry("ip4resolvers"),
+#endif
+        CmdEntry("ip6resolver"),
+#if OPENTHREAD_CONFIG_MULTICAST_DNS_ENTRY_ITERATION_API_ENABLE
+        CmdEntry("ip6resolvers"),
+        CmdEntry("keys"),
+#endif
+        CmdEntry("register"),
+#if OPENTHREAD_CONFIG_MULTICAST_DNS_ENTRY_ITERATION_API_ENABLE
+        CmdEntry("services"),
+#endif
+        CmdEntry("srvresolver"),
+#if OPENTHREAD_CONFIG_MULTICAST_DNS_ENTRY_ITERATION_API_ENABLE
+        CmdEntry("srvresolvers"),
+#endif
+        CmdEntry("state"),
+        CmdEntry("txtresolver"),
+#if OPENTHREAD_CONFIG_MULTICAST_DNS_ENTRY_ITERATION_API_ENABLE
+        CmdEntry("txtresolvers"),
+#endif
+        CmdEntry("unicastquestion"),
+        CmdEntry("unregister"),
     };
 
 #undef CmdEntry

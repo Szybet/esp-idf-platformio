@@ -1,12 +1,8 @@
 menu "Bootloader config"
 
-    orsource "../esp_bootloader_format/Kconfig.bootloader"
-
     config BOOTLOADER_OFFSET_IN_FLASH
         hex
         default 0x1000 if IDF_TARGET_ESP32 || IDF_TARGET_ESP32S2
-        # the first 2 sectors are reserved for the key manager with AES-XTS (flash encryption) purpose
-        default 0x2000 if IDF_TARGET_ESP32P4 || IDF_TARGET_ESP32C5
         default 0x0
         help
             Offset address that 2nd bootloader will be flashed to.
@@ -23,6 +19,7 @@ menu "Bootloader config"
             - The default "Size" setting will add the -0s flag to CFLAGS.
             - The "Debug" setting will add the -Og flag to CFLAGS.
             - The "Performance" setting will add the -O2 flag to CFLAGS.
+            - The "None" setting will add the -O0 flag to CFLAGS.
 
             Note that custom optimization levels may be unsupported.
 
@@ -33,9 +30,7 @@ menu "Bootloader config"
         config BOOTLOADER_COMPILER_OPTIMIZATION_PERF
             bool "Optimize for performance (-O2)"
         config BOOTLOADER_COMPILER_OPTIMIZATION_NONE
-            bool "Debug without optimization (-O0) (Deprecated, will be removed in IDF v6.0)"
-            depends on IDF_TARGET_ARCH_XTENSA || IDF_TARGET_ESP32C3 || IDF_TARGET_ESP32C2
-
+            bool "Debug without optimization (-O0)"
     endchoice
 
     choice BOOTLOADER_LOG_LEVEL
@@ -120,22 +115,6 @@ menu "Bootloader config"
             default n
             help
                 This is a helper config for 32bits address flash. Invisible for users.
-
-        config BOOTLOADER_FLASH_NEEDS_32BIT_FEAT
-            bool
-            default y if BOOTLOADER_FLASH_32BIT_ADDR && !ESPTOOLPY_OCT_FLASH
-            help
-                This is a helper config for 32bits address flash. Invisible for users.
-
-        config BOOTLOADER_CACHE_32BIT_ADDR_QUAD_FLASH
-            bool "Enable cache access to 32-bit-address (over 16MB) range of SPI Flash (READ DOCS FIRST)"
-            depends on BOOTLOADER_FLASH_NEEDS_32BIT_FEAT && IDF_TARGET_ESP32S3 && IDF_EXPERIMENTAL_FEATURES
-            default n
-            help
-                Enabling this option allows the CPU to access 32-bit-address flash beyond 16M range.
-                1. This option only valid for 4-line flash. Octal flash doesn't need this.
-                2. This option is experimental, which means it can’t use on all flash chips stable, for more
-                information, please contact Espressif Business support.
 
         config BOOTLOADER_CACHE_32BIT_ADDR_OCTAL_FLASH
             bool
@@ -293,11 +272,8 @@ menu "Bootloader config"
             If this option is not set (default), then rtc_wdt will be disabled by ESP-IDF before calling
             the app_main() function.
 
-            Use function wdt_hal_feed() for resetting counter of RTC_WDT.
-            For esp32/s2 you can also use rtc_wdt_feed().
-
-            Use function wdt_hal_disable() for disabling RTC_WDT.
-            For esp32/s2 you can also use rtc_wdt_disable().
+            Use function rtc_wdt_feed() for resetting counter of rtc_wdt.
+            Use function rtc_wdt_disable() for disabling rtc_wdt.
 
     config BOOTLOADER_WDT_TIME_MS
         int "Timeout for RTC watchdog (ms)"
@@ -370,7 +346,7 @@ menu "Bootloader config"
         select EFUSE_VIRTUAL_KEEP_IN_FLASH
         help
             This option allows to emulate read/write operations with all eFuses and efuse secure version.
-            It allows to test anti-rollback implementation without permanent write eFuse bits.
+            It allows to test anti-rollback implemention without permanent write eFuse bits.
             There should be an entry in partition table with following details: `emul_efuse, data, efuse, , 0x2000`.
 
             This option enables: EFUSE_VIRTUAL and EFUSE_VIRTUAL_KEEP_IN_FLASH.
@@ -458,7 +434,7 @@ menu "Bootloader config"
             this area remains valid when rebooted, except for power loss.
             This memory is located at a fixed address and is available
             for both the bootloader and the application.
-            (The application and bootloader must be compiled with the same option).
+            (The application and bootoloader must be compiled with the same option).
             The RTC FAST memory has access only through PRO_CPU.
 
     config BOOTLOADER_CUSTOM_RESERVE_RTC_IN_CRC
@@ -468,7 +444,7 @@ menu "Bootloader config"
         help
             This option allows the customer to use the legacy bootloader behavior when the
             RTC FAST memory CRC calculation takes place. When this option is enabled, the
-            allocated user custom data will be taken into account in the CRC calculation.
+            allocated user custom data will be taken into account in the CRC calculcation.
             This means that any change to the custom data would need a CRC update to prevent
             the bootloader from marking this data as corrupted.
             If this option is disabled, the custom data will not be taken into account when
@@ -795,23 +771,6 @@ menu "Security features"
             This can lead to permanent bricking of the device, in case all keys are revoked
             because of signature verification failure.
 
-    config SECURE_BOOT_FLASH_BOOTLOADER_DEFAULT
-        bool "Flash bootloader along with other artifacts when using the default flash command"
-        depends on SECURE_BOOT_V2_ENABLED && SECURE_BOOT_BUILD_SIGNED_BINARIES
-        default N
-        help
-            When Secure Boot V2 is enabled, by default the bootloader is not flashed along with other artifacts
-            like the application and the partition table images, i.e. bootloader has to be separately flashed
-            using the command `idf.py bootloader flash`, whereas, the application and partition table can be flashed
-            using the command `idf.py flash` itself.
-            Enabling this option allows flashing the bootloader along with the other artifacts
-            by invocation of the command `idf.py flash`.
-
-            If this option is enabled make sure that even the bootloader is signed using the correct secure boot key,
-            otherwise the bootloader signature verification would fail, as hash of the public key which is present in
-            the bootloader signature would not match with the digest stored into the efuses
-            and thus the device will not be able to boot up.
-
     choice SECURE_BOOTLOADER_KEY_ENCODING
         bool "Hardware Key Encoding"
         depends on SECURE_BOOTLOADER_REFLASHABLE
@@ -861,11 +820,11 @@ menu "Security features"
             before enabling.
 
     choice SECURE_FLASH_ENCRYPTION_KEYSIZE
-        bool "Size of generated XTS-AES key"
+        bool "Size of generated AES-XTS key"
         default SECURE_FLASH_ENCRYPTION_AES128
         depends on SOC_FLASH_ENCRYPTION_XTS_AES_OPTIONS && SECURE_FLASH_ENC_ENABLED
         help
-            Size of generated XTS-AES key.
+            Size of generated AES-XTS key.
 
             - AES-128 uses a 256-bit key (32 bytes) derived from 128 bits (16 bytes) burned in half Efuse key block.
               Internally, it calculates SHA256(128 bits)
@@ -923,9 +882,7 @@ menu "Security features"
         default y if (SOC_EFUSE_DIS_ICACHE || IDF_TARGET_ESP32) && SECURE_FLASH_ENC_ENABLED
 
     menu "Potentially insecure options"
-        visible if (SECURE_FLASH_ENCRYPTION_MODE_DEVELOPMENT || \
-            SECURE_BOOT_INSECURE || \
-            SECURE_SIGNED_ON_UPDATE_NO_SECURE_BOOT) # NOERROR
+        visible if SECURE_FLASH_ENCRYPTION_MODE_DEVELOPMENT || SECURE_BOOT_INSECURE || SECURE_SIGNED_ON_UPDATE_NO_SECURE_BOOT # NOERROR
 
         # NOTE: Options in this menu NEED to have SECURE_BOOT_INSECURE
         # and/or SECURE_FLASH_ENCRYPTION_MODE_DEVELOPMENT in "depends on", as the menu
@@ -1005,14 +962,6 @@ menu "Security features"
                 Revoking unused digest slots makes ensures that no trusted keys can be added later by an attacker.
                 If set, it means that you have a plan to use unused digests slots later.
 
-                Note that if you plan to enable secure boot during the first boot up, the bootloader will intentionally
-                revoke the unused digest slots while enabling secure boot, even if the above config is enabled because
-                keeping the unused key slots un-revoked would a security hazard.
-                In case for any development workflow if you need to avoid this revocation, you should enable
-                secure boot externally (host based mechanism) rather than enabling it during the boot up,
-                so that the bootloader would not need to enable secure boot and thus you could avoid its revocation
-                strategy.
-
         config SECURE_FLASH_UART_BOOTLOADER_ALLOW_ENC
             bool "Leave UART bootloader encryption enabled"
             depends on SECURE_FLASH_ENCRYPTION_MODE_DEVELOPMENT
@@ -1037,8 +986,7 @@ menu "Security features"
 
         config SECURE_FLASH_UART_BOOTLOADER_ALLOW_CACHE
             bool "Leave UART bootloader flash cache enabled"
-            depends on SECURE_FLASH_ENCRYPTION_MODE_DEVELOPMENT && \
-                (IDF_TARGET_ESP32 || SOC_EFUSE_DIS_DOWNLOAD_ICACHE || SOC_EFUSE_DIS_DOWNLOAD_DCACHE) # NOERROR
+            depends on SECURE_FLASH_ENCRYPTION_MODE_DEVELOPMENT && (IDF_TARGET_ESP32 || SOC_EFUSE_DIS_DOWNLOAD_ICACHE || SOC_EFUSE_DIS_DOWNLOAD_DCACHE) # NOERROR
             default N
             select SECURE_FLASH_SKIP_WRITE_PROTECTION_CACHE if SECURE_FLASH_HAS_WRITE_PROTECTION_CACHE
             help
@@ -1100,16 +1048,16 @@ menu "Security features"
     config SECURE_FLASH_ENCRYPT_ONLY_IMAGE_LEN_IN_APP_PART
         bool "Encrypt only the app image that is present in the partition of type app"
         depends on SECURE_FLASH_ENC_ENABLED && !SECURE_FLASH_REQUIRE_ALREADY_ENABLED
-        default y
+        default n
         help
-            If set (default), optimise encryption time for the partition of type APP,
+            If set, optimise encryption time for the partition of type APP,
             by only encrypting the app image that is present in the partition,
             instead of the whole partition.
             The image length used for encryption is derived from the image metadata, which
             includes the size of the app image, checksum, hash and also the signature sector
             when secure boot is enabled.
 
-            If not set, the whole partition of type APP would be encrypted,
+            If not set (default), the whole partition of type APP would be encrypted,
             which increases the encryption time but might be useful if there
             is any custom data appended to the firmware image.
 

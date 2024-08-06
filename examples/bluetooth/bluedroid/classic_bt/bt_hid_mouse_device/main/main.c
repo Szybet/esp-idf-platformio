@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2021-2023 Espressif Systems (Shanghai) CO LTD
+ * SPDX-FileCopyrightText: 2021-2024 Espressif Systems (Shanghai) CO LTD
  *
  * SPDX-License-Identifier: Unlicense OR CC0-1.0
  */
@@ -70,6 +70,18 @@ uint8_t hid_mouse_descriptor[] = {
     0xc0,                          //   END_COLLECTION
     0xc0                           // END_COLLECTION
 };
+
+static char *bda2str(esp_bd_addr_t bda, char *str, size_t size)
+{
+    if (bda == NULL || str == NULL || size < 18) {
+        return NULL;
+    }
+
+    uint8_t *p = bda;
+    sprintf(str, "%02x:%02x:%02x:%02x:%02x:%02x",
+            p[0], p[1], p[2], p[3], p[4], p[5]);
+    return str;
+}
 
 const int hid_mouse_descriptor_len = sizeof(hid_mouse_descriptor);
 
@@ -158,16 +170,6 @@ void mouse_move_task(void *pvParameters)
     }
 }
 
-static void print_bt_address(void)
-{
-    const char *TAG = "bt_address";
-    const uint8_t *bd_addr;
-
-    bd_addr = esp_bt_dev_get_address();
-    ESP_LOGI(TAG, "my bluetooth address is %02X:%02X:%02X:%02X:%02X:%02X",
-             bd_addr[0], bd_addr[1], bd_addr[2], bd_addr[3], bd_addr[4], bd_addr[5]);
-}
-
 void esp_bt_gap_cb(esp_bt_gap_cb_event_t event, esp_bt_gap_cb_param_t *param)
 {
     const char *TAG = "esp_bt_gap_cb";
@@ -199,7 +201,7 @@ void esp_bt_gap_cb(esp_bt_gap_cb_event_t event, esp_bt_gap_cb_param_t *param)
         break;
     }
 
-#if (CONFIG_EXAMPLE_SSP_ENABLED == true)
+#if (CONFIG_BT_SSP_ENABLED == true)
     case ESP_BT_GAP_CFM_REQ_EVT:
         ESP_LOGI(TAG, "ESP_BT_GAP_CFM_REQ_EVT Please compare the numeric value: %"PRIu32, param->cfm_req.num_val);
         esp_bt_gap_ssp_confirm_reply(param->cfm_req.bda, true);
@@ -390,6 +392,7 @@ void app_main(void)
 {
     const char *TAG = "app_main";
     esp_err_t ret;
+    char bda_str[18] = {0};
 
     ret = nvs_flash_init();
     if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
@@ -402,36 +405,32 @@ void app_main(void)
 
     esp_bt_controller_config_t bt_cfg = BT_CONTROLLER_INIT_CONFIG_DEFAULT();
     if ((ret = esp_bt_controller_init(&bt_cfg)) != ESP_OK) {
-        ESP_LOGE(TAG, "initialize controller failed: %s", esp_err_to_name(ret));
+        ESP_LOGE(TAG, "initialize controller failed: %s\n", esp_err_to_name(ret));
         return;
     }
 
     if ((ret = esp_bt_controller_enable(ESP_BT_MODE_CLASSIC_BT)) != ESP_OK) {
-        ESP_LOGE(TAG, "enable controller failed: %s", esp_err_to_name(ret));
+        ESP_LOGE(TAG, "enable controller failed: %s\n", esp_err_to_name(ret));
         return;
     }
 
-    esp_bluedroid_config_t bluedroid_cfg = BT_BLUEDROID_INIT_CONFIG_DEFAULT();
-#if (CONFIG_EXAMPLE_SSP_ENABLED == false)
-    bluedroid_cfg.ssp_en = false;
-#endif
-    if ((ret = esp_bluedroid_init_with_cfg(&bluedroid_cfg)) != ESP_OK) {
-        ESP_LOGE(TAG, "%s initialize bluedroid failed: %s", __func__, esp_err_to_name(ret));
+    if ((ret = esp_bluedroid_init()) != ESP_OK) {
+        ESP_LOGE(TAG, "initialize bluedroid failed: %s\n", esp_err_to_name(ret));
         return;
     }
 
     if ((ret = esp_bluedroid_enable()) != ESP_OK) {
-        ESP_LOGE(TAG, "enable bluedroid failed: %s", esp_err_to_name(ret));
+        ESP_LOGE(TAG, "enable bluedroid failed: %s\n", esp_err_to_name(ret));
         return;
     }
 
     if ((ret = esp_bt_gap_register_callback(esp_bt_gap_cb)) != ESP_OK) {
-        ESP_LOGE(TAG, "gap register failed: %s", esp_err_to_name(ret));
+        ESP_LOGE(TAG, "gap register failed: %s\n", esp_err_to_name(ret));
         return;
     }
 
     ESP_LOGI(TAG, "setting device name");
-    esp_bt_gap_set_device_name("HID Mouse Example");
+    esp_bt_dev_set_device_name("HID Mouse Example");
 
     ESP_LOGI(TAG, "setting cod major, peripheral");
     esp_bt_cod_t cod;
@@ -462,7 +461,7 @@ void app_main(void)
     ESP_LOGI(TAG, "starting hid device");
     esp_bt_hid_device_init();
 
-#if (CONFIG_EXAMPLE_SSP_ENABLED == true)
+#if (CONFIG_BT_SSP_ENABLED == true)
     /* Set default parameters for Secure Simple Pairing */
     esp_bt_sp_param_t param_type = ESP_BT_SP_IOCAP_MODE;
     esp_bt_io_cap_t iocap = ESP_BT_IO_CAP_NONE;
@@ -477,6 +476,6 @@ void app_main(void)
     esp_bt_pin_code_t pin_code;
     esp_bt_gap_set_pin(pin_type, 0, pin_code);
 
-    print_bt_address();
+    ESP_LOGI(TAG, "Own address:[%s]", bda2str((uint8_t *)esp_bt_dev_get_address(), bda_str, sizeof(bda_str)));
     ESP_LOGI(TAG, "exiting");
 }

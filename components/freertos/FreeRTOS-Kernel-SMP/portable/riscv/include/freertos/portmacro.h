@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2023-2024 Espressif Systems (Shanghai) CO LTD
+ * SPDX-FileCopyrightText: 2023 Espressif Systems (Shanghai) CO LTD
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -7,34 +7,6 @@
 #pragma once
 
 #include "sdkconfig.h"
-
-/* Macros used instead ofsetoff() for better performance of interrupt handler */
-#if CONFIG_FREERTOS_USE_LIST_DATA_INTEGRITY_CHECK_BYTES
-/*
-pxTopOfStack (4) +
-xStateListItem (28) +
-xEventListItem (28) +
-uxPriority (4)
-*/
-#define PORT_OFFSET_PX_STACK 0x40
-#else
-/*
-pxTopOfStack (4) +
-xStateListItem (20) +
-xEventListItem (20) +
-uxPriority (4)
-*/
-#define PORT_OFFSET_PX_STACK 0x30
-#endif /* #if CONFIG_FREERTOS_USE_LIST_DATA_INTEGRITY_CHECK_BYTES */
-
-#define PORT_OFFSET_PX_END_OF_STACK ( \
-    PORT_OFFSET_PX_STACK \
-    + 4                                 /* StackType_t * pxStack */ \
-    + CONFIG_FREERTOS_MAX_TASK_NAME_LEN /* pcTaskName[ configMAX_TASK_NAME_LEN ] */ \
-)
-
-#ifndef __ASSEMBLER__
-
 #include <stdint.h>
 #include "spinlock.h"
 #include "soc/interrupt_reg.h"
@@ -115,16 +87,15 @@ BaseType_t xPortCheckIfInISR(void);
 
 // ------------------ Critical Sections --------------------
 
-#if ( configNUMBER_OF_CORES > 1 )
 /*
 These are always called with interrupts already disabled. We simply need to get/release the spinlocks
 */
+
 extern portMUX_TYPE port_xTaskLock;
 extern portMUX_TYPE port_xISRLock;
 
 void vPortTakeLock( portMUX_TYPE *lock );
 void vPortReleaseLock( portMUX_TYPE *lock );
-#endif /* configNUMBER_OF_CORES > 1 */
 
 // ---------------------- Yielding -------------------------
 
@@ -161,19 +132,9 @@ void vPortYieldFromISR(void);
 
 static inline BaseType_t __attribute__((always_inline)) xPortGetCoreID( void );
 
-// --------------------- TCB Cleanup -----------------------
+// ----------------------- TCB Cleanup --------------------------
 
-/**
- * @brief TCB cleanup hook
- *
- * The portCLEAN_UP_TCB() macro is called in prvDeleteTCB() right before a
- * deleted task's memory is freed. We map that macro to this internal function
- * so that IDF FreeRTOS ports can inject some task pre-deletion operations.
- *
- * @note We can't use vPortCleanUpTCB() due to API compatibility issues. See
- * CONFIG_FREERTOS_ENABLE_STATIC_TASK_CLEAN_UP. Todo: IDF-8097
- */
-void vPortTCBPreDeleteHook( void *pxTCB );
+void vPortCleanUpTCB ( void *pxTCB );
 
 /* ------------------------------------------- FreeRTOS Porting Interface ----------------------------------------------
  * - Contains all the mappings of the macros required by FreeRTOS
@@ -189,12 +150,11 @@ void vPortTCBPreDeleteHook( void *pxTCB );
 
 // ------------------ Critical Sections --------------------
 
-#if ( configNUMBER_OF_CORES > 1 )
 #define portGET_TASK_LOCK()                         vPortTakeLock(&port_xTaskLock)
 #define portRELEASE_TASK_LOCK()                     vPortReleaseLock(&port_xTaskLock)
 #define portGET_ISR_LOCK()                          vPortTakeLock(&port_xISRLock)
 #define portRELEASE_ISR_LOCK()                      vPortReleaseLock(&port_xISRLock)
-#endif /* configNUMBER_OF_CORES > 1 */
+
 
 //Critical sections used by FreeRTOS SMP
 extern void vTaskEnterCritical( void );
@@ -212,7 +172,7 @@ extern void vTaskExitCritical( void );
 
 #define portSET_INTERRUPT_MASK_FROM_ISR() ({ \
     unsigned int cur_level; \
-    cur_level = REG_READ(INTERRUPT_CURRENT_CORE_INT_THRESH_REG); \
+    cur_level = REG_READ(INTERRUPT_CORE0_CPU_INT_THRESH_REG); \
     vTaskEnterCritical(); \
     cur_level; \
 })
@@ -239,16 +199,15 @@ extern void vTaskExitCritical( void );
 // ------------------- Run Time Stats ----------------------
 
 #define portCONFIGURE_TIMER_FOR_RUN_TIME_STATS()
+#define portGET_RUN_TIME_COUNTER_VALUE()            0
 #ifdef CONFIG_FREERTOS_RUN_TIME_STATS_USING_ESP_TIMER
-#define portGET_RUN_TIME_COUNTER_VALUE()        ((configRUN_TIME_COUNTER_TYPE) esp_timer_get_time())
-#else
-#define portGET_RUN_TIME_COUNTER_VALUE()        0
-#endif // CONFIG_FREERTOS_RUN_TIME_STATS_USING_ESP_TIMER
+/* Coarse resolution time (us) */
+#define portALT_GET_RUN_TIME_COUNTER_VALUE(x)       do {x = (uint32_t)esp_timer_get_time();} while(0)
+#endif
 
 // --------------------- TCB Cleanup -----------------------
 
-#define portCLEAN_UP_TCB( pxTCB )                   vPortTCBPreDeleteHook( pxTCB )
-
+#define portCLEAN_UP_TCB( pxTCB )                   vPortCleanUpTCB( pxTCB )
 
 /* --------------------------------------------- Inline Implementations ------------------------------------------------
  * - Implementation of inline functions of the forward declares
@@ -312,16 +271,7 @@ void vPortExitCritical(void);
 
 static inline bool IRAM_ATTR xPortCanYield(void)
 {
-    uint32_t threshold = REG_READ(INTERRUPT_CURRENT_CORE_INT_THRESH_REG);
-#if SOC_INT_CLIC_SUPPORTED
-    threshold = threshold >> (CLIC_CPU_INT_THRESH_S + (8 - NLBITS));
-
-    /* When CLIC is supported, the lowest interrupt threshold level is 0.
-     * Therefore, an interrupt threshold level above 0 would mean that we
-     * are either in a critical section or in an ISR.
-     */
-    return (threshold == 0);
-#endif /* SOC_INT_CLIC_SUPPORTED */
+    uint32_t threshold = REG_READ(INTERRUPT_CORE0_CPU_INT_THRESH_REG);
     /* when enter critical code, FreeRTOS will mask threshold to RVHAL_EXCM_LEVEL
      * and exit critical code, will recover threshold value (1). so threshold <= 1
      * means not in critical code
@@ -329,25 +279,14 @@ static inline bool IRAM_ATTR xPortCanYield(void)
     return (threshold <= 1);
 }
 
-// Defined even for configNUMBER_OF_CORES > 1 for IDF compatibility
-#define portYIELD_WITHIN_API()                      esp_crosscore_int_send_yield(xPortGetCoreID())
+// Added for backward compatibility with IDF
+#define portYIELD_WITHIN_API()                      vTaskYieldWithinAPI()
 
 // ----------------------- System --------------------------
 
 void vPortSetStackWatchpoint(void *pxStackStart);
 
 // -------------------- Heap Related -----------------------
-
-/**
- * @brief Checks if a given piece of memory can be used to store a FreeRTOS list
- *
- * - Defined in heap_idf.c
- *
- * @param ptr Pointer to memory
- * @return true Memory can be used to store a List
- * @return false Otherwise
- */
-bool xPortCheckValidListMem(const void *ptr);
 
 /**
  * @brief Checks if a given piece of memory can be used to store a task's TCB
@@ -371,7 +310,6 @@ bool xPortCheckValidTCBMem(const void *ptr);
  */
 bool xPortcheckValidStackMem(const void *ptr);
 
-#define portVALID_LIST_MEM(ptr)     xPortCheckValidListMem(ptr)
 #define portVALID_TCB_MEM(ptr)      xPortCheckValidTCBMem(ptr)
 #define portVALID_STACK_MEM(ptr)    xPortcheckValidStackMem(ptr)
 
@@ -417,5 +355,3 @@ portmacro.h. Therefore, we need to keep these headers around for now to allow th
 #ifdef __cplusplus
 }
 #endif
-
-#endif // __ASSEMBLER__

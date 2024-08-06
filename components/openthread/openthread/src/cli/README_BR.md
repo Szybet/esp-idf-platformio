@@ -209,6 +209,18 @@ running
 Done
 ```
 
+Usage `br pd omrprefix`
+
+Get the DHCPv6 Prefix Delegation (PD) provided off-mesh-routable (OMR) prefix.
+
+`OPENTHREAD_CONFIG_BORDER_ROUTING_DHCP6_PD_ENABLE` is required.
+
+```bash
+> br pd omrprefix
+2001:db8:cafe:0:0/64 lifetime:1800 preferred:1800
+Done
+```
+
 ### prefixtable
 
 Usage: `br prefixtable`
@@ -339,9 +351,14 @@ Info per router:
   - M: Managed Address Config flag
   - O: Other Config flag
   - Stub: Stub Router flag (indicates whether the router is a stub router)
+- Milliseconds since last received message from this router
+- Reachability flag: A router is marked as unreachable if it fails to respond to multiple Neighbor Solicitation probes.
+- Age: Duration interval since this router was first discovered. It is formatted as `{hh}:{mm}:{ss}` for hours, minutes, seconds, if the duration is less than 24 hours. If the duration is 24 hours or more, the format is `{dd}d.{hh}:{mm}:{ss}` for days, hours, minutes, seconds.
+- `(this BR)` is appended when the router is the local device itself.
+- `(peer BR)` is appended when the router is likely a peer BR connected to the same Thread mesh. This requires `OPENTHREAD_CONFIG_BORDER_ROUTING_TRACK_PEER_BR_INFO_ENABLE`.
 
 ```bash
 > br routers
-ff02:0:0:0:0:0:0:1 (M:0 O:0 Stub:1)
+ff02:0:0:0:0:0:0:1 (M:0 O:0 Stub:1) ms-since-rx:1505 reachable:yes age:00:18:13
 Done
 ```

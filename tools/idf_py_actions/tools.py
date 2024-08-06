@@ -382,12 +382,6 @@ class RunTool:
             print('\r' + fit_text_in_terminal(output.strip('\n\r')) + '\x1b[K', end='', file=output_stream)
             output_stream.flush()
 
-        def is_progression(output: str) -> bool:
-            # try to find possible progression by a pattern match
-            if re.match(r'^\[\d+/\d+\]|.*\(\d+ \%\)$', output):
-                return True
-            return False
-
         async def read_stream() -> Optional[str]:
             try:
                 output_b = await input_stream.readline()
@@ -419,8 +413,6 @@ class RunTool:
         # used in interactive mode to print hints after matched line
         hints = load_hints()
         last_line = ''
-        is_progression_last_line = False
-        is_progression_processing_enabled = self.force_progression and output_stream.isatty() and '-v' not in self.args
 
         try:
             # The command output from asyncio stream already contains OS specific line ending,
@@ -445,13 +437,10 @@ class RunTool:
                     if not output_stream.isatty():
                         output = output_noescape
 
-                    if is_progression_processing_enabled and is_progression(output):
+                    if self.force_progression and output[0] == '[' and '-v' not in self.args and output_stream.isatty():
+                        # print output in progression way but only the progression related (that started with '[') and if verbose flag is not set
                         print_progression(output)
-                        is_progression_last_line = True
                     else:
-                        if is_progression_last_line:
-                            output_converter.write(os.linesep)
-                            is_progression_last_line = False
                         output_converter.write(output)
                         output_converter.flush()
 
@@ -649,7 +638,7 @@ def ensure_build_directory(args: 'PropertyDict', prog_name: str, always_run_cmak
 
     try:
         python = cache['PYTHON']
-        if os.path.normcase(python) != os.path.normcase(sys.executable):
+        if python != sys.executable:
             raise FatalError(
                 "'{}' is currently active in the environment while the project was configured with '{}'. "
                 "Run '{} fullclean' to start again.".format(sys.executable, python, prog_name))

@@ -11,7 +11,7 @@
 
 #ifndef CONFIG_MBEDTLS_CUSTOM_MEM_ALLOC
 
-void *esp_mbedtls_mem_calloc(size_t n, size_t size)
+IRAM_ATTR void *esp_mbedtls_mem_calloc(size_t n, size_t size)
 {
 #ifdef CONFIG_MBEDTLS_INTERNAL_MEM_ALLOC
     return heap_caps_calloc(n, size, MALLOC_CAP_INTERNAL|MALLOC_CAP_8BIT);
@@ -33,7 +33,7 @@ void *esp_mbedtls_mem_calloc(size_t n, size_t size)
 #endif
 }
 
-void esp_mbedtls_mem_free(void *ptr)
+IRAM_ATTR void esp_mbedtls_mem_free(void *ptr)
 {
     return heap_caps_free(ptr);
 }

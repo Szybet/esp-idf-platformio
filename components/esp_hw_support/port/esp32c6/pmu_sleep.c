@@ -341,13 +341,11 @@ uint32_t pmu_sleep_start(uint32_t wakeup_opt, uint32_t reject_opt, uint32_t lslp
         ;
     }
 
-    return pmu_sleep_finish(dslp);
+    return pmu_sleep_finish();
 }
 
-bool pmu_sleep_finish(bool dslp)
+bool pmu_sleep_finish(void)
 {
-    (void)dslp;
-
     // Wait eFuse memory update done.
     while(efuse_ll_get_controller_state() != EFUSE_CONTROLLER_STATE_IDLE);
 

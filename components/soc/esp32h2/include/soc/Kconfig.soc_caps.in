@@ -23,10 +23,6 @@ config SOC_GDMA_SUPPORTED
     bool
     default y
 
-config SOC_AHB_GDMA_SUPPORTED
-    bool
-    default y
-
 config SOC_ASYNC_MEMCPY_SUPPORTED
     bool
     default y
@@ -40,10 +36,6 @@ config SOC_MCPWM_SUPPORTED
     default y
 
 config SOC_TWAI_SUPPORTED
-    bool
-    default y
-
-config SOC_PHY_SUPPORTED
     bool
     default y
 
@@ -76,10 +68,6 @@ config SOC_SUPPORTS_SECURE_DL_MODE
     default y
 
 config SOC_EFUSE_KEY_PURPOSE_FIELD
-    bool
-    default y
-
-config SOC_EFUSE_SUPPORTED
     bool
     default y
 
@@ -199,38 +187,6 @@ config SOC_CLK_TREE_SUPPORTED
     bool
     default y
 
-config SOC_ASSIST_DEBUG_SUPPORTED
-    bool
-    default y
-
-config SOC_WDT_SUPPORTED
-    bool
-    default y
-
-config SOC_SPI_FLASH_SUPPORTED
-    bool
-    default y
-
-config SOC_RNG_SUPPORTED
-    bool
-    default y
-
-config SOC_LIGHT_SLEEP_SUPPORTED
-    bool
-    default y
-
-config SOC_DEEP_SLEEP_SUPPORTED
-    bool
-    default y
-
-config SOC_MODEM_CLOCK_SUPPORTED
-    bool
-    default y
-
-config SOC_PM_SUPPORTED
-    bool
-    default y
-
 config SOC_XTAL_SUPPORT_32M
     bool
     default y
@@ -343,10 +299,6 @@ config SOC_ADC_TEMPERATURE_SHARE_INTR
     bool
     default y
 
-config SOC_ADC_SHARED_POWER
-    bool
-    default y
-
 config SOC_APB_BACKUP_DMA
     bool
     default n
@@ -376,10 +328,6 @@ config SOC_CPU_HAS_FLEXIBLE_INTC
     default y
 
 config SOC_INT_PLIC_SUPPORTED
-    bool
-    default y
-
-config SOC_CPU_HAS_CSR_PC
     bool
     default y
 
@@ -431,23 +379,15 @@ config SOC_DS_KEY_CHECK_MAX_WAIT_US
     int
     default 1100
 
-config SOC_AHB_GDMA_VERSION
+config SOC_GDMA_GROUPS
     int
     default 1
 
-config SOC_GDMA_NUM_GROUPS_MAX
-    int
-    default 1
-
-config SOC_GDMA_PAIRS_PER_GROUP_MAX
+config SOC_GDMA_PAIRS_PER_GROUP
     int
     default 3
 
 config SOC_GDMA_SUPPORT_ETM
-    bool
-    default y
-
-config SOC_GDMA_SUPPORT_SLEEP_RETENTION
     bool
     default y
 
@@ -471,17 +411,13 @@ config SOC_GPIO_SUPPORT_PIN_GLITCH_FILTER
     bool
     default y
 
-config SOC_GPIO_FLEX_GLITCH_FILTER_NUM
-    int
-    default 8
-
 config SOC_GPIO_SUPPORT_PIN_HYS_FILTER
     bool
     default y
 
-config SOC_GPIO_SUPPORT_PIN_HYS_CTRL_BY_EFUSE
-    bool
-    default y
+config SOC_GPIO_FLEX_GLITCH_FILTER_NUM
+    int
+    default 8
 
 config SOC_GPIO_SUPPORT_ETM
     bool
@@ -490,18 +426,6 @@ config SOC_GPIO_SUPPORT_ETM
 config SOC_GPIO_SUPPORT_RTC_INDEPENDENT
     bool
     default y
-
-config SOC_LP_IO_CLOCK_IS_INDEPENDENT
-    bool
-    default y
-
-config SOC_GPIO_IN_RANGE_MAX
-    int
-    default 27
-
-config SOC_GPIO_OUT_RANGE_MAX
-    int
-    default 27
 
 config SOC_GPIO_VALID_DIGITAL_IO_PAD_MASK
     hex
@@ -515,18 +439,6 @@ config SOC_GPIO_SUPPORT_HOLD_SINGLE_IO_IN_DSLP
     bool
     default y
 
-config SOC_GPIO_CLOCKOUT_BY_GPIO_MATRIX
-    bool
-    default y
-
-config SOC_CLOCKOUT_HAS_SOURCE_GATE
-    bool
-    default y
-
-config SOC_GPIO_CLOCKOUT_CHANNEL_NUM
-    int
-    default 3
-
 config SOC_RTCIO_PIN_COUNT
     int
     default 8
@@ -534,10 +446,6 @@ config SOC_RTCIO_PIN_COUNT
 config SOC_RTCIO_HOLD_SUPPORTED
     bool
     default y
-
-config SOC_RTCIO_VALID_RTCIO_MASK
-    hex
-    default 0x7F80
 
 config SOC_DEDIC_GPIO_OUT_CHANNELS_NUM
     int
@@ -555,15 +463,7 @@ config SOC_ANA_CMPR_NUM
     int
     default 1
 
-config SOC_ANA_CMPR_INTR_SHARE_WITH_GPIO
-    bool
-    default y
-
 config SOC_I2C_NUM
-    int
-    default 2
-
-config SOC_HP_I2C_NUM
     int
     default 2
 
@@ -579,10 +479,6 @@ config SOC_I2C_SUPPORT_SLAVE
     bool
     default y
 
-config SOC_I2C_SUPPORT_HW_FSM_RST
-    bool
-    default y
-
 config SOC_I2C_SUPPORT_HW_CLR_BUS
     bool
     default y
@@ -592,26 +488,6 @@ config SOC_I2C_SUPPORT_XTAL
     default y
 
 config SOC_I2C_SUPPORT_RTC
-    bool
-    default y
-
-config SOC_I2C_SUPPORT_10BIT_ADDR
-    bool
-    default y
-
-config SOC_I2C_SLAVE_SUPPORT_BROADCAST
-    bool
-    default y
-
-config SOC_I2C_SLAVE_CAN_GET_STRETCH_CAUSE
-    bool
-    default y
-
-config SOC_I2C_SLAVE_SUPPORT_I2CRAM_ACCESS
-    bool
-    default y
-
-config SOC_I2C_SLAVE_SUPPORT_SLAVE_UNMATCH
     bool
     default y
 
@@ -863,25 +739,9 @@ config SOC_PARLIO_TX_CLK_SUPPORT_GATING
     bool
     default y
 
-config SOC_PARLIO_RX_CLK_SUPPORT_GATING
-    bool
-    default y
-
-config SOC_PARLIO_RX_CLK_SUPPORT_OUTPUT
-    bool
-    default y
-
 config SOC_PARLIO_TRANS_BIT_ALIGN
     bool
     default y
-
-config SOC_MPI_MEM_BLOCKS_NUM
-    int
-    default 4
-
-config SOC_MPI_OPERATIONS_NUM
-    int
-    default 3
 
 config SOC_RSA_MAX_BIT_LEN
     int
@@ -975,22 +835,6 @@ config SOC_SPI_SUPPORT_CLK_RC_FAST
     bool
     default y
 
-config SOC_SPI_SCT_SUPPORTED
-    bool
-    default y
-
-config SOC_SPI_SCT_REG_NUM
-    int
-    default 14
-
-config SOC_SPI_SCT_BUFFER_NUM_MAX
-    bool
-    default y
-
-config SOC_SPI_SCT_CONF_BITLEN_MAX
-    hex
-    default 0x3FFFA
-
 config SOC_MEMSPI_IS_INDEPENDENT
     bool
     default y
@@ -1039,7 +883,7 @@ config SOC_MEMSPI_SRC_FREQ_16M_SUPPORTED
     bool
     default y
 
-config SOC_MEMSPI_FLASH_CLK_SRC_IS_INDEPENDENT
+config SOC_MEMSPI_CLOCK_IS_INDEPENDENT
     bool
     default y
 
@@ -1115,17 +959,13 @@ config SOC_TIMER_SUPPORT_ETM
     bool
     default y
 
-config SOC_TIMER_SUPPORT_SLEEP_RETENTION
-    bool
-    default y
-
 config SOC_MWDT_SUPPORT_XTAL
     bool
     default y
 
 config SOC_TWAI_CONTROLLER_NUM
-    int
-    default 1
+    bool
+    default y
 
 config SOC_TWAI_CLK_SUPPORT_XTAL
     bool
@@ -1171,10 +1011,6 @@ config SOC_EFUSE_ECDSA_USE_HARDWARE_K
     bool
     default y
 
-config SOC_EFUSE_ECDSA_KEY
-    bool
-    default y
-
 config SOC_SECURE_BOOT_V2_RSA
     bool
     default y
@@ -1197,7 +1033,7 @@ config SOC_SUPPORT_SECURE_BOOT_REVOKE_KEY
 
 config SOC_FLASH_ENCRYPTED_XTS_AES_BLOCK_MAX
     int
-    default 64
+    default 32
 
 config SOC_FLASH_ENCRYPTION_XTS_AES
     bool
@@ -1211,15 +1047,7 @@ config SOC_CRYPTO_DPA_PROTECTION_SUPPORTED
     bool
     default y
 
-config SOC_ECDSA_USES_MPI
-    bool
-    default y
-
 config SOC_UART_NUM
-    int
-    default 2
-
-config SOC_UART_HP_NUM
     int
     default 2
 
@@ -1347,10 +1175,6 @@ config SOC_MODEM_CLOCK_IS_INDEPENDENT
     bool
     default y
 
-config SOC_RCC_IS_INDEPENDENT
-    bool
-    default y
-
 config SOC_TEMPERATURE_SENSOR_SUPPORT_FAST_RC
     bool
     default y
@@ -1360,14 +1184,6 @@ config SOC_TEMPERATURE_SENSOR_SUPPORT_XTAL
     default y
 
 config SOC_TEMPERATURE_SENSOR_INTR_SUPPORT
-    bool
-    default y
-
-config SOC_TEMPERATURE_SENSOR_SUPPORT_ETM
-    bool
-    default y
-
-config SOC_RNG_CLOCK_IS_INDEPENDENT
     bool
     default y
 

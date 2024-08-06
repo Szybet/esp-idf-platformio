@@ -76,6 +76,7 @@ TEST_CASE("esp-tls global_ca_store set free", "[esp-tls]")
     esp_tls_free_global_ca_store();
 }
 
+#ifdef CONFIG_ESP_TLS_SERVER
 TEST_CASE("esp_tls_server session create delete", "[esp-tls]")
 {
     struct esp_tls *tls = esp_tls_init();
@@ -94,3 +95,4 @@ TEST_CASE("esp_tls_server session create delete", "[esp-tls]")
     esp_tls_server_session_delete(tls);
 
 }
+#endif

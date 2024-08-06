@@ -93,9 +93,6 @@ static ble_hs_hci_evt_le_fn ble_hs_hci_evt_le_periodic_adv_rpt;
 static ble_hs_hci_evt_le_fn ble_hs_hci_evt_le_periodic_adv_sync_lost;
 static ble_hs_hci_evt_le_fn ble_hs_hci_evt_le_scan_req_rcvd;
 static ble_hs_hci_evt_le_fn ble_hs_hci_evt_le_periodic_adv_sync_transfer;
-#if MYNEWT_VAL(BLE_PERIODIC_ADV_SYNC_BIGINFO_REPORTS)
-static ble_hs_hci_evt_le_fn ble_hs_hci_evt_le_biginfo_adv_report;
-#endif
 #if MYNEWT_VAL(BLE_POWER_CONTROL)
 static ble_hs_hci_evt_le_fn ble_hs_hci_evt_le_pathloss_threshold;
 static ble_hs_hci_evt_le_fn ble_hs_hci_evt_le_transmit_power_report;
@@ -130,7 +127,7 @@ static const struct ble_hs_hci_evt_dispatch_entry ble_hs_hci_evt_dispatch[] = {
 #endif
     { BLE_HCI_EVCODE_HW_ERROR, ble_hs_hci_evt_hw_error },
 #if MYNEWT_VAL(BLE_HCI_VS)
-    { BLE_HCI_EVCODE_VS, ble_hs_hci_evt_vs },
+    { BLE_HCI_EVCODE_VS_DEBUG, ble_hs_hci_evt_vs },
 #endif
     { BLE_HCI_OCF_LE_RX_TEST, ble_hs_hci_evt_rx_test },
     { BLE_HCI_OCF_LE_TX_TEST, ble_hs_hci_evt_tx_test },
@@ -167,9 +164,6 @@ static ble_hs_hci_evt_le_fn * const ble_hs_hci_evt_le_dispatch[] = {
     [BLE_HCI_LE_SUBEV_ADV_SET_TERMINATED] = ble_hs_hci_evt_le_adv_set_terminated,
     [BLE_HCI_LE_SUBEV_SCAN_REQ_RCVD] = ble_hs_hci_evt_le_scan_req_rcvd,
     [BLE_HCI_LE_SUBEV_PERIODIC_ADV_SYNC_TRANSFER] = ble_hs_hci_evt_le_periodic_adv_sync_transfer,
-#if MYNEWT_VAL(BLE_PERIODIC_ADV_SYNC_BIGINFO_REPORTS)
-    [BLE_HCI_LE_SUBEV_BIGINFO_ADV_REPORT] = ble_hs_hci_evt_le_biginfo_adv_report,
-#endif
 #if MYNEWT_VAL(BLE_POWER_CONTROL)
     [BLE_HCI_LE_SUBEV_PATH_LOSS_THRESHOLD] = ble_hs_hci_evt_le_pathloss_threshold,
     [BLE_HCI_LE_SUBEV_TRANSMIT_POWER_REPORT] = ble_hs_hci_evt_le_transmit_power_report,
@@ -186,7 +180,7 @@ static const struct ble_hs_hci_evt_dispatch_entry *
 ble_hs_hci_evt_dispatch_find(uint8_t event_code)
 {
     const struct ble_hs_hci_evt_dispatch_entry *entry;
-    unsigned int i;
+    int i;
 
     for (i = 0; i < BLE_HS_HCI_EVT_DISPATCH_SZ; i++) {
         entry = ble_hs_hci_evt_dispatch + i;
@@ -385,7 +379,7 @@ ble_hs_hci_evt_num_completed_pkts(uint8_t event_code, const void *data,
 static int
 ble_hs_hci_evt_vs(uint8_t event_code, const void *data, unsigned int len)
 {
-    const struct ble_hci_ev_vs *ev = data;
+    const struct ble_hci_ev_vs_debug *ev = data;
 
     if (len < sizeof(*ev)) {
         return BLE_HS_ECONTROLLER;
@@ -901,23 +895,6 @@ ble_hs_hci_evt_le_periodic_adv_sync_transfer(uint8_t subevent, const void *data,
 #endif
     return 0;
 }
-
-#if MYNEWT_VAL(BLE_PERIODIC_ADV_SYNC_BIGINFO_REPORTS)
-static int
-ble_hs_hci_evt_le_biginfo_adv_report(uint8_t subevent, const void *data,
-                                     unsigned int len)
-{
-    const struct ble_hci_ev_le_subev_biginfo_adv_report *ev = data;
-
-    if (len != sizeof(*ev)) {
-        return BLE_HS_EBADDATA;
-    }
-
-    ble_gap_rx_biginfo_adv_rpt(ev);
-
-    return 0;
-}
-#endif
 
 static int
 ble_hs_hci_evt_le_scan_timeout(uint8_t subevent, const void *data,

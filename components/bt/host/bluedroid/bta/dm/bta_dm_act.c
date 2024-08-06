@@ -46,9 +46,6 @@
 #if (GAP_INCLUDED == TRUE)
 #include "stack/gap_api.h"
 #endif
-#if (BT_CONTROLLER_INCLUDED == TRUE)
-#include "esp_bt.h"
-#endif
 
 static void bta_dm_inq_results_cb (tBTM_INQ_RESULTS *p_inq, UINT8 *p_eir);
 static void bta_dm_inq_cmpl_cb (void *p_result);
@@ -77,10 +74,11 @@ static void bta_dm_bl_change_cback (tBTM_BL_EVENT_DATA *p_data);
 static void bta_dm_acl_link_stat_cback(tBTM_ACL_LINK_STAT_EVENT_DATA *p_data);
 static void bta_dm_policy_cback(tBTA_SYS_CONN_STATUS status, UINT8 id, UINT8 app_id, BD_ADDR peer_addr);
 
-#if (CLASSIC_BT_INCLUDED == TRUE)
-static void bta_dm_encryption_change_cback(BD_ADDR bd_addr, UINT8 enc_mode);
-static UINT8 bta_dm_sp_cback (tBTM_SP_EVT event, tBTM_SP_EVT_DATA *p_data);
 /* Extended Inquiry Response */
+#if (BT_SSP_INCLUDED == TRUE && SMP_INCLUDED == TRUE)
+static UINT8 bta_dm_sp_cback (tBTM_SP_EVT event, tBTM_SP_EVT_DATA *p_data);
+#endif /* (BT_SSP_INCLUDED == TRUE) */
+#if (CLASSIC_BT_INCLUDED == TRUE)
 static void bta_dm_set_eir (char *local_name);
 #endif
 #if (SDP_INCLUDED == TRUE)
@@ -140,6 +138,7 @@ static void bta_dm_observe_discard_cb (uint32_t num_dis);
 static void bta_dm_delay_role_switch_cback(TIMER_LIST_ENT *p_tle);
 extern void sdpu_uuid16_to_uuid128(UINT16 uuid16, UINT8 *p_uuid128);
 static void bta_dm_disable_timer_cback(TIMER_LIST_ENT *p_tle);
+extern int bredr_txpwr_get(int *min_power_level, int *max_power_level);
 
 const UINT16 bta_service_id_to_uuid_lkup_tbl [BTA_MAX_SERVICE_ID] = {
     UUID_SERVCLASS_PNP_INFORMATION,         /* Reserved */
@@ -231,11 +230,9 @@ const tBTM_APPL_INFO bta_security = {
     &bta_dm_new_link_key_cback,
     &bta_dm_authentication_complete_cback,
     &bta_dm_bond_cancel_complete_cback,
-#if (CLASSIC_BT_INCLUDED == TRUE)
-    &bta_dm_encryption_change_cback,
+#if (BT_SSP_INCLUDED == TRUE)
     &bta_dm_sp_cback,
 #else
-    NULL,
     NULL,
 #endif
 #if BLE_INCLUDED == TRUE
@@ -510,7 +507,7 @@ static void bta_dm_sys_hw_cback( tBTA_SYS_HW_EVT status )
 #endif  ///SMP_INCLUDED == TRUE
         BTM_SetDefaultLinkSuperTout(p_bta_dm_cfg->link_timeout);
 #if CLASSIC_BT_INCLUDED
-        BTM_WritePageTimeout(p_bta_dm_cfg->page_timeout, NULL);
+        BTM_WritePageTimeout(p_bta_dm_cfg->page_timeout);
         bta_dm_cb.cur_policy = p_bta_dm_cfg->policy_settings;
         BTM_SetDefaultLinkPolicy(bta_dm_cb.cur_policy);
 #endif
@@ -683,11 +680,9 @@ static void bta_dm_disable_timer_cback (TIMER_LIST_ENT *p_tle)
 *******************************************************************************/
 void bta_dm_set_dev_name (tBTA_DM_MSG *p_data)
 {
-    BTM_SetLocalDeviceName((char *)p_data->set_name.name, p_data->set_name.name_type);
+    BTM_SetLocalDeviceName((char *)p_data->set_name.name);
 #if CLASSIC_BT_INCLUDED
-    if (p_data->set_name.name_type & BT_DEVICE_TYPE_BREDR) {
-        bta_dm_set_eir ((char *)p_data->set_name.name);
-    }
+    bta_dm_set_eir ((char *)p_data->set_name.name);
 #endif /// CLASSIC_BT_INCLUDED
 }
 
@@ -706,30 +701,11 @@ void bta_dm_get_dev_name (tBTA_DM_MSG *p_data)
     tBTM_STATUS status;
     char *name = NULL;
 
-    status = BTM_ReadLocalDeviceName(&name, p_data->get_name.name_type);
+    status = BTM_ReadLocalDeviceName(&name);
     if (p_data->get_name.p_cback) {
         (*p_data->get_name.p_cback)(status, name);
     }
 }
-
-/*******************************************************************************
-**
-** Function         bta_dm_cfg_coex_status
-**
-** Description      config coexistence status
-**
-**
-** Returns          void
-**
-*******************************************************************************/
-#if (ESP_COEX_VSC_INCLUDED == TRUE)
-void bta_dm_cfg_coex_status (tBTA_DM_MSG *p_data)
-{
-    BTM_ConfigCoexStatus(p_data->cfg_coex_status.op,
-                         p_data->cfg_coex_status.type,
-                         p_data->cfg_coex_status.status);
-}
-#endif
 
 void bta_dm_send_vendor_hci(tBTA_DM_MSG *p_data)
 {
@@ -873,36 +849,6 @@ void bta_dm_config_eir (tBTA_DM_MSG *p_data)
 
 /*******************************************************************************
 **
-** Function         bta_dm_set_page_timeout
-**
-** Description      Sets page timeout
-**
-**
-** Returns          void
-**
-*******************************************************************************/
-void bta_dm_set_page_timeout (tBTA_DM_MSG *p_data)
-{
-    BTM_WritePageTimeout(p_data->set_page_timeout.page_to, p_data->set_page_timeout.set_page_to_cb);
-}
-
-/*******************************************************************************
-**
-** Function         bta_dm_get_page_timeout
-**
-** Description      Gets page timeout
-**
-**
-** Returns          void
-**
-*******************************************************************************/
-void bta_dm_get_page_timeout (tBTA_DM_MSG *p_data)
-{
-    BTM_ReadPageTimeout(p_data->get_page_timeout.get_page_to_cb);
-}
-
-/*******************************************************************************
-**
 ** Function         bta_dm_set_acl_pkt_types
 **
 ** Description      Sets ACL packet types
@@ -921,23 +867,6 @@ void bta_dm_set_acl_pkt_types (tBTA_DM_MSG *p_data)
         APPL_TRACE_ERROR("%s(), the callback function can't be NULL.", __func__);
     }
 }
-
-/*******************************************************************************
-**
-** Function         bta_dm_set_min_enc_key_size
-**
-** Description      Sets the minimal size of encryption key
-**
-**
-** Returns          void
-**
-*******************************************************************************/
-#if (ENC_KEY_SIZE_CTRL_MODE != ENC_KEY_SIZE_CTRL_MODE_NONE)
-void bta_dm_set_min_enc_key_size (tBTA_DM_MSG *p_data)
-{
-    BTM_SetMinEncKeySize(p_data->set_min_enc_key_size.key_size, p_data->set_min_enc_key_size.set_min_enc_key_size_cb);
-}
-#endif
 
 #endif
 /*******************************************************************************
@@ -1490,7 +1419,7 @@ static void bta_dm_policy_cback(tBTA_SYS_CONN_STATUS status, UINT8 id, UINT8 app
 ** Returns          void
 **
 *******************************************************************************/
-#if (CLASSIC_BT_INCLUDED == TRUE)
+#if (SMP_INCLUDED == TRUE)
 void bta_dm_confirm(tBTA_DM_MSG *p_data)
 {
     tBTM_STATUS res = BTM_NOT_AUTHORIZED;
@@ -1500,6 +1429,7 @@ void bta_dm_confirm(tBTA_DM_MSG *p_data)
     }
     BTM_ConfirmReqReply(res, p_data->confirm.bd_addr);
 }
+#endif  ///SMP_INCLUDED == TRUE
 
 /*******************************************************************************
 **
@@ -1511,6 +1441,7 @@ void bta_dm_confirm(tBTA_DM_MSG *p_data)
 ** Returns          void
 **
 *******************************************************************************/
+#if (SMP_INCLUDED == TRUE && BT_SSP_INCLUDED)
 void bta_dm_key_req(tBTA_DM_MSG *p_data)
 {
     tBTM_STATUS res = BTM_NOT_AUTHORIZED;
@@ -1520,7 +1451,7 @@ void bta_dm_key_req(tBTA_DM_MSG *p_data)
     }
     BTM_PasskeyReqReply(res, p_data->key_req.bd_addr, p_data->key_req.passkey);
 }
-#endif  ///CLASSIC_BT_INCLUDED == TRUE
+#endif  ///SMP_INCLUDED == TRUE && BT_SSP_INCLUDED
 
 /*******************************************************************************
 **
@@ -3049,6 +2980,7 @@ static UINT8 bta_dm_authorize_cback (BD_ADDR bd_addr, DEV_CLASS dev_class, BD_NA
 
 
 #if (CLASSIC_BT_INCLUDED == TRUE)
+#if (BT_SSP_INCLUDED == TRUE)
 /*******************************************************************************
 **
 ** Function         bta_dm_pinname_cback
@@ -3100,6 +3032,7 @@ static UINT8 bta_dm_authorize_cback (BD_ADDR bd_addr, DEV_CLASS dev_class, BD_NA
         bta_dm_cb.p_sec_cback(event, &sec_event);
     }
 }
+#endif /// BT_SSP_INCLUDED == TRUE
 
 /*******************************************************************************
 **
@@ -3127,27 +3060,6 @@ static UINT8 bta_dm_pin_cback (BD_ADDR bd_addr, DEV_CLASS dev_class, BD_NAME bd_
 
     bta_dm_cb.p_sec_cback(BTA_DM_PIN_REQ_EVT, &sec_event);
     return BTM_CMD_STARTED;
-}
-
-/*******************************************************************************
-**
-** Function         bta_dm_new_link_key_cback
-**
-** Description      Callback from BTM to notify new link key
-**
-** Returns          void
-**
-*******************************************************************************/
-static void bta_dm_encryption_change_cback(BD_ADDR bd_addr, UINT8 enc_mode)
-{
-    if (bta_dm_cb.p_sec_cback) {
-        tBTA_DM_SEC sec_event;
-        memset (&sec_event, 0, sizeof(tBTA_DM_SEC));
-        bdcpy(sec_event.enc_chg.bd_addr, bd_addr);
-        sec_event.enc_chg.enc_mode = enc_mode;
-
-        bta_dm_cb.p_sec_cback(BTA_DM_ENC_CHG_EVT, &sec_event);
-    }
 }
 #endif ///CLASSIC_BT_INCLUDED == TRUE
 
@@ -3243,7 +3155,7 @@ static UINT8 bta_dm_authentication_complete_cback(BD_ADDR bd_addr, DEV_CLASS dev
     return BTM_SUCCESS;
 }
 
-#if (CLASSIC_BT_INCLUDED == TRUE)
+#if (BT_SSP_INCLUDED == TRUE)
 /*******************************************************************************
 **
 ** Function         bta_dm_sp_cback
@@ -3267,9 +3179,11 @@ static UINT8 bta_dm_sp_cback (tBTM_SP_EVT event, tBTM_SP_EVT_DATA *p_data)
     /* TODO_SP */
     switch (event) {
     case BTM_SP_IO_REQ_EVT:
+#if (BT_SSP_INCLUDED == TRUE)
         /* translate auth_req */
         bta_dm_co_io_req(p_data->io_req.bd_addr, &p_data->io_req.io_cap,
                          &p_data->io_req.oob_data, &p_data->io_req.auth_req, p_data->io_req.is_orig);
+#endif
 #if BTM_OOB_INCLUDED == FALSE
         status = BTM_SUCCESS;
 #endif
@@ -3277,8 +3191,10 @@ static UINT8 bta_dm_sp_cback (tBTM_SP_EVT event, tBTM_SP_EVT_DATA *p_data)
         APPL_TRACE_EVENT("io mitm: %d oob_data:%d", p_data->io_req.auth_req, p_data->io_req.oob_data);
         break;
     case BTM_SP_IO_RSP_EVT:
+#if (BT_SSP_INCLUDED == TRUE)
         bta_dm_co_io_rsp(p_data->io_rsp.bd_addr, p_data->io_rsp.io_cap,
                          p_data->io_rsp.oob_data, p_data->io_rsp.auth_req );
+#endif
         break;
 
     case BTM_SP_CFM_REQ_EVT:
@@ -3290,10 +3206,12 @@ static UINT8 bta_dm_sp_cback (tBTM_SP_EVT event, tBTM_SP_EVT_DATA *p_data)
         sec_event.cfm_req.rmt_io_caps = p_data->cfm_req.rmt_io_caps;
 
         /* continue to next case */
+#if (BT_SSP_INCLUDED == TRUE)
     /* Passkey entry mode, mobile device with output capability is very
         unlikely to receive key request, so skip this event */
     case BTM_SP_KEY_REQ_EVT:
     case BTM_SP_KEY_NOTIF_EVT:
+#endif
         if (BTM_SP_CFM_REQ_EVT == event) {
             /* Due to the switch case falling through below to BTM_SP_KEY_NOTIF_EVT,
                call remote name request using values from cfm_req */
@@ -3410,7 +3328,7 @@ static UINT8 bta_dm_sp_cback (tBTM_SP_EVT event, tBTM_SP_EVT_DATA *p_data)
     APPL_TRACE_EVENT("dm status: %d", status);
     return status;
 }
-#endif /* (CLASSIC_BT_INCLUDED == TRUE) */
+#endif /* (BT_SSP_INCLUDED == TRUE) */
 
 #endif  ///SMP_INCLUDED == TRUE
 
@@ -4170,7 +4088,7 @@ static void bta_dm_set_eir (char *local_name)
     if (p_bta_dm_eir_cfg->bta_dm_eir_included_name) {
         /* if local name is not provided, get it from controller */
         if ( local_name == NULL ) {
-            if ( BTM_ReadLocalDeviceName( &local_name, BT_DEVICE_TYPE_BREDR) != BTM_SUCCESS ) {
+            if ( BTM_ReadLocalDeviceName( &local_name ) != BTM_SUCCESS ) {
                 APPL_TRACE_ERROR("Fail to read local device name for EIR");
             }
         }
@@ -4401,14 +4319,7 @@ static void bta_dm_set_eir (char *local_name)
     if (p_bta_dm_eir_cfg->bta_dm_eir_included_tx_power) {
         if (free_eir_length >= 3) {
             int min_power_level, max_power_level;
-#if (BT_CONTROLLER_INCLUDED == TRUE)
-            if (esp_bredr_tx_power_get((esp_power_level_t *)&min_power_level, (esp_power_level_t *)&max_power_level) == ESP_OK) {
-#else
-            {
-                min_power_level = 0;
-                max_power_level = 0;
-                UNUSED(min_power_level);
-#endif
+            if (bredr_txpwr_get(&min_power_level, &max_power_level) == 0) {
                 INT8 btm_tx_power[BTM_TX_POWER_LEVEL_MAX + 1] = BTM_TX_POWER;
                 p_bta_dm_eir_cfg->bta_dm_eir_inq_tx_power = btm_tx_power[max_power_level];
                 UINT8_TO_STREAM(p, 2);      /* Length field */
@@ -4871,6 +4782,7 @@ static UINT8 bta_dm_ble_smp_cback (tBTM_LE_EVT event, BD_ADDR bda, tBTM_LE_EVT_D
     memset(&sec_event, 0, sizeof(tBTA_DM_SEC));
     switch (event) {
     case BTM_LE_IO_REQ_EVT: {
+        // #if (BT_SSP_INCLUDED == TRUE)
         bta_dm_co_ble_io_req(bda,
                              &p_data->io_req.io_cap,
                              &p_data->io_req.oob_data,
@@ -4878,6 +4790,7 @@ static UINT8 bta_dm_ble_smp_cback (tBTM_LE_EVT event, BD_ADDR bda, tBTM_LE_EVT_D
                              &p_data->io_req.max_key_size,
                              &p_data->io_req.init_keys,
                              &p_data->io_req.resp_keys);
+        // #endif
 #if BTM_OOB_INCLUDED == FALSE
         status = BTM_SUCCESS;
 #endif
@@ -5419,6 +5332,10 @@ void bta_dm_ble_scan (tBTA_DM_MSG *p_data)
             status = (status == BTM_CMD_STARTED ? BTA_SUCCESS : BTA_FAILURE);
             p_data->ble_scan.p_stop_scan_cback(status);
         }
+
+        // reset BLE scan link state when stop scan
+        btm_ble_clear_topology_mask(BTM_BLE_STATE_ACTIVE_SCAN_BIT);
+        btm_ble_clear_topology_mask(BTM_BLE_STATE_PASSIVE_SCAN_BIT);
     }
 }
 

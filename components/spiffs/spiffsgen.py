@@ -2,8 +2,11 @@
 #
 # spiffsgen is a tool used to generate a spiffs image from a directory
 #
-# SPDX-FileCopyrightText: 2019-2024 Espressif Systems (Shanghai) CO LTD
+# SPDX-FileCopyrightText: 2019-2022 Espressif Systems (Shanghai) CO LTD
 # SPDX-License-Identifier: Apache-2.0
+
+from __future__ import division, print_function
+
 import argparse
 import io
 import math
@@ -226,7 +229,7 @@ class SpiffsObjIndexPage(SpiffsObjPageWithIdx):
         # Add padding before the object index page specific information
         img += b'\xFF' * self.build_config.OBJ_DATA_PAGE_HEADER_LEN_ALIGNED_PAD
 
-        # If this is the first object index page for the object, add filename, type
+        # If this is the first object index page for the object, add filname, type
         # and size information
         if self.span_ix == 0:
             img += struct.pack(SpiffsPage._endianness_dict[self.build_config.endianness] +
@@ -240,7 +243,7 @@ class SpiffsObjIndexPage(SpiffsObjPageWithIdx):
                 + self.build_config.meta_len
                 + self.build_config.OBJ_INDEX_PAGES_HEADER_LEN_ALIGNED_PAD))
 
-        # Finally, add the page index of data pages
+        # Finally, add the page index of daa pages
         for page in self.pages:
             page = page >> int(math.log(self.build_config.page_size, 2))
             img += struct.pack(SpiffsPage._endianness_dict[self.build_config.endianness] +

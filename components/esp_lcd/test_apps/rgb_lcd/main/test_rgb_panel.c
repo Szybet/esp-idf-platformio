@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2022-2023 Espressif Systems (Shanghai) CO LTD
+ * SPDX-FileCopyrightText: 2022 Espressif Systems (Shanghai) CO LTD
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -14,6 +14,7 @@
 #include "esp_random.h"
 #include "esp_timer.h"
 #include "esp_attr.h"
+#include "spi_flash_mmap.h"
 #include "test_rgb_board.h"
 #include "esp_private/spi_flash_os.h"
 
@@ -26,12 +27,12 @@
 #define TEST_IMG_SIZE (100 * 100 * sizeof(uint16_t))
 
 static esp_lcd_panel_handle_t test_rgb_panel_initialization(size_t data_width, size_t bpp, size_t bb_pixels, bool refresh_on_demand,
-                                                            esp_lcd_rgb_panel_vsync_cb_t vsync_cb, void *user_data)
+        esp_lcd_rgb_panel_vsync_cb_t vsync_cb, void *user_data)
 {
     esp_lcd_panel_handle_t panel_handle = NULL;
     esp_lcd_rgb_panel_config_t panel_config = {
         .data_width = data_width,
-        .dma_burst_size = 64,
+        .psram_trans_align = 64,
         .bounce_buffer_size_px = bb_pixels,
         .bits_per_pixel = bpp,
         .clk_src = LCD_CLK_SRC_DEFAULT,

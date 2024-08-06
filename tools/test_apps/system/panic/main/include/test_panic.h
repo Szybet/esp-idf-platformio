@@ -24,22 +24,14 @@ void test_int_wdt(void);
 
 void test_task_wdt_cpu0(void);
 
-#if CONFIG_ESP_SYSTEM_HW_STACK_GUARD
-void test_hw_stack_guard_cpu0(void);
-#if !CONFIG_FREERTOS_UNICORE
-void test_hw_stack_guard_cpu1(void);
-#endif // CONFIG_FREERTOS_UNICORE
-#endif // CONFIG_ESP_SYSTEM_HW_STACK_GUARD
-
 #if CONFIG_ESP_COREDUMP_ENABLE_TO_FLASH && CONFIG_SPIRAM_ALLOW_STACK_EXTERNAL_MEMORY
 void test_panic_extram_stack(void);
 #endif
 
 #if !CONFIG_FREERTOS_UNICORE
 void test_task_wdt_cpu1(void);
+void test_task_wdt_both_cpus(void);
 #endif
-
-void test_loadprohibited(void);
 
 void test_storeprohibited(void);
 
@@ -58,8 +50,6 @@ void test_ub(void);
 void test_assert(void);
 
 void test_assert_cache_disabled(void);
-
-void test_illegal_access(void);
 
 #ifdef __cplusplus
 }

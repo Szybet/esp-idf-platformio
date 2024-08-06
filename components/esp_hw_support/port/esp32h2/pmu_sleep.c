@@ -258,12 +258,11 @@ uint32_t pmu_sleep_start(uint32_t wakeup_opt, uint32_t reject_opt, uint32_t lslp
         ;
     }
 
-    return pmu_sleep_finish(dslp);
+    return ESP_OK;
 }
 
-bool pmu_sleep_finish(bool dslp)
+bool pmu_sleep_finish(void)
 {
-    (void)dslp;
     return pmu_ll_hp_is_sleep_reject(PMU_instance()->hal->dev);
 }
 

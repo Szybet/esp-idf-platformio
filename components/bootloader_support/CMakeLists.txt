@@ -1,24 +1,14 @@
-idf_build_get_property(target IDF_TARGET)
-
-if(${target} STREQUAL "linux")
-    return() # This component is not supported by the POSIX/Linux simulator
-endif()
-
 set(srcs
     "src/bootloader_common.c"
     "src/bootloader_common_loader.c"
     "src/bootloader_clock_init.c"
     "src/bootloader_mem.c"
     "src/bootloader_random.c"
+    "src/bootloader_random_${IDF_TARGET}.c"
     "src/bootloader_efuse.c"
     "src/flash_encrypt.c"
     "src/secure_boot.c"
     )
-
-if(NOT CONFIG_IDF_ENV_FPGA)
-    # For FPGA ENV, bootloader_random implementation is implemented in `bootloader_random.c`
-    list(APPEND srcs "src/bootloader_random_${IDF_TARGET}.c")
-endif()
 
 if(NOT CONFIG_APP_BUILD_TYPE_PURE_RAM_APP)
     list(APPEND srcs
@@ -39,7 +29,7 @@ endif()
 if(BOOTLOADER_BUILD OR CONFIG_APP_BUILD_TYPE_RAM)
     set(include_dirs "include" "bootloader_flash/include"
         "private_include")
-    set(priv_requires micro-ecc spi_flash efuse esp_bootloader_format esp_app_format)
+    set(priv_requires micro-ecc spi_flash efuse esp_app_format)
     list(APPEND srcs
     "src/bootloader_init.c"
     "src/bootloader_clock_loader.c"
@@ -60,7 +50,7 @@ else()
     set(include_dirs "include" "bootloader_flash/include")
     set(priv_include_dirs "private_include")
     # heap is required for `heap_memory_layout.h` header
-    set(priv_requires spi_flash mbedtls efuse heap esp_bootloader_format esp_app_format)
+    set(priv_requires spi_flash mbedtls efuse heap esp_app_format)
 endif()
 
 if(BOOTLOADER_BUILD)
@@ -86,10 +76,6 @@ if(BOOTLOADER_BUILD)
         endif()
     endif()
 else()
-    if(CONFIG_SOC_SECURE_BOOT_SUPPORTED)
-        list(APPEND srcs "src/${IDF_TARGET}/secure_boot_secure_features.c")
-    endif()
-
     if(CONFIG_SECURE_SIGNED_ON_UPDATE)
         if(CONFIG_SECURE_SIGNED_APPS_ECDSA_SCHEME)
             list(APPEND srcs "src/secure_boot_v1/secure_boot_signatures_app.c")
@@ -184,7 +170,4 @@ endif()
 
 if(BOOTLOADER_BUILD)
     target_link_libraries(${COMPONENT_LIB} INTERFACE "-u abort")
-    # esp_bootloader_desc structure is added as an undefined symbol because otherwise the
-    # linker will ignore this structure as it has no other files depending on it.
-    target_link_libraries(${COMPONENT_LIB} INTERFACE "-u esp_bootloader_desc")
 endif()

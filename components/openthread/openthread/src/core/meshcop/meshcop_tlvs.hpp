@@ -160,16 +160,6 @@ public:
      */
     const Tlv *GetNext(void) const { return As<Tlv>(ot::Tlv::GetNext()); }
 
-    /**
-     * Indicates whether a TLV appears to be well-formed.
-     *
-     * @param[in]  aTlv  A reference to the TLV.
-     *
-     * @returns TRUE if the TLV appears to be well-formed, FALSE otherwise.
-     *
-     */
-    static bool IsValid(const Tlv &aTlv);
-
 } OT_TOOL_PACKED_END;
 
 /**
@@ -280,7 +270,7 @@ typedef SimpleTlvInfo<Tlv::kExtendedPanId, ExtendedPanId> ExtendedPanIdTlv;
  *
  */
 OT_TOOL_PACKED_BEGIN
-class NetworkNameTlv : public Tlv, public TlvInfo<Tlv::kNetworkName>
+class NetworkNameTlv : public Tlv, public StringTlvInfo<Tlv::kNetworkName, NetworkName::kMaxSize>
 {
 public:
     /**
@@ -763,8 +753,7 @@ private:
 
         const uint8_t *mData;
         const Message *mMessage;
-        uint16_t       mOffset;
-        uint16_t       mLength;
+        OffsetRange    mOffsetRange;
     };
 
     uint8_t mEntriesStart;

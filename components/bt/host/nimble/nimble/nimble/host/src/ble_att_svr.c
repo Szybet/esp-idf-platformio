@@ -326,18 +326,12 @@ ble_att_svr_check_perms(uint16_t conn_handle, int is_read,
      * require it on level 4
      */
     if (MYNEWT_VAL(BLE_SM_SC_ONLY)) {
-        if (!sec_state.authenticated ||
+        if (sec_state.key_size != 16 ||
+            !sec_state.authenticated ||
             !sec_state.encrypted) {
-            *out_att_err = BLE_ATT_ERR_INSUFFICIENT_AUTHEN;
-            return BLE_HS_ATT_ERR(*out_att_err);
-        } else if (sec_state.authenticated &&
-                   sec_state.encrypted &&
-                   sec_state.key_size != 16) {
-            *out_att_err = BLE_ATT_ERR_INSUFFICIENT_KEY_SZ;
-            return BLE_HS_ATT_ERR(*out_att_err);
+            return BLE_ATT_ERR_INSUFFICIENT_KEY_SZ;
         }
     }
-
     if ((enc || authen) && !sec_state.encrypted) {
         ble_hs_lock();
         conn = ble_hs_conn_find(conn_handle);
@@ -1379,7 +1373,7 @@ ble_att_svr_build_read_type_rsp(uint16_t conn_handle,
     *rxom = NULL;
     os_mbuf_adj(txom, OS_MBUF_PKTLEN(txom));
 
-    /* Allocate space for the response base, but don't fill in the fields.  They
+    /* Allocate space for the respose base, but don't fill in the fields.  They
      * get filled in at the end, when we know the value of the length field.
      */
 
@@ -1982,9 +1976,6 @@ ble_att_svr_build_read_group_type_rsp(uint16_t conn_handle,
 
     /* Silence warnings. */
     end_group_handle = 0;
-    start_group_handle = 0;
-
-    entry = NULL;
 
     *att_err = 0;
     *err_handle = start_handle;
@@ -2942,7 +2933,7 @@ ble_att_svr_rx_notify(uint16_t conn_handle, struct os_mbuf **rxom)
     /* All indications shall be confirmed, but only these with required
      * security established shall be pass to application
      */
-    if (MYNEWT_VAL(BLE_SM_LVL) >= 2 && !sec_state.encrypted) {
+    if (MYNEWT_VAL(BLE_SM_SC_LVL) >= 2 && !sec_state.encrypted) {
         return 0;
     }
 
@@ -3033,7 +3024,7 @@ ble_att_svr_rx_indicate(uint16_t conn_handle, struct os_mbuf **rxom)
     /* All indications shall be confirmed, but only these with required
      * security established shall be pass to application
      */
-    if (MYNEWT_VAL(BLE_SM_LVL) >= 2 && !sec_state.encrypted) {
+    if (MYNEWT_VAL(BLE_SM_SC_LVL) >= 2 && !sec_state.encrypted) {
         goto done;
     }
 

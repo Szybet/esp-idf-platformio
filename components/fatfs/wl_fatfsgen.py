@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# SPDX-FileCopyrightText: 2021-2024 Espressif Systems (Shanghai) CO LTD
+# SPDX-FileCopyrightText: 2021-2022 Espressif Systems (Shanghai) CO LTD
 # SPDX-License-Identifier: Apache-2.0
 from typing import Optional
 
@@ -215,14 +215,13 @@ class WLFATFS:
 if __name__ == '__main__':
     desc = 'Create a FAT filesystem with support for wear levelling and populate it with directory content'
     args = get_args_for_partition_generator(desc, wl=True)
-    wl_fatfs = WLFATFS(size=args.partition_size,
+    wl_fatfs = WLFATFS(sectors_per_cluster=args.sectors_per_cluster,
+                       size=args.partition_size,
                        sector_size=args.sector_size,
-                       fat_tables_cnt=args.fat_count,
-                       sectors_per_cluster=args.sectors_per_cluster,
+                       root_entry_count=args.root_entry_count,
                        explicit_fat_type=args.fat_type,
                        long_names_enabled=args.long_name_support,
                        use_default_datetime=args.use_default_datetime,
-                       root_entry_count=args.root_entry_count,
                        wl_mode=args.wl_mode)
 
     wl_fatfs.plain_fatfs.generate(args.input_directory)

@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2019-2024 Espressif Systems (Shanghai) CO LTD
+ * SPDX-FileCopyrightText: 2019-2023 Espressif Systems (Shanghai) CO LTD
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -304,6 +304,7 @@ esp_err_t esp_eth_stop(esp_eth_handle_t hdl)
     esp_eth_driver_t *eth_driver = (esp_eth_driver_t *)hdl;
     ESP_GOTO_ON_FALSE(eth_driver, ESP_ERR_INVALID_ARG, err, TAG, "ethernet driver handle can't be null");
     esp_eth_phy_t *phy = eth_driver->phy;
+    esp_eth_mac_t *mac = eth_driver->mac;
     // check if driver has started
     esp_eth_fsm_t expected_fsm = ESP_ETH_FSM_START;
     ESP_GOTO_ON_FALSE(atomic_compare_exchange_strong(&eth_driver->fsm, &expected_fsm, ESP_ETH_FSM_STOP),
@@ -312,8 +313,16 @@ esp_err_t esp_eth_stop(esp_eth_handle_t hdl)
 
     eth_link_t expected_link = ETH_LINK_UP;
     if (atomic_compare_exchange_strong(&eth_driver->link, &expected_link, ETH_LINK_DOWN)){
-        // MAC is stopped by setting link down at PHY layer
-        ESP_GOTO_ON_ERROR(phy->set_link(phy, ETH_LINK_DOWN), err, TAG, "ethernet phy reset link failed");
+        // to ensure backwards compatibility, check if set_link function is not NULL
+        if (phy->set_link != NULL) {
+            // MAC is stopped by setting link down at PHY layer
+            ESP_GOTO_ON_ERROR(phy->set_link(phy, ETH_LINK_DOWN), err, TAG, "ethernet phy reset link failed");
+        } else {
+            // MAC is stopped by setting link down at MAC layer
+            ESP_GOTO_ON_ERROR(mac->set_link(mac, ETH_LINK_DOWN), err, TAG, "ethernet mac set link failed");
+            ESP_GOTO_ON_ERROR(esp_event_post(ETH_EVENT, ETHERNET_EVENT_DISCONNECTED, &eth_driver, sizeof(esp_eth_driver_t *), 0), err,
+                            TAG, "send ETHERNET_EVENT_DISCONNECTED event failed");
+        }
     }
 
     ESP_GOTO_ON_ERROR(esp_event_post(ETH_EVENT, ETHERNET_EVENT_STOP, &eth_driver, sizeof(esp_eth_driver_t *), 0),
@@ -497,24 +506,6 @@ esp_err_t esp_eth_ioctl(esp_eth_handle_t hdl, esp_eth_io_cmd_t cmd, void *data)
     }
 err:
     return ret;
-}
-
-esp_err_t esp_eth_get_phy_instance(esp_eth_handle_t hdl, esp_eth_phy_t **phy)
-{
-    esp_eth_driver_t *eth_driver = (esp_eth_driver_t *)hdl;
-    ESP_RETURN_ON_FALSE(eth_driver, ESP_ERR_INVALID_ARG, TAG, "ethernet driver handle can't be null");
-    ESP_RETURN_ON_FALSE(phy != NULL, ESP_ERR_INVALID_ARG, TAG, "can't store PHY instance to null");
-    *phy = eth_driver->phy;
-    return ESP_OK;
-}
-
-esp_err_t esp_eth_get_mac_instance(esp_eth_handle_t hdl, esp_eth_mac_t **mac)
-{
-    esp_eth_driver_t *eth_driver = (esp_eth_driver_t *)hdl;
-    ESP_RETURN_ON_FALSE(eth_driver, ESP_ERR_INVALID_ARG, TAG, "ethernet driver handle can't be null");
-    ESP_RETURN_ON_FALSE(mac != NULL, ESP_ERR_INVALID_ARG, TAG, "can't store MAC instance to null");
-    *mac = eth_driver->mac;
-    return ESP_OK;
 }
 
 esp_err_t esp_eth_increase_reference(esp_eth_handle_t hdl)

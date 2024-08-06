@@ -83,17 +83,10 @@ menu "Main Flash configuration"
                 This is a helper config for HPM. Whether HPM-DC is enabled is also determined by bootloader.
                 Invisible for users.
 
-        config SPI_FLASH_SUSPEND_QVL_SUPPORTED
-            bool
-            default y if IDF_TARGET_ESP32C3 || IDF_TARGET_ESP32S3 || IDF_TARGET_ESP32C2
-            default n
-            help
-                This is a helper config. Invisible for users.
-
         config SPI_FLASH_AUTO_SUSPEND
             bool "Auto suspend long erase/write operations (READ DOCS FIRST)"
             default n
-            depends on SPI_FLASH_SUSPEND_QVL_SUPPORTED && !SPI_FLASH_ROM_IMPL
+            depends on IDF_TARGET_ESP32C3 && !SPI_FLASH_ROM_IMPL
             help
                 This option is disabled by default because it is supported only
                 for specific flash chips and for specific Espressif chips.
@@ -107,14 +100,6 @@ menu "Main Flash configuration"
                 to check if the module has the flash that support this feature installed.
                 Also refer to `Concurrency Constraints for Flash on SPI1` > `Flash Auto Suspend Feature`
                 before enabling this option.
-
-        config SPI_FLASH_SUSPEND_TSUS_VAL_US
-            int "SPI flash tSUS value (refer to chapter AC CHARACTERISTICS)"
-            default 50
-            range 20 100
-            help
-                This config is used for setting Tsus parameter. Tsus means CS# high to next command after
-                suspend. You can refer to the chapter of AC CHARACTERISTICS of flash datasheet.
 
     endmenu
 endmenu

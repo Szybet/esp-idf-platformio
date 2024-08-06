@@ -64,7 +64,7 @@
                 .sclk_io_num = 0,                               \
                 .quadhd_io_num = -1,                            \
                 .quadwp_io_num = -1,                            \
-                .isr_cpu_id = ESP_INTR_CPU_AFFINITY_AUTO,       \
+                .isr_cpu_id = INTR_CPU_ID_0,                    \
             },                                                  \
             .slave_config = {                                   \
                 .mode = 0,                                      \

@@ -212,9 +212,6 @@ FORCE_INLINE_ATTR void usb_wrap_ll_enable_bus_clock(bool clk_en)
     REG_SET_FIELD(DPORT_PERIP_CLK_EN0_REG, DPORT_USB_CLK_EN, clk_en);
 }
 
-// SYSTEM.perip_clk_enx are shared registers, so this function must be used in an atomic way
-#define usb_wrap_ll_enable_bus_clock(...) (void)__DECLARE_RCC_ATOMIC_ENV; usb_wrap_ll_enable_bus_clock(__VA_ARGS__)
-
 /**
  * @brief Reset the USB Wrap module
  */
@@ -223,9 +220,6 @@ FORCE_INLINE_ATTR void usb_wrap_ll_reset_register(void)
     REG_SET_FIELD(DPORT_PERIP_RST_EN0_REG, DPORT_USB_RST, 1);
     REG_SET_FIELD(DPORT_PERIP_RST_EN0_REG, DPORT_USB_RST, 0);
 }
-
-// SYSTEM.perip_rst_enx are shared registers, so this function must be used in an atomic way
-#define usb_wrap_ll_reset_register(...) (void)__DECLARE_RCC_ATOMIC_ENV; usb_wrap_ll_reset_register(__VA_ARGS__)
 
 #ifdef __cplusplus
 }

@@ -27,6 +27,7 @@ extern "C" {
  */
 void esp_clk_init(void);
 
+
 /**
  * @brief Disables clock of some peripherals
  *

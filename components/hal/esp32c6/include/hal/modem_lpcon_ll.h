@@ -9,7 +9,6 @@
 #pragma once
 
 #include <stdlib.h>
-#include <stdbool.h>
 #include "soc/soc.h"
 #include "hal/assert.h"
 #include "modem/modem_lpcon_struct.h"

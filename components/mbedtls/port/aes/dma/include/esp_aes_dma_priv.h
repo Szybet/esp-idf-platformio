@@ -1,13 +1,12 @@
 /*
- * SPDX-FileCopyrightText: 2020-2024 Espressif Systems (Shanghai) CO LTD
+ * SPDX-FileCopyrightText: 2020-2023 Espressif Systems (Shanghai) CO LTD
  *
  * SPDX-License-Identifier: Apache-2.0
  */
 
 #pragma once
 
-#include <stdbool.h>
-#include "esp_crypto_dma.h"
+#include "soc/lldesc.h"
 #include "soc/soc_caps.h"
 #include "esp_err.h"
 
@@ -24,7 +23,7 @@ extern "C" {
  *      - ESP_OK: Successfully started the DMA
  *      - ESP_ERR_INVALID_STATE: No DMA channel available
  */
-esp_err_t esp_aes_dma_start(const crypto_dma_desc_t *input, const crypto_dma_desc_t *output);
+esp_err_t esp_aes_dma_start(const lldesc_t *input, const lldesc_t *output);
 
 /**
  * @brief Check if the DMA engine is finished reading the result
@@ -34,7 +33,7 @@ esp_err_t esp_aes_dma_start(const crypto_dma_desc_t *input, const crypto_dma_des
  *      - true: DMA finished
  *      - false: DMA not yet finished
  */
-bool esp_aes_dma_done(const crypto_dma_desc_t *output);
+bool esp_aes_dma_done(const lldesc_t *output);
 
 /**
  * @brief Allocate AES peripheral interrupt handler

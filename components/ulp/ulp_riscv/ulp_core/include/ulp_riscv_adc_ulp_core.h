@@ -6,7 +6,6 @@
 
 #pragma once
 
-#include "ulp_riscv_register_ops.h"
 #include "hal/adc_ll.h"
 
 #ifdef __cplusplus

@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2016-2023 Espressif Systems (Shanghai) CO LTD
+ * SPDX-FileCopyrightText: 2016-2024 Espressif Systems (Shanghai) CO LTD
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -12,13 +12,13 @@
 #include "esp_log.h"
 #include "esp_system.h"
 #include "esp_wifi.h"
+#include "esp_mac.h"
 #include "esp_event.h"
 #include "esp_log.h"
 #include "nvs_flash.h"
+
 #include "mdns.h"
 #include "esp_netif.h"
-#include "esp_mac.h"
-
 #include "protocol_examples_common.h"
 
 #include "mbcontroller.h"       // for mbcontroller defines and api
@@ -49,8 +49,6 @@
                                                 | MB_EVENT_COILS_WR)
 #define MB_READ_WRITE_MASK                  (MB_READ_MASK | MB_WRITE_MASK)
 
-#define MB_SLAVE_ADDR (CONFIG_MB_SLAVE_ADDR)
-
 static const char *TAG = "SLAVE_TEST";
 
 static portMUX_TYPE param_lock = portMUX_INITIALIZER_UNLOCKED;
@@ -67,6 +65,8 @@ static portMUX_TYPE param_lock = portMUX_INITIALIZER_UNLOCKED;
 #if CONFIG_FMB_CONTROLLER_SLAVE_ID_SUPPORT
 #define MB_DEVICE_ID (uint32_t)CONFIG_FMB_CONTROLLER_SLAVE_ID
 #endif
+
+#define MB_SLAVE_ADDR (CONFIG_MB_SLAVE_ADDR)
 
 #define MB_MDNS_INSTANCE(pref) pref"mb_slave_tcp"
 
@@ -259,7 +259,7 @@ static esp_err_t init_services(void)
     MB_RETURN_ON_FALSE((result == ESP_OK), ESP_ERR_INVALID_STATE,
                                    TAG,
                                    "esp_wifi_set_ps fail, returns(0x%x).",
-                                   (int)result);
+                                   (uint32_t)result);
 #endif
     return ESP_OK;
 }
@@ -309,14 +309,13 @@ static esp_err_t slave_init(mb_communication_info_t* comm_info)
 
     comm_info->ip_addr = NULL; // Bind to any address
     comm_info->ip_netif_ptr = (void*)get_example_netif();
-    comm_info->slave_uid = MB_SLAVE_ADDR;
 
     // Setup communication parameters and start stack
     err = mbc_slave_setup((void*)comm_info);
     MB_RETURN_ON_FALSE((err == ESP_OK), ESP_ERR_INVALID_STATE,
                                         TAG,
                                         "mbc_slave_setup fail, returns(0x%x).",
-                                        (int)err);
+                                        (uint32_t)err);
 
     // The code below initializes Modbus register area descriptors
     // for Modbus Holding Registers, Input Registers, Coils and Discrete Inputs
@@ -418,7 +417,6 @@ void app_main(void)
     ESP_ERROR_CHECK(init_services());
 
     // Set UART log level
-
     esp_log_level_set(TAG, ESP_LOG_INFO);
 
     mb_communication_info_t comm_info = { 0 };

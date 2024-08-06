@@ -58,11 +58,10 @@ namespace MeshCoP {
  */
 class Dataset
 {
-    friend class DatasetLocal;
+    friend class DatasetManager;
 
 public:
-    static constexpr uint8_t kMaxSize      = OT_OPERATIONAL_DATASET_MAX_LENGTH; ///< Max size of MeshCoP Dataset (bytes)
-    static constexpr uint8_t kMaxValueSize = 16;                                ///< Max size of a TLV value (bytes)
+    static constexpr uint8_t kMaxLength = OT_OPERATIONAL_DATASET_MAX_LENGTH; ///< Max length of Dataset (bytes)
 
     /**
      * Represents the Dataset type (active or pending).
@@ -213,20 +212,6 @@ public:
          */
         Error GenerateRandom(Instance &aInstance);
 
-        /**
-         * Checks whether the Dataset is a subset of another one, i.e., all the components in the current
-         * Dataset are also present in the @p aOther and the component values fully match.
-         *
-         * The matching of components in the two Datasets excludes Active/Pending Timestamp and Delay components.
-         *
-         * @param[in] aOther   The other Dataset to check against.
-         *
-         * @retval TRUE   The current dataset is a subset of @p aOther.
-         * @retval FALSE  The current Dataset is not a subset of @p aOther.
-         *
-         */
-        bool IsSubsetOf(const Info &aOther) const;
-
     private:
         Components       &GetComponents(void) { return static_cast<Components &>(mComponents); }
         const Components &GetComponents(void) const { return static_cast<const Components &>(mComponents); }
@@ -242,15 +227,35 @@ public:
      * Clears the Dataset.
      *
      */
-    void Clear(void);
+    void Clear(void) { mLength = 0; }
 
     /**
-     * Indicates whether or not the dataset appears to be well-formed.
+     * Parses and validates all TLVs contained within the Dataset.
      *
-     * @returns TRUE if the dataset appears to be well-formed, FALSE otherwise.
+     * Performs the following checks all TLVs in the Dataset:
+     *  - Ensures correct TLV format and expected minimum length for known TLV types that may appear in a Dataset.
+     *  - Validates TLV value when applicable (e.g., Channel TLV using a supported channel).
+     *  - Ensures no duplicate occurrence of same TLV type.
+     *
+     * @retval kErrorNone   Successfully validated all the TLVs in the Dataset.
+     * @retval kErrorParse  Dataset TLVs is not well-formed.
      *
      */
-    bool IsValid(void) const;
+    Error ValidateTlvs(void) const;
+
+    /**
+     * Validates the format and value of a given MeshCoP TLV used in Dataset.
+     *
+     * TLV types that can appear in an Active or Pending Operational Dataset are validated. Other TLV types including
+     * unknown TLV types are considered as valid.
+     *
+     * @param[in]  aTlv    The TLV to validate.
+     *
+     * @retval  TRUE       The TLV format and value is valid, or TLV type is unknown (not supported in Dataset).
+     * @retval  FALSE      The TLV format or value is invalid.
+     *
+     */
+    static bool IsTlvValid(const Tlv &aTlv);
 
     /**
      * Indicates whether or not a given TLV type is present in the Dataset.
@@ -278,6 +283,29 @@ public:
     }
 
     /**
+     * Indicates whether or not the Dataset contains all the TLVs from a given array.
+     *
+     * @param[in] aTlvTypes    An array of TLV types.
+     * @param[in] aLength      Length of @p aTlvTypes array.
+     *
+     * @retval TRUE    The Dataset contains all the TLVs in @p aTlvTypes array.
+     * @retval FALSE   The Dataset does not contain all the TLVs in @p aTlvTypes array.
+     *
+     */
+    bool ContainsAllTlvs(const Tlv::Type aTlvTypes[], uint8_t aLength) const;
+
+    /**
+     * Indicates whether or not the Dataset contains all the required TLVs for an Active or Pending Dataset.
+     *
+     * @param[in] aType  The Dataset type, Active or Pending.
+     *
+     * @retval TRUE    The Dataset contains all the required TLVs for @p aType.
+     * @retval FALSE   The Dataset does not contain all the required TLVs for @p aType.
+     *
+     */
+    bool ContainsAllRequiredTlvsFor(Type aType) const;
+
+    /**
      * Searches for a given TLV type in the Dataset.
      *
      * @param[in] aType  The TLV type to find.
@@ -296,6 +324,46 @@ public:
      *
      */
     const Tlv *FindTlv(Tlv::Type aType) const;
+
+    /**
+     * Finds and reads a simple TLV in the Dataset.
+     *
+     * If the specified TLV type is not found, `kErrorNotFound` is reported.
+     *
+     * @tparam  SimpleTlvType   The simple TLV type (must be a sub-class of `SimpleTlvInfo`).
+     *
+     * @param[out] aValue       A reference to return the read TLV value.
+     *
+     * @retval kErrorNone      Successfully found and read the TLV value. @p aValue is updated.
+     * @retval kErrorNotFound  Could not find the TLV in the Dataset.
+     *
+     */
+    template <typename SimpleTlvType> Error Read(typename SimpleTlvType::ValueType &aValue) const
+    {
+        const Tlv *tlv = FindTlv(static_cast<Tlv::Type>(SimpleTlvType::kType));
+
+        return (tlv == nullptr) ? kErrorNotFound : (aValue = tlv->ReadValueAs<SimpleTlvType>(), kErrorNone);
+    }
+
+    /**
+     * Finds and reads an `uint` TLV in the Dataset.
+     *
+     * If the specified TLV type is not found, `kErrorNotFound` is reported.
+     *
+     * @tparam  UintTlvType     The integer simple TLV type (must be a sub-class of `UintTlvInfo`).
+     *
+     * @param[out] aValue       A reference to return the read TLV value.
+     *
+     * @retval kErrorNone      Successfully found and read the TLV value. @p aValue is updated.
+     * @retval kErrorNotFound  Could not find the TLV in the Dataset.
+     *
+     */
+    template <typename UintTlvType> Error Read(typename UintTlvType::UintValueType &aValue) const
+    {
+        const Tlv *tlv = FindTlv(static_cast<Tlv::Type>(UintTlvType::kType));
+
+        return (tlv == nullptr) ? kErrorNotFound : (aValue = tlv->ReadValueAs<UintTlvType>(), kErrorNone);
+    }
 
     /**
      * Writes a TLV to the Dataset.
@@ -364,6 +432,66 @@ public:
     }
 
     /**
+     * Writes TLVs parsed from a given Dataset into this Dataset.
+     *
+     * TLVs from @p aDataset are parsed and written in the current Dataset. If the same TLV already exists, it will be
+     * replaced. Otherwise, the TLV will be appended.
+     *
+     * @param[in] aDataset   A Dataset.
+     *
+     * @retval kErrorNone    Successfully merged TLVs from @p Dataset into this Dataset.
+     * @retval kErrorParse   The @p aDataset is not valid.
+     * @retval kErrorNoBufs  Could not add the TLVs due to insufficient buffer space.
+     *
+     */
+    Error WriteTlvsFrom(const Dataset &aDataset);
+
+    /**
+     * Writes TLVs parsed from a given buffer containing a sequence of TLVs into this Dataset.
+     *
+     * TLVs from @p aTlvs buffer are parsed and written in the current Dataset. If the same TLV already exists, it will
+     * be replaced. Otherwise, the TLV will be appended.
+     *
+     * @param[in] aTlvs     A pointer to a buffer containing TLVs.
+     * @param[in] aLength   Number of bytes in @p aTlvs buffer.
+     *
+     * @retval kErrorNone    Successfully merged TLVs from @p Dataset into this Dataset.
+     * @retval kErrorParse   The @p aTlvs is not valid.
+     * @retval kErrorNoBufs  Could not add the TLVs due to insufficient buffer space.
+     *
+     */
+    Error WriteTlvsFrom(const uint8_t *aTlvs, uint8_t aLength);
+
+    /**
+     * Writes TLVs corresponding to the components in a given `Dataset::Info` into this Dataset.
+     *
+     * If the same TLV already exists, it will be replaced. Otherwise the TLV will be appended.
+     *
+     * @param[in] aDataseInfo     A `Dataset::Info`.
+     *
+     * @retval kErrorNone    Successfully merged TLVs from @p aDataseInfo into this Dataset.
+     * @retval kErrorNoBufs  Could not add the TLVs due to insufficient buffer space.
+     *
+     */
+    Error WriteTlvsFrom(const Dataset::Info &aDatasetInfo);
+
+    /**
+     * Appends a given sequence of TLVs to the Dataset.
+     *
+     * @note Unlike `WriteTlvsFrom()`, this method does not validate the @p aTlvs to be well-formed or check that there
+     * are no duplicates. It is up to caller to validate the resulting `Dataset` (e.g., using `ValidateTlvs()`) if
+     * desired.
+     *
+     * @param[in] aTlvs     A pointer to a buffer containing TLVs.
+     * @param[in] aLength   Number of bytes in @p aTlvs buffer.
+     *
+     * @retval kErrorNone    Successfully merged TLVs from @p Dataset into this Dataset.
+     * @retval kErrorNoBufs  Could not append the TLVs due to insufficient buffer space.
+     *
+     */
+    Error AppendTlvsFrom(const uint8_t *aTlvs, uint8_t aLength);
+
+    /**
      * Removes a TLV from the Dataset.
      *
      * If the Dataset does not contain the given TLV type, no action is performed.
@@ -372,6 +500,40 @@ public:
      *
      */
     void RemoveTlv(Tlv::Type aType);
+
+    /**
+     * Reads the Timestamp TLV (Active or Pending).
+     *
+     * @param[in]  aType       The timestamp type, active or pending.
+     * @param[out] aTimestamp  A reference to a `Timestamp` to output the value.
+     *
+     * @retval kErrorNone      Timestamp was read successfully. @p aTimestamp is updated.
+     * @retval kErrorNotFound  Could not find the requested Timestamp TLV.
+     *
+     */
+    Error ReadTimestamp(Type aType, Timestamp &aTimestamp) const;
+
+    /**
+     * Writes the Timestamp TLV (Active or Pending).
+     *
+     * If the TLV already exists, it will be replaced. Otherwise, the TLV will be appended.
+     *
+     * @param[in] aType       The timestamp type, active or pending.
+     * @param[in] aTimestamp  The timestamp value.
+     *
+     * @retval kErrorNone    Successfully updated the Timestamp TLV.
+     * @retval kErrorNoBufs  Could not append the Timestamp TLV due to insufficient buffer space.
+     *
+     */
+    Error WriteTimestamp(Type aType, const Timestamp &aTimestamp);
+
+    /**
+     * Removes the Timestamp TLV (Active or Pending) from the Dataset.
+     *
+     * @param[in] aType       The timestamp type, active or pending.
+     *
+     */
+    void RemoveTimestamp(Type aType);
 
     /**
      * Returns a pointer to the byte representation of the Dataset.
@@ -406,12 +568,12 @@ public:
     void ConvertTo(Tlvs &aTlvs) const;
 
     /**
-     * Returns the Dataset size in bytes.
+     * Returns the Dataset length in bytes.
      *
-     * @returns The Dataset size in bytes.
+     * @returns The Dataset length in bytes.
      *
      */
-    uint16_t GetSize(void) const { return mLength; }
+    uint8_t GetLength(void) const { return mLength; }
 
     /**
      * Sets the Dataset size in bytes.
@@ -419,7 +581,7 @@ public:
      * @param[in] aSize  The Dataset size in bytes.
      *
      */
-    void SetSize(uint16_t aSize) { mLength = aSize; }
+    void SetLength(uint8_t aLength) { mLength = aLength; }
 
     /**
      * Returns the local time the dataset was last updated.
@@ -430,112 +592,56 @@ public:
     TimeMilli GetUpdateTime(void) const { return mUpdateTime; }
 
     /**
-     * Gets the Timestamp (Active or Pending).
+     * Sets this Dataset using an existing Dataset.
      *
-     * @param[in]  aType       The type: active or pending.
-     * @param[out] aTimestamp  A reference to a `Timestamp` to output the value.
-     *
-     * @retval kErrorNone      Timestamp was read successfully. @p aTimestamp is updated.
-     * @retval kErrorNotFound  Could not find the requested Timestamp TLV.
-     *
-     */
-    Error GetTimestamp(Type aType, Timestamp &aTimestamp) const;
-
-    /**
-     * Sets the Timestamp value.
-     *
-     * @param[in] aType        The type: active or pending.
-     * @param[in] aTimestamp   A Timestamp.
-     *
-     */
-    void SetTimestamp(Type aType, const Timestamp &aTimestamp);
-
-    /**
-     * Reads the Dataset from a given message and checks that it is well-formed and valid.
-     *
-     * @param[in]  aMessage  The message to read from.
-     * @param[in]  aOffset   The offset in @p aMessage to start reading the Dataset TLVs.
-     * @param[in]  aLength   The dataset length in bytes.
-     *
-     * @retval kErrorNone    Successfully read and validated the Dataset.
-     * @retval kErrorParse   Could not read or parse the dataset from @p aMessage.
-     *
-     */
-    Error ReadFromMessage(const Message &aMessage, uint16_t aOffset, uint16_t aLength);
-
-    /**
-     * Sets the Dataset using an existing Dataset.
-     *
-     * If this Dataset is an Active Dataset, any Pending Timestamp and Delay Timer TLVs will be omitted in the copy
-     * from @p aDataset.
-     *
-     * @param[in]  aType     The type of the dataset, active or pending.
      * @param[in]  aDataset  The input Dataset.
      *
      */
-    void Set(Type aType, const Dataset &aDataset);
+    void SetFrom(const Dataset &aDataset);
 
     /**
      * Sets the Dataset from a given structure representation.
      *
      * @param[in]  aDatasetInfo  The input Dataset as `Dataset::Info`.
      *
+     */
+    void SetFrom(const Info &aDatasetInfo);
+
+    /**
+     * Sets the Dataset from a given sequence of TLVs.
+     *
+     * @param[in]  aTlvs          The input Dataset as `Tlvs`.
+     *
      * @retval kErrorNone         Successfully set the Dataset.
-     * @retval kErrorInvalidArgs  Dataset is missing Active and/or Pending Timestamp.
+     * @retval kErrorInvalidArgs  The @p aTlvs is invalid and its length is longer than `kMaxLength`.
      *
      */
-    Error SetFrom(const Info &aDatasetInfo);
+    Error SetFrom(const Tlvs &aTlvs);
 
     /**
-     * Sets the Dataset using @p aDataset.
+     * Sets the Dataset from a buffer containing a sequence of TLVs.
      *
-     * @param[in]  aDataset  The input Dataset as `Tlvs`.
+     * @param[in] aTlvs     A pointer to a buffer containing TLVs.
+     * @param[in] aLength   Number of bytes in @p aTlvs buffer.
+     *
+     * @retval kErrorNone         Successfully set the Dataset.
+     * @retval kErrorInvalidArgs  @p aLength is longer than `kMaxLength`.
      *
      */
-    void SetFrom(const Tlvs &aTlvs);
+    Error SetFrom(const uint8_t *aTlvs, uint8_t aLength);
 
     /**
-     * Appends the MLE Dataset TLV but excluding MeshCoP Sub Timestamp TLV.
+     * Sets the Dataset by reading the TLVs bytes from given message.
      *
-     * @param[in] aType          The type of the dataset, active or pending.
-     * @param[in] aMessage       A message to append to.
+     * @param[in] aMessage       The message to read from.
+     * @param[in] aOffsetRange   The offset range in @p aMessage to read the Dataset TLVs.
      *
-     * @retval kErrorNone    Successfully append MLE Dataset TLV without MeshCoP Sub Timestamp TLV.
-     * @retval kErrorNoBufs  Insufficient available buffers to append the message with MLE Dataset TLV.
-     *
-     */
-    Error AppendMleDatasetTlv(Type aType, Message &aMessage) const;
-
-    /**
-     * Applies the Active or Pending Dataset to the Thread interface.
-     *
-     * @param[in]  aInstance            A reference to the OpenThread instance.
-     *
-     * @retval kErrorNone   Successfully applied configuration.
-     * @retval kErrorParse  The dataset has at least one TLV with invalid format.
+     * @retval kErrorNone    Successfully set the Dataset.
+     * @retval kInvalidArgs  The given offset range length is longer than `kMaxLength`.
+     * @retval kErrorParse   Could not read or parse the dataset from @p aMessage.
      *
      */
-    Error ApplyConfiguration(Instance &aInstance) const;
-
-    /**
-     * Applies the Active or Pending Dataset to the Thread interface.
-     *
-     * @param[in]  aInstance              A reference to the OpenThread instance.
-     * @param[out] aIsNetworkKeyUpdated   Variable to return whether network key was updated.
-     *
-     * @retval kErrorNone   Successfully applied configuration, @p aIsNetworkKeyUpdated is changed.
-     * @retval kErrorParse  The dataset has at least one TLV with invalid format.
-     *
-     */
-    Error ApplyConfiguration(Instance &aInstance, bool &aIsNetworkKeyUpdated) const;
-
-    /**
-     * Converts a Pending Dataset to an Active Dataset.
-     *
-     * Removes the Delay Timer and Pending Timestamp TLVs
-     *
-     */
-    void ConvertToActive(void);
+    Error SetFrom(const Message &aMessage, const OffsetRange &aOffsetRange);
 
     /**
      * Returns a pointer to the start of Dataset TLVs sequence.
@@ -574,6 +680,20 @@ public:
     const Tlv *GetTlvsEnd(void) const { return reinterpret_cast<const Tlv *>(mTlvs + mLength); }
 
     /**
+     * Determines whether this Dataset is a subset of another Dataset.
+     *
+     * The Dataset is considered a subset if all of its TLVs, excluding Active/Pending Timestamp and Delay Timer TLVs,
+     * are present in the @p aOther Dataset and the TLV values match exactly.
+     *
+     * @param[in] aOther   The other Dataset to check against.
+     *
+     * @retval TRUE   The current Dataset is a subset of @p aOther.
+     * @retval FALSE  The current Dataset is not a subset of @p aOther.
+     *
+     */
+    bool IsSubsetOf(const Dataset &aOther) const;
+
+    /**
      * Converts a Dataset Type to a string.
      *
      * @param[in]  aType   A Dataset type.
@@ -581,41 +701,17 @@ public:
      */
     static const char *TypeToString(Type aType);
 
-#if OPENTHREAD_CONFIG_PLATFORM_KEY_REFERENCES_ENABLE
-
-    /**
-     * Saves a given TLV value in secure storage and clears the TLV value by setting all value bytes to zero.
-     *
-     * If the Dataset does not contain the @p aTlvType, no action is performed.
-     *
-     * @param[in] aTlvType    The TLV type.
-     * @param[in] aKeyRef     The `KeyRef` to use with secure storage.
-     *
-     */
-    void SaveTlvInSecureStorageAndClearValue(Tlv::Type aTlvType, Crypto::Storage::KeyRef aKeyRef);
-
-    /**
-     * Reads and updates a given TLV value in Dataset from secure storage.
-     *
-     * If the Dataset does not contain the @p aTlvType, no action is performed and `kErrorNone` is returned.
-     *
-     * @param[in] aTlvType    The TLV type.
-     * @param[in] aKeyRef     The `KeyRef` to use with secure storage.
-     *
-     * @retval kErrorNone    Successfully read the TLV value from secure storage and updated the Dataset.
-     * @retval KErrorFailed  Could not read the @aKeyRef from secure storage.
-     *
-     */
-    Error ReadTlvFromSecureStorage(Tlv::Type aTlvType, Crypto::Storage::KeyRef aKeyRef);
-
-#endif // OPENTHREAD_CONFIG_PLATFORM_KEY_REFERENCES_ENABLE
-
 private:
     void RemoveTlv(Tlv *aTlv);
 
-    uint8_t   mTlvs[kMaxSize]; ///< The Dataset buffer
-    TimeMilli mUpdateTime;     ///< Local time last updated
-    uint16_t  mLength;         ///< The number of valid bytes in @var mTlvs
+    static Tlv::Type TimestampTlvFor(Type aType)
+    {
+        return (aType == kActive) ? Tlv::kActiveTimestamp : Tlv::kPendingTimestamp;
+    }
+
+    uint8_t   mTlvs[kMaxLength];
+    uint8_t   mLength;
+    TimeMilli mUpdateTime; // Local time last updated
 };
 
 //---------------------------------------------------------------------------------------------------------------------
@@ -713,12 +809,12 @@ template <> inline const uint32_t &Dataset::Info::Get<Dataset::kChannelMask>(voi
 
 template <> inline void Dataset::Info::Get<Dataset::kActiveTimestamp>(Timestamp &aTimestamp) const
 {
-    aTimestamp.SetFromTimestamp(mActiveTimestamp);
+    aTimestamp.SetFrom(mActiveTimestamp);
 }
 
 template <> inline void Dataset::Info::Get<Dataset::kPendingTimestamp>(Timestamp &aTimestamp) const
 {
-    aTimestamp.SetFromTimestamp(mPendingTimestamp);
+    aTimestamp.SetFrom(mPendingTimestamp);
 }
 
 template <> inline void Dataset::Info::Set<Dataset::kActiveTimestamp>(const Timestamp &aTimestamp)

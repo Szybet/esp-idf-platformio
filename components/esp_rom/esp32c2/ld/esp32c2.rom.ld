@@ -200,6 +200,81 @@ PROVIDE( spi_flash_encryption_hal_prepare = 0x4000026c );
 PROVIDE( spi_flash_encryption_hal_done = 0x40000270 );
 PROVIDE( spi_flash_encryption_hal_destroy = 0x40000274 );
 PROVIDE( spi_flash_encryption_hal_check = 0x40000278 );
+PROVIDE( wdt_hal_init = 0x4000027c );
+PROVIDE( wdt_hal_deinit = 0x40000280 );
+PROVIDE( wdt_hal_config_stage = 0x40000284 );
+PROVIDE( wdt_hal_write_protect_disable = 0x40000288 );
+PROVIDE( wdt_hal_write_protect_enable = 0x4000028c );
+PROVIDE( wdt_hal_enable = 0x40000290 );
+PROVIDE( wdt_hal_disable = 0x40000294 );
+PROVIDE( wdt_hal_handle_intr = 0x40000298 );
+PROVIDE( wdt_hal_feed = 0x4000029c );
+PROVIDE( wdt_hal_set_flashboot_en = 0x400002a0 );
+PROVIDE( wdt_hal_is_enabled = 0x400002a4 );
+PROVIDE( systimer_hal_get_counter_value = 0x400002ac );
+PROVIDE( systimer_hal_get_alarm_value = 0x400002bc );
+PROVIDE( systimer_hal_enable_alarm_int = 0x400002c0 );
+PROVIDE( systimer_hal_enable_counter = 0x400002cc );
+PROVIDE( systimer_hal_select_alarm_mode = 0x400002d0 );
+PROVIDE( systimer_hal_connect_alarm_counter = 0x400002d4 );
+PROVIDE( systimer_hal_counter_can_stall_by_cpu = 0x400002d8 );
+
+/* The following ROM functions are commented out because they're patched in the esp_rom_systimer.c */
+/* PROVIDE( systimer_hal_init = 0x400002a8 ); */
+/* PROVIDE( systimer_hal_get_time = 0x400002b0 ); */
+/* PROVIDE( systimer_hal_set_alarm_target = 0x400002b4 ); */
+/* PROVIDE( systimer_hal_set_alarm_period = 0x400002b8 ); */
+/* PROVIDE( systimer_hal_counter_value_advance = 0x400002c8 ); */
+
+
+/***************************************
+ Group heap
+ ***************************************/
+
+/* Functions */
+PROVIDE( tlsf_create = 0x400002dc );
+PROVIDE( tlsf_create_with_pool = 0x400002e0 );
+PROVIDE( tlsf_get_pool = 0x400002e4 );
+PROVIDE( tlsf_add_pool = 0x400002e8 );
+PROVIDE( tlsf_remove_pool = 0x400002ec );
+PROVIDE( tlsf_malloc = 0x400002f0 );
+PROVIDE( tlsf_memalign = 0x400002f4 );
+PROVIDE( tlsf_memalign_offs = 0x400002f8 );
+PROVIDE( tlsf_realloc = 0x400002fc );
+PROVIDE( tlsf_free = 0x40000300 );
+PROVIDE( tlsf_block_size = 0x40000304 );
+PROVIDE( tlsf_size = 0x40000308 );
+PROVIDE( tlsf_align_size = 0x4000030c );
+PROVIDE( tlsf_block_size_min = 0x40000310 );
+PROVIDE( tlsf_block_size_max = 0x40000314 );
+PROVIDE( tlsf_pool_overhead = 0x40000318 );
+PROVIDE( tlsf_alloc_overhead = 0x4000031c );
+PROVIDE( tlsf_walk_pool = 0x40000320 );
+PROVIDE( tlsf_check = 0x40000324 );
+PROVIDE( tlsf_check_pool = 0x40000328 );
+PROVIDE( tlsf_poison_fill_pfunc_set = 0x4000032c );
+PROVIDE( multi_heap_get_block_address_impl = 0x40000330 );
+PROVIDE( multi_heap_get_allocated_size_impl = 0x40000334 );
+PROVIDE( multi_heap_register_impl = 0x40000338 );
+PROVIDE( multi_heap_set_lock = 0x4000033c );
+PROVIDE( multi_heap_os_funcs_init = 0x40000340 );
+PROVIDE( multi_heap_internal_lock = 0x40000344 );
+PROVIDE( multi_heap_internal_unlock = 0x40000348 );
+PROVIDE( multi_heap_get_first_block = 0x4000034c );
+PROVIDE( multi_heap_get_next_block = 0x40000350 );
+PROVIDE( multi_heap_is_free = 0x40000354 );
+PROVIDE( multi_heap_malloc_impl = 0x40000358 );
+PROVIDE( multi_heap_free_impl = 0x4000035c );
+PROVIDE( multi_heap_realloc_impl = 0x40000360 );
+PROVIDE( multi_heap_aligned_alloc_impl_offs = 0x40000364 );
+PROVIDE( multi_heap_aligned_alloc_impl = 0x40000368 );
+PROVIDE( multi_heap_check = 0x4000036c );
+PROVIDE( multi_heap_dump = 0x40000370 );
+PROVIDE( multi_heap_free_size_impl = 0x40000374 );
+PROVIDE( multi_heap_minimum_free_size_impl = 0x40000378 );
+PROVIDE( multi_heap_get_info_impl = 0x4000037c );
+/* Data (.data, .bss, .rodata) */
+PROVIDE( heap_tlsf_table_ptr = 0x3fcdffec );
 
 
 /***************************************
@@ -753,7 +828,6 @@ r_ble_ll_hci_ev_send_adv_set_terminated = 0x40000ff4;
 r_ble_ll_hci_ev_send_scan_req_recv = 0x40000ff8;
 r_ble_ll_hci_ev_send_scan_timeout = 0x40000ffc;
 r_ble_ll_hci_ev_send_vendor_err = 0x40001000;
-r_ble_ll_hci_event_send = 0x40001004;
 r_ble_ll_hci_ext_scan_set_enable = 0x40001008;
 r_ble_ll_hci_get_num_cmd_pkts = 0x4000100c;
 r_ble_ll_hci_info_params_cmd_proc = 0x40001010;
@@ -973,7 +1047,6 @@ r_ble_lll_adv_coex_dpc_update_on_event_scheduled = 0x40001418;
 r_ble_lll_adv_done = 0x4000141c;
 r_ble_lll_adv_event_done = 0x40001424;
 r_ble_lll_adv_event_rmvd_from_sched = 0x40001428;
-r_ble_lll_adv_ext_estimate_data_itvl = 0x4000142c;
 r_ble_lll_adv_get_sec_pdu_len = 0x40001430;
 r_ble_lll_adv_make_done = 0x40001438;
 r_ble_lll_adv_periodic_done = 0x4000143c;
@@ -1517,7 +1590,7 @@ trc_SetTxAmpduState = 0x40001ccc;
 trc_tid_isTxAmpduOperational = 0x40001cd0;
 trcAmpduSetState = 0x40001cd4;
 wDevCheckBlockError = 0x40001cd8;
-wDev_AppendRxBlocks = 0x40001cdc;
+/*wDev_AppendRxBlocks = 0x40001cdc;*/
 wDev_DiscardFrame = 0x40001ce0;
 wDev_GetNoiseFloor = 0x40001ce4;
 wDev_IndicateAmpdu = 0x40001ce8;
@@ -1805,7 +1878,7 @@ ieee80211_vnd_lora_ie_size = 0x40002048;
 ieee80211_vnd_ie_size = 0x4000204c;
 ieee80211_add_ssid = 0x40002050;
 ieee80211_add_rates = 0x40002054;
-/*ieee80211_add_xrates = 0x40002058;*/
+ieee80211_add_xrates = 0x40002058;
 ieee80211_is_ht_cipher = 0x4000205c;
 ieee80211_setup_lr_rates = 0x40002068;
 ieee80211_ht_node_init = 0x4000206c;
@@ -1847,7 +1920,7 @@ ieee80211_alloc_tx_buf = 0x40002108;
 /* ieee80211_send_nulldata = 0x40002110; */
 /* ieee80211_setup_robust_mgmtframe = 0x40002114; */
 ieee80211_encap_null_data = 0x4000211c;
-ieee80211_send_deauth_no_bss = 0x40002120;
+ieee80211_send_deauth = 0x40002120;
 ieee80211_alloc_deauth = 0x40002124;
 ieee80211_send_proberesp = 0x40002128;
 ieee80211_getcapinfo = 0x40002130;
@@ -2150,7 +2223,7 @@ set_rx_gain_param = 0x40002524;
 set_rx_gain_table = 0x40002528;
 rom_tester_wifi_cali = 0x4000252c;
 esp_recover_efuse_data = 0x40002530;
-/* bt_track_pll_cap = 0x40002534;*/
+bt_track_pll_cap = 0x40002534;
 rfpll_cap_track = 0x40002538;
 phy_param_track = 0x4000253c;
 txpwr_correct = 0x40002540;

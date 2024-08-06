@@ -48,7 +48,7 @@ menu "Wear Levelling"
               flash device sector will not be lost.
 
         config WL_SECTOR_MODE_PERF
-            bool "Performance"
+            bool "Perfomance"
 
         config WL_SECTOR_MODE_SAFE
             bool "Safety"

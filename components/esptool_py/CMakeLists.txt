@@ -1,9 +1,3 @@
-idf_build_get_property(target IDF_TARGET)
-
-if(${target} STREQUAL "linux")
-    return() # This component is not supported by the POSIX/Linux simulator
-endif()
-
 idf_component_register(REQUIRES bootloader PRIV_REQUIRES partition_table)
 
 if(NOT BOOTLOADER_BUILD)

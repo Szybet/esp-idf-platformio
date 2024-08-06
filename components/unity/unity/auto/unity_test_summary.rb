@@ -86,11 +86,7 @@ class UnityTestSummary
   def get_details(_result_file, lines)
     results = { failures: [], ignores: [], successes: [] }
     lines.each do |line|
-      status_match = line.match(/^[^:]+:[^:]+:\w+(?:\([^)]*\))?:([^:]+):?/)
-      next unless status_match
-
-      status = status_match.captures[0]
-
+      _src_file, _src_line, _test_name, status, _msg = line.split(/:/)
       line_out = (@root && (@root != 0) ? "#{@root}#{line}" : line).gsub(/\//, '\\')
       case status
       when 'IGNORE' then results[:ignores]   << line_out
@@ -103,8 +99,11 @@ class UnityTestSummary
 
   def parse_test_summary(summary)
     raise "Couldn't parse test results: #{summary}" unless summary.find { |v| v =~ /(\d+) Tests (\d+) Failures (\d+) Ignored/ }
-
     [Regexp.last_match(1).to_i, Regexp.last_match(2).to_i, Regexp.last_match(3).to_i]
+  end
+
+  def here
+    File.expand_path(File.dirname(__FILE__))
   end
 end
 
@@ -112,7 +111,7 @@ if $0 == __FILE__
 
   # parse out the command options
   opts, args = ARGV.partition { |v| v =~ /^--\w+/ }
-  opts.map! { |v| v[2..].to_sym }
+  opts.map! { |v| v[2..-1].to_sym }
 
   # create an instance to work with
   uts = UnityTestSummary.new(opts)
@@ -122,13 +121,11 @@ if $0 == __FILE__
     args[0] ||= './'
     targets = "#{ARGV[0].tr('\\', '/')}**/*.test*"
     results = Dir[targets]
-
     raise "No *.testpass, *.testfail, or *.testresults files found in '#{targets}'" if results.empty?
-
     uts.targets = results
 
     # set the root path
-    args[1] ||= "#{Dir.pwd}/"
+    args[1] ||= Dir.pwd + '/'
     uts.root = ARGV[1]
 
     # run the summarizer

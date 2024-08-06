@@ -5,7 +5,6 @@
  */
 
 #include <string.h>
-#include <inttypes.h>
 #include <lwip/ip_addr.h>
 #include <lwip/sockets.h>
 
@@ -221,7 +220,7 @@ static void esp_netif_api_cb(void *api_msg)
 static inline esp_err_t esp_netif_lwip_ipc_call_msg(esp_netif_api_msg_t *msg)
 {
     if (!sys_thread_tcpip(LWIP_CORE_LOCK_QUERY_HOLDER)) {
-        ESP_LOGD(TAG, "check: remote, if=%p fn=%p", msg->esp_netif, msg->api_fn);
+        ESP_LOGD(TAG, "check: remote, if=%p fn=%p\n", msg->esp_netif, msg->api_fn);
 #if LWIP_TCPIP_CORE_LOCKING
         tcpip_send_msg_wait_sem((tcpip_callback_fn)esp_netif_api_cb, msg, NULL);
 #else
@@ -231,7 +230,7 @@ static inline esp_err_t esp_netif_lwip_ipc_call_msg(esp_netif_api_msg_t *msg)
 #endif /* LWIP_TCPIP_CORE_LOCKING */
         return msg->ret;
     }
-    ESP_LOGD(TAG, "check: local, if=%p fn=%p",  msg->esp_netif, msg->api_fn);
+    ESP_LOGD(TAG, "check: local, if=%p fn=%p\n",  msg->esp_netif, msg->api_fn);
     return msg->api_fn(msg);
 }
 
@@ -496,7 +495,8 @@ esp_netif_t* esp_netif_get_handle_from_netif_impl(void *dev)
 
 void* esp_netif_get_netif_impl(esp_netif_t *esp_netif)
 {
-    if (esp_netif) {
+    // get impl ptr only for vanilla lwip impl (ppp_pcb not supported)
+    if (esp_netif && !ESP_NETIF_IS_POINT2POINT_TYPE(esp_netif, PPP_LWIP_NETIF)) {
         return esp_netif->lwip_netif;
     }
     return NULL;
@@ -711,7 +711,7 @@ static esp_err_t esp_netif_new_api(esp_netif_api_msg_t *msg)
     // Create parent esp-netif object
     esp_netif_t *esp_netif = calloc(1, sizeof(struct esp_netif_obj));
     if (!esp_netif) {
-        ESP_LOGE(TAG, "Failed to allocate %" PRIu32 " bytes (free heap size %" PRIu32 ")", (uint32_t)sizeof(struct esp_netif_obj),
+        ESP_LOGE(TAG, "Failed to allocate %d bytes (free heap size %d)", sizeof(struct esp_netif_obj),
                  esp_get_free_heap_size());
         return ESP_FAIL;
     }
@@ -719,7 +719,7 @@ static esp_err_t esp_netif_new_api(esp_netif_api_msg_t *msg)
     // Create ip info
     esp_netif_ip_info_t *ip_info = calloc(1, sizeof(esp_netif_ip_info_t));
     if (!ip_info) {
-        ESP_LOGE(TAG, "Failed to allocate %" PRIu32 " bytes (free heap size %" PRIu32 ")", (uint32_t)sizeof(esp_netif_ip_info_t),
+        ESP_LOGE(TAG, "Failed to allocate %d bytes (free heap size %d)", sizeof(esp_netif_ip_info_t),
                  esp_get_free_heap_size());
         free(esp_netif);
         return ESP_FAIL;
@@ -729,7 +729,7 @@ static esp_err_t esp_netif_new_api(esp_netif_api_msg_t *msg)
     // creating another ip info (to store old ip)
     ip_info = calloc(1, sizeof(esp_netif_ip_info_t));
     if (!ip_info) {
-        ESP_LOGE(TAG, "Failed to allocate %" PRIu32 " bytes (free heap size %" PRIu32 ")", (uint32_t)sizeof(esp_netif_ip_info_t),
+        ESP_LOGE(TAG, "Failed to allocate %d bytes (free heap size %d)", sizeof(esp_netif_ip_info_t),
                  esp_get_free_heap_size());
         free(esp_netif->ip_info);
         free(esp_netif);
@@ -740,7 +740,7 @@ static esp_err_t esp_netif_new_api(esp_netif_api_msg_t *msg)
     // Create underlying lwip netif
     struct netif * lwip_netif = calloc(1, sizeof(struct netif));
     if (!lwip_netif) {
-        ESP_LOGE(TAG, "Failed to allocate %" PRIu32 " bytes (free heap size %" PRIu32 ")", (uint32_t)sizeof(struct netif),
+        ESP_LOGE(TAG, "Failed to allocate %d bytes (free heap size %d)", sizeof(struct netif),
                  esp_get_free_heap_size());
         free(esp_netif->ip_info_old);
         free(esp_netif->ip_info);
@@ -869,7 +869,7 @@ static esp_err_t esp_netif_lwip_add(esp_netif_t *esp_netif)
 #if CONFIG_PPP_SUPPORT
         err_t err = esp_netif->lwip_init_fn(NULL);
         if (err != ERR_OK) {
-            ESP_LOGE(TAG, "Init netif failed with  %" PRId8 "", err);
+            ESP_LOGE(TAG, "Init netif failed with  %d", err);
             return ESP_ERR_ESP_NETIF_INIT_FAILED;
         }
 #else
@@ -1370,15 +1370,15 @@ static esp_err_t esp_netif_start_ip_lost_timer(esp_netif_t *esp_netif)
         return ESP_OK;
     }
 
-    if ( netif && (CONFIG_ESP_NETIF_IP_LOST_TIMER_INTERVAL > 0)) {
+    if ( netif && (CONFIG_ESP_NETIF_IP_LOST_TIMER_INTERVAL > 0) && !ip4_addr_isany_val(ip_info_old->ip)) {
         esp_netif->timer_running = true;
         sys_timeout(CONFIG_ESP_NETIF_IP_LOST_TIMER_INTERVAL * 1000, esp_netif_ip_lost_timer, (void *)esp_netif);
         ESP_LOGD(TAG, "if%p start ip lost tmr: interval=%d", esp_netif, CONFIG_ESP_NETIF_IP_LOST_TIMER_INTERVAL);
         return ESP_OK;
     }
 
-    ESP_LOGD(TAG, "if%p start ip lost tmr: no need start because netif=%p interval=%d ip=%" PRIx32,
-             esp_netif, netif, (CONFIG_ESP_NETIF_IP_LOST_TIMER_INTERVAL), ip_info_old->ip.addr);
+    ESP_LOGD(TAG, "if%p start ip lost tmr: no need start because netif=%p interval=%d ip=%x",
+             esp_netif, netif, CONFIG_ESP_NETIF_IP_LOST_TIMER_INTERVAL, ip_info_old->ip.addr);
 
     return ESP_OK;
 }
@@ -1406,7 +1406,7 @@ static esp_err_t esp_netif_dhcpc_stop_api(esp_netif_api_msg_t *msg)
             return ESP_ERR_ESP_NETIF_IF_NOT_READY;
         }
     } else if (esp_netif->dhcpc_status == ESP_NETIF_DHCP_STOPPED) {
-        ESP_LOGD(TAG, "dhcp client already stopped");
+        ESP_LOGD(TAG, "dhcp client already stoped");
         return ESP_ERR_ESP_NETIF_DHCP_ALREADY_STOPPED;
     }
 
@@ -1569,7 +1569,7 @@ static esp_err_t esp_netif_dhcps_stop_api(esp_netif_api_msg_t *msg)
             return ESP_ERR_ESP_NETIF_IF_NOT_READY;
         }
     } else if (esp_netif->dhcps_status == ESP_NETIF_DHCP_STOPPED) {
-        ESP_LOGD(TAG, "dhcp server already stopped");
+        ESP_LOGD(TAG, "dhcp server already stoped");
         return ESP_ERR_ESP_NETIF_DHCP_ALREADY_STOPPED;
     }
 
@@ -1833,7 +1833,7 @@ static esp_err_t esp_netif_set_ip_info_api(esp_netif_api_msg_t *msg)
     if (p_netif != NULL && netif_is_up(p_netif)) {
         netif_set_addr(p_netif, (ip4_addr_t*)&ip_info->ip, (ip4_addr_t*)&ip_info->netmask, (ip4_addr_t*)&ip_info->gw);
         if (ESP_NETIF_FLAG_EVENT_IP_MODIFIED & esp_netif->flags) {
-            if (!ip4_addr_isany_val(ip_info->ip)) {
+            if (!(ip4_addr_isany_val(ip_info->ip) || ip4_addr_isany_val(ip_info->netmask) || ip4_addr_isany_val(ip_info->gw))) {
 
                 ip_event_t evt_id = esp_netif->get_ip_event;
                 ip_event_got_ip_t evt = { .esp_netif = esp_netif, .ip_changed = false};
@@ -1898,7 +1898,7 @@ static esp_err_t esp_netif_set_dns_info_api(esp_netif_api_msg_t *msg)
     esp_netif_dns_type_t type = dns_param->dns_type;
     esp_netif_dns_info_t *dns = dns_param->dns_info;
 
-    ESP_LOGD(TAG, "esp_netif_set_dns_info: if=%p type=%d dns=%" PRIx32, esp_netif, type, dns->ip.u_addr.ip4.addr);
+    ESP_LOGD(TAG, "esp_netif_set_dns_info: if=%p type=%d dns=%x", esp_netif, type, dns->ip.u_addr.ip4.addr);
 
     ip_addr_t lwip_ip = {};
     ESPIP_TO_IP(&dns->ip, &lwip_ip);
@@ -2622,15 +2622,8 @@ static esp_err_t esp_netif_add_ip6_address_api(esp_netif_api_msg_t *msg)
     return error;
 }
 
-static esp_err_t esp_netif_add_ip6_address_priv(esp_netif_t *esp_netif, const ip_event_add_ip6_t *addr)
+esp_err_t esp_netif_add_ip6_address(esp_netif_t *esp_netif, const ip_event_add_ip6_t *addr)
     _RUN_IN_LWIP_TASK(esp_netif_add_ip6_address_api, esp_netif, addr)
-
-esp_err_t esp_netif_add_ip6_address(esp_netif_t *esp_netif, const esp_ip6_addr_t addr, bool preferred)
-{
-    const ip_event_add_ip6_t addr_evt = {.addr = addr, .preferred = preferred};
-
-    return esp_netif_add_ip6_address_priv(esp_netif, &addr_evt);
-}
 
 static esp_err_t esp_netif_remove_ip6_address_api(esp_netif_api_msg_t *msg)
 {

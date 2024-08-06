@@ -5,8 +5,6 @@
  */
 #pragma once
 
-#warning "apb_ctrl_struct is deprecated due to duplicated with syscon_struct, please use syscon_struct instead, they are same"
-
 #include <stdint.h>
 
 #ifdef __cplusplus

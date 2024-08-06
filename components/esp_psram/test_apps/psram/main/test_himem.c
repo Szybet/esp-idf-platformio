@@ -75,6 +75,7 @@ static bool test_region(int check_size, int seed)
     return ret;
 }
 
+
 static volatile int testsDone;
 
 static void memtest_thread(void *arg)
@@ -88,6 +89,7 @@ static void memtest_thread(void *arg)
     testsDone++; //note possible race here... not really an issue if the two tasks have different vTaskDelay args
     vTaskDelete(NULL);
 }
+
 
 TEST_CASE("high psram memory test", "[himem]")
 {
@@ -105,6 +107,7 @@ TEST_CASE("high psram memory test", "[himem]")
     printf("Done!\n");
     vTaskDelay(100);
 }
+
 
 #endif
 

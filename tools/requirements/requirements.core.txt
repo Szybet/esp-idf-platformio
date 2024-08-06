@@ -14,10 +14,8 @@ esp-coredump
 esptool
 esp-idf-kconfig
 esp-idf-monitor
-esp-idf-nvs-partition-gen
 esp-idf-size
 esp-idf-panic-decoder
-pyclang
 construct
 
 # gdb extensions dependencies

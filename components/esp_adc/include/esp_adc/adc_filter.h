@@ -31,6 +31,7 @@ typedef struct {
     adc_digi_iir_filter_coeff_t coeff;  ///< ADC filter coefficient
 } adc_continuous_iir_filter_config_t;
 
+
 /**
  * @brief New an ADC continuous mode IIR filter
  *

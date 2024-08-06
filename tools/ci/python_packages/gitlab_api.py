@@ -1,21 +1,15 @@
-# SPDX-FileCopyrightText: 2022-2024 Espressif Systems (Shanghai) CO LTD
+# SPDX-FileCopyrightText: 2022-2023 Espressif Systems (Shanghai) CO LTD
 # SPDX-License-Identifier: Apache-2.0
 import argparse
 import logging
 import os
 import re
-import sys
 import tarfile
 import tempfile
 import time
 import zipfile
 from functools import wraps
-from typing import Any
-from typing import Callable
-from typing import Dict
-from typing import List
-from typing import Optional
-from typing import Union
+from typing import Any, Callable, Dict, List, Optional
 
 import gitlab
 
@@ -68,7 +62,7 @@ class Gitlab(object):
 
     DOWNLOAD_ERROR_MAX_RETRIES = 3
 
-    def __init__(self, project_id: Union[int, str, None] = None):
+    def __init__(self, project_id: Optional[int] = None):
         config_data_from_env = os.getenv('PYTHON_GITLAB_CONFIG')
         if config_data_from_env:
             # prefer to load config from env variable
@@ -84,26 +78,9 @@ class Gitlab(object):
     def _init_gitlab_inst(self, project_id: Optional[int], config_files: Optional[List[str]]) -> None:
         gitlab_id = os.getenv('LOCAL_GITLAB_HTTPS_HOST')  # if None, will use the default gitlab server
         self.gitlab_inst = gitlab.Gitlab.from_config(gitlab_id=gitlab_id, config_files=config_files)
-
-        try:
-            self.gitlab_inst.auth()
-        except gitlab.exceptions.GitlabAuthenticationError:
-            msg = """To call gitlab apis locally, please create ~/.python-gitlab.cfg with the following content:
-
-        [global]
-        default = internal
-        ssl_verify = true
-        timeout = 5
-
-        [internal]
-        url = <OUR INTERNAL HTTPS SERVER URL>
-        private_token = <YOUR PERSONAL ACCESS TOKEN>
-        api_version = 4
-        """
-            raise SystemExit(msg)
-
+        self.gitlab_inst.auth()
         if project_id:
-            self.project = self.gitlab_inst.projects.get(project_id, lazy=True)
+            self.project = self.gitlab_inst.projects.get(project_id)
         else:
             self.project = None
 
@@ -151,7 +128,7 @@ class Gitlab(object):
             archive_file.extractall(destination)
 
     @retry
-    def download_artifact(self, job_id: int, artifact_path: List[str], destination: Optional[str] = None) -> List[bytes]:
+    def download_artifact(self, job_id: int, artifact_path: str, destination: Optional[str] = None) -> List[bytes]:
         """
         download specific path of job artifacts and extract to destination.
 
@@ -253,19 +230,9 @@ class Gitlab(object):
 
     @staticmethod
     def decompress_archive(path: str, destination: str) -> str:
-        full_destination = os.path.abspath(destination)
-        # By default max path lenght is set to 260 characters
-        # Prefix `\\?\` extends it to 32,767 characters
-        if sys.platform == 'win32':
-            full_destination = '\\\\?\\' + full_destination
-
-        try:
-            with tarfile.open(path, 'r') as archive_file:
-                root_name = archive_file.getnames()[0]
-                archive_file.extractall(full_destination)
-        except tarfile.TarError as e:
-            logging.error(f'Error while decompressing archive {path}')
-            raise e
+        with tarfile.open(path, 'r') as archive_file:
+            root_name = archive_file.getnames()[0]
+            archive_file.extractall(destination)
 
         return os.path.join(os.path.realpath(destination), root_name)
 

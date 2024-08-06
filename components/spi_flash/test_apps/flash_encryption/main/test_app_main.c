@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2015-2023 Espressif Systems (Shanghai) CO LTD
+ * SPDX-FileCopyrightText: 2015-2024 Espressif Systems (Shanghai) CO LTD
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -11,7 +11,7 @@
 #include "memory_checks.h"
 
 // Some resources are lazy allocated in flash encryption, the threadhold is left for that case
-#define TEST_MEMORY_LEAK_THRESHOLD (-400)
+#define TEST_MEMORY_LEAK_THRESHOLD (-600)
 
 static size_t before_free_8bit;
 static size_t before_free_32bit;

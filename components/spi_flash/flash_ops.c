@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2015-2024 Espressif Systems (Shanghai) CO LTD
+ * SPDX-FileCopyrightText: 2015-2022 Espressif Systems (Shanghai) CO LTD
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -41,8 +41,6 @@
 #include "esp32c2/rom/cache.h"
 #elif CONFIG_IDF_TARGET_ESP32C6
 #include "esp32c6/rom/cache.h"
-#elif CONFIG_IDF_TARGET_ESP32C61
-#include "esp32c61/rom/cache.h"
 #endif
 #include "esp_rom_spiflash.h"
 #include "esp_flash_partitions.h"
@@ -150,15 +148,12 @@ void IRAM_ATTR esp_mspi_pin_init(void)
     }
     //Set F4R4 board pin drive strength. TODO: IDF-3663
 #endif
-}
-
-void esp_mspi_pin_reserve(void)
-{
+    /* Reserve the GPIO pins */
     uint64_t reserve_pin_mask = 0;
     for (esp_mspi_io_t i = 0; i < ESP_MSPI_IO_MAX; i++) {
         reserve_pin_mask |= BIT64(esp_mspi_get_io(i));
     }
-    esp_gpio_reserve(reserve_pin_mask);
+    esp_gpio_reserve_pins(reserve_pin_mask);
 }
 
 esp_err_t IRAM_ATTR spi_flash_init_chip_state(void)
@@ -288,3 +283,13 @@ uint8_t esp_mspi_get_io(esp_mspi_io_t io)
     return s_mspi_io_num_default[io];
 #endif // SOC_SPI_MEM_SUPPORT_CONFIG_GPIO_BY_EFUSE
 }
+
+#if SOC_MEMSPI_CLOCK_IS_INDEPENDENT
+
+IRAM_ATTR void spi_flash_set_clock_src(soc_periph_mspi_clk_src_t clk_src)
+{
+    cache_hal_freeze(CACHE_TYPE_INSTRUCTION);
+    spimem_flash_ll_set_clock_source(clk_src);
+    cache_hal_unfreeze(CACHE_TYPE_INSTRUCTION);
+}
+#endif // SOC_MEMSPI_CLOCK_IS_INDEPENDENT

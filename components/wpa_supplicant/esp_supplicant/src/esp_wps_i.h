@@ -41,20 +41,20 @@ typedef struct {
 } wps_ioctl_param_t;
 
 #ifdef ESP_SUPPLICANT
-enum wps_sm_state {
-    WAIT_START,
-    WPA_MESG,
-    WPA_FAIL
+enum wps_sm_state{
+     WAIT_START,
+     WPA_MESG,
+     WPA_FAIL
 };
 #endif /* ESP_SUPPLICANT */
 
-#define WPS_IGNORE_SEL_REG_MAX_CNT  4
+#define WPS_IGNORE_SEL_REG_MAX_CNT	4
 
-#define WPS_MAX_DIS_AP_NUM  10
+#define WPS_MAX_DIS_AP_NUM	10
 
 /* Bssid of the discard AP which is discarded for not select reg or other reason */
-struct discard_ap_list_t {
-    u8 bssid[6];
+struct discard_ap_list_t{
+	u8 bssid[6];
 };
 
 #ifndef MAX_PASSPHRASE_LEN
@@ -119,6 +119,11 @@ int wps_dev_deinit(struct wps_device_data *dev);
 int wps_dev_init(void);
 int wps_set_factory_info(const esp_wps_config_t *config);
 
+struct wps_sm_funcs {
+    void (*wps_sm_notify_deauth)(void);
+};
+
+struct wps_sm_funcs* wps_get_wps_sm_cb(void);
 static inline int wps_get_type(void)
 {
     return esp_wifi_get_wps_type_internal();

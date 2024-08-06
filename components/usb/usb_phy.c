@@ -20,12 +20,6 @@
 #include "soc/soc_caps.h"
 #include "soc/usb_pins.h"
 
-#if !SOC_RCC_IS_INDEPENDENT
-#define USB_WRAP_RCC_ATOMIC() PERIPH_RCC_ATOMIC()
-#else
-#define USB_WRAP_RCC_ATOMIC()
-#endif
-
 static const char *USBPHY_TAG = "usb_phy";
 
 #define USBPHY_NOT_INIT_ERR_STR    "USB_PHY is not initialized"
@@ -256,12 +250,10 @@ static esp_err_t usb_phy_install(void)
         portEXIT_CRITICAL(&phy_spinlock);
         goto cleanup;
     }
+    usb_wrap_ll_enable_bus_clock(true);
+    usb_wrap_ll_reset_register();
     // Enable USB peripheral and reset the register
     portEXIT_CRITICAL(&phy_spinlock);
-    USB_WRAP_RCC_ATOMIC() {
-        usb_wrap_ll_enable_bus_clock(true);
-        usb_wrap_ll_reset_register();
-    }
     return ESP_OK;
 
 cleanup:
@@ -356,10 +348,8 @@ static void phy_uninstall(void)
     if (p_phy_ctrl_obj->ref_count == 0) {
         p_phy_ctrl_obj_free = p_phy_ctrl_obj;
         p_phy_ctrl_obj = NULL;
-        USB_WRAP_RCC_ATOMIC() {
-            // Disable USB peripheral without reset the module
-            usb_wrap_ll_enable_bus_clock(false);
-        }
+        // Disable USB peripheral without reset the module
+        usb_wrap_ll_enable_bus_clock(false);
     }
     portEXIT_CRITICAL(&phy_spinlock);
     free(p_phy_ctrl_obj_free);

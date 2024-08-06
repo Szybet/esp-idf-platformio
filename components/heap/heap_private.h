@@ -81,7 +81,6 @@ FORCE_INLINE_ATTR heap_t *find_containing_heap(void *ptr )
 */
 void *heap_caps_realloc_default(void *p, size_t size);
 void *heap_caps_malloc_default(size_t size);
-void *heap_caps_aligned_alloc_default(size_t alignment, size_t size);
 void *heap_caps_realloc_base(void *ptr, size_t size, uint32_t caps);
 void *heap_caps_calloc_base(size_t n, size_t size, uint32_t caps);
 void *heap_caps_malloc_base(size_t size, uint32_t caps);

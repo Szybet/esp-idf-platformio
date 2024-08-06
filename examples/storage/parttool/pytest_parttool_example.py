@@ -9,7 +9,7 @@ from pytest_embedded import Dut
 
 
 @pytest.mark.esp32
-@pytest.mark.generic
+@pytest.mark.esp32c3
 def test_examples_parttool(dut: Dut) -> None:
     # Verify factory firmware
     dut.expect('Partitions Tool Example')

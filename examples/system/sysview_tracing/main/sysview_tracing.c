@@ -7,7 +7,6 @@
    CONDITIONS OF ANY KIND, either express or implied.
 */
 
-#include "sdkconfig.h"
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -134,7 +133,7 @@ static void example_task(void *p)
 
 void app_main(void)
 {
-    static example_event_data_t event_data[CONFIG_FREERTOS_NUMBER_OF_CORES];
+    static example_event_data_t event_data[portNUM_PROCESSORS];
 
 #if CONFIG_APPTRACE_SV_ENABLE && CONFIG_USE_CUSTOM_EVENT_ID
     // Currently OpenOCD does not support requesting module info from target. So do the following...
@@ -147,7 +146,7 @@ void app_main(void)
     SEGGER_SYSVIEW_RegisterModule(&s_example_sysview_module);
 #endif
 
-    for (int i = 0; i < CONFIG_FREERTOS_NUMBER_OF_CORES; i++) {
+    for (int i = 0; i < portNUM_PROCESSORS; i++) {
         gptimer_config_t timer_config = {
             .clk_src = GPTIMER_CLK_SRC_DEFAULT,
             .direction = GPTIMER_COUNT_UP,
@@ -157,7 +156,7 @@ void app_main(void)
         event_data[i].period = 1000000 * (i + 1);
     }
 
-    for (int i = 0; i < CONFIG_FREERTOS_NUMBER_OF_CORES; i++) {
+    for (int i = 0; i < portNUM_PROCESSORS; i++) {
         sprintf(event_data->task_name, "svtrace%d", i);
         xTaskCreatePinnedToCore(example_task, event_data->task_name, 4096, &event_data[i], 3, &event_data[i].thnd, i);
         ESP_LOGI(TAG, "Created task %p", event_data[i].thnd);

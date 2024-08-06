@@ -97,20 +97,22 @@ static void btu_hcif_page_scan_rep_mode_chng_evt (void);
 static void btu_hcif_esco_connection_comp_evt(UINT8 *p);
 static void btu_hcif_esco_connection_chg_evt(UINT8 *p);
 
-static void btu_hcif_host_support_evt (UINT8 *p);
 /* Simple Pairing Events */
-#if (CLASSIC_BT_INCLUDED == TRUE)
+static void btu_hcif_host_support_evt (UINT8 *p);
+#if (SMP_INCLUDED == TRUE)
 static void btu_hcif_io_cap_request_evt (UINT8 *p);
 static void btu_hcif_io_cap_response_evt (UINT8 *p);
 static void btu_hcif_user_conf_request_evt (UINT8 *p);
 static void btu_hcif_user_passkey_request_evt (UINT8 *p);
-static void btu_hcif_simple_pair_complete_evt (UINT8 *p);
 static void btu_hcif_user_passkey_notif_evt (UINT8 *p);
 static void btu_hcif_keypress_notif_evt (UINT8 *p);
-#endif  /* (CLASSIC_BT_INCLUDED == TRUE) */
+#endif  ///SMP_INCLUDED == TRUE
 #if BTM_OOB_INCLUDED == TRUE && SMP_INCLUDED == TRUE
 static void btu_hcif_rem_oob_request_evt (UINT8 *p);
 #endif
+#if (SMP_INCLUDED == TRUE)
+static void btu_hcif_simple_pair_complete_evt (UINT8 *p);
+#endif  ///SMP_INCLUDED == TRUE
 static void btu_hcif_link_supv_to_changed_evt (UINT8 *p);
 #if L2CAP_NON_FLUSHABLE_PB_INCLUDED == TRUE
 static void btu_hcif_enhanced_flush_complete_evt (void);
@@ -305,7 +307,7 @@ void btu_hcif_process_event (UNUSED_ATTR UINT8 controller_id, BT_HDR *p_msg)
     case HCI_RMT_HOST_SUP_FEAT_NOTIFY_EVT:
         btu_hcif_host_support_evt (p);
         break;
-#if (CLASSIC_BT_INCLUDED == TRUE)
+#if (SMP_INCLUDED == TRUE)
     case HCI_IO_CAPABILITY_REQUEST_EVT:
         btu_hcif_io_cap_request_evt (p);
         break;
@@ -318,13 +320,13 @@ void btu_hcif_process_event (UNUSED_ATTR UINT8 controller_id, BT_HDR *p_msg)
     case HCI_USER_PASSKEY_REQUEST_EVT:
         btu_hcif_user_passkey_request_evt (p);
         break;
-#endif /* (CLASSIC_BT_INCLUDED == TRUE) */
+#endif  ///SMP_INCLUDED == TRUE
 #if BTM_OOB_INCLUDED == TRUE && SMP_INCLUDED == TRUE
     case HCI_REMOTE_OOB_DATA_REQUEST_EVT:
         btu_hcif_rem_oob_request_evt (p);
         break;
 #endif
-#if (CLASSIC_BT_INCLUDED == TRUE)
+#if (SMP_INCLUDED == TRUE)
     case HCI_SIMPLE_PAIRING_COMPLETE_EVT:
         btu_hcif_simple_pair_complete_evt (p);
         break;
@@ -334,7 +336,7 @@ void btu_hcif_process_event (UNUSED_ATTR UINT8 controller_id, BT_HDR *p_msg)
     case HCI_KEYPRESS_NOTIFY_EVT:
         btu_hcif_keypress_notif_evt (p);
         break;
-#endif /* (CLASSIC_BT_INCLUDED == TRUE) */
+#endif  ///SMP_INCLUDED == TRUE
     case HCI_LINK_SUPER_TOUT_CHANGED_EVT:
         btu_hcif_link_supv_to_changed_evt (p);
         break;
@@ -995,19 +997,6 @@ static void btu_hcif_hdl_command_complete (UINT16 opcode, UINT8 *p, UINT16 evt_l
     case HCI_SET_AFH_CHANNELS:
         btm_set_afh_channels_complete(p);
         break;
-    case HCI_WRITE_PAGE_TOUT:
-        btm_set_page_timeout_complete(p);
-        break;
-#if (ENC_KEY_SIZE_CTRL_MODE == ENC_KEY_SIZE_CTRL_MODE_STD)
-    case HCI_SET_MIN_ENC_KEY_SIZE:
-        btm_set_min_enc_key_size_complete(p);
-        break;
-#endif
-#if (ENC_KEY_SIZE_CTRL_MODE == ENC_KEY_SIZE_CTRL_MODE_VSC)
-    case HCI_VENDOR_BT_SET_MIN_ENC_KEY_SIZE:
-        btm_set_min_enc_key_size_complete(p);
-        break;
-#endif
 #endif
 
 #if (BLE_INCLUDED == TRUE)
@@ -1379,6 +1368,9 @@ static void btu_hcif_hdl_command_status (UINT16 opcode, UINT8 status, UINT8 *p_c
                 break;
 
 #if BLE_INCLUDED == TRUE
+#if (BLE_50_FEATURE_SUPPORT == TRUE)
+            case HCI_BLE_EXT_CREATE_CONN:
+#endif // #if (BLE_50_FEATURE_SUPPORT == TRUE)
             case HCI_BLE_CREATE_LL_CONN:
                 btm_ble_create_ll_conn_complete(status);
                 break;
@@ -1867,7 +1859,7 @@ static void btu_hcif_host_support_evt (UINT8 *p)
 ** Returns          void
 **
 *******************************************************************************/
-#if (CLASSIC_BT_INCLUDED == TRUE)
+#if (SMP_INCLUDED == TRUE)
 static void btu_hcif_io_cap_request_evt (UINT8 *p)
 {
     btm_io_capabilities_req(p);
@@ -1919,20 +1911,6 @@ static void btu_hcif_user_passkey_request_evt (UINT8 *p)
 
 /*******************************************************************************
 **
-** Function         btu_hcif_simple_pair_complete_evt
-**
-** Description      Process event HCI_SIMPLE_PAIRING_COMPLETE_EVT
-**
-** Returns          void
-**
-*******************************************************************************/
-static void btu_hcif_simple_pair_complete_evt (UINT8 *p)
-{
-    btm_simple_pair_complete(p);
-}
-
-/*******************************************************************************
-**
 ** Function         btu_hcif_user_passkey_notif_evt
 **
 ** Description      Process event HCI_USER_PASSKEY_NOTIFY_EVT
@@ -1958,7 +1936,8 @@ static void btu_hcif_keypress_notif_evt (UINT8 *p)
 {
     btm_keypress_notif_evt(p);
 }
-#endif /* (CLASSIC_BT_INCLUDED == TRUE) */
+#endif  ///SMP_INCLUDED == TRUE
+
 
 /*******************************************************************************
 **
@@ -1975,6 +1954,22 @@ static void btu_hcif_rem_oob_request_evt (UINT8 *p)
     btm_rem_oob_req(p);
 }
 #endif
+
+/*******************************************************************************
+**
+** Function         btu_hcif_simple_pair_complete_evt
+**
+** Description      Process event HCI_SIMPLE_PAIRING_COMPLETE_EVT
+**
+** Returns          void
+**
+*******************************************************************************/
+#if (SMP_INCLUDED == TRUE)
+static void btu_hcif_simple_pair_complete_evt (UINT8 *p)
+{
+    btm_simple_pair_complete(p);
+}
+#endif  ///SMP_INCLUDED == TRUE
 
 /*******************************************************************************
 **

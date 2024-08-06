@@ -225,7 +225,7 @@ void gatts_show_local_database(void)
                     printf("\tend_handle %d\n", p_attr->p_value->incl_handle.e_handle);
                     break;
                 case GATT_UUID_CHAR_DECLARE: {
-                    tBT_UUID char_uuid = {0};
+                    tBT_UUID char_uuid;
                     tGATT_ATTR16 *p_char_val;
                     p_char_val = (tGATT_ATTR16 *)p_attr->p_next;
                     attr_uuid_to_bt_uuid((void *)p_char_val, &char_uuid);

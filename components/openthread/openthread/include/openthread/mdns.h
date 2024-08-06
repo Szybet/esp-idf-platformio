@@ -134,6 +134,24 @@ typedef otPlatDnssdService otMdnsService;
 typedef otPlatDnssdKey otMdnsKey;
 
 /**
+ * Represents an mDNS entry iterator.
+ *
+ */
+typedef struct otMdnsIterator otMdnsIterator;
+
+/**
+ * Represents a host/service/key entry state.
+ *
+ */
+typedef enum otMdnsEntryState
+{
+    OT_MDNS_ENTRY_STATE_PROBING,    ///< Probing to claim the name.
+    OT_MDNS_ENTRY_STATE_REGISTERED, ///< Entry is successfully registered.
+    OT_MDNS_ENTRY_STATE_CONFLICT,   ///< Name conflict was detected.
+    OT_MDNS_ENTRY_STATE_REMOVING,   ///< Entry is being removed (sending "goodbye" announcements).
+} otMdnsEntryState;
+
+/**
  * Enables or disables the mDNS module.
  *
  * The mDNS module should be enabled before registration any host, service, or key entries. Disabling mDNS will
@@ -335,10 +353,11 @@ otError otMdnsUnregisterService(otInstance *aInstance, const otMdnsService *aSer
  *
  * The fields in @p aKey follow these rules:
  *
- * - If the key is associated with a host entry, `mName` specifies the host name and `mServcieType` MUST be NULL.
- * - If the key is associated with a service entry, `mName` specifies the service instance label (always treated as
- *   a single label) and `mServiceType` specifies the service type (e.g., "_tst._udp"). In this case the DNS name for
- *   key record is `<mName>.<mServiceTye>`.
+ * - If the key is associated with a host entry, the `mName` field specifies the host name and the `mServiceType` MUST
+ *   be NULL.
+ * - If the key is associated with a service entry, the `mName` filed specifies the service instance label (always
+ *   treated as a single label) and the `mServiceType` filed specifies the service type (e.g., "_tst._udp"). In this
+ *   case the DNS name for key record is `<mName>.<mServiceTye>`.
  * - The `mKeyData` field contains the key record's data with `mKeyDataLength` as its length in byes.
  * - The `mTtl` specifies the TTL if non-zero. If zero, the mDNS module will use the default TTL of 120 seconds.
  * - Other fields in @p aKey structure are ignored in an `otMdnsRegisterKey()` call.
@@ -368,10 +387,11 @@ otError otMdnsRegisterKey(otInstance            *aInstance,
  *
  * The fields in @p aKey follow these rules:
  *
- * - If the key is associated with a host entry, `mName` specifies the host name and `mServcieType` MUST be NULL.
- * - If the key is associated with a service entry, `mName` specifies the service instance label (always treated as
- *   a single label) and `mServiceType` specifies the service type (e.g., "_tst._udp"). In this case the DNS name for
- *   key record is `<mName>.<mServiceTye>`.
+ * - If the key is associated with a host entry, the `mName` field specifies the host name and the `mServiceType` MUST
+ *   be NULL.
+ * - If the key is associated with a service entry, the `mName` filed specifies the service instance label (always
+ *   treated as a single label) and the `mServiceType` filed specifies the service type (e.g., "_tst._udp"). In this
+ *   case the DNS name for key record is `<mName>.<mServiceTye>`.
  * - Other fields in @p aKey structure are ignored in an `otMdnsUnregisterKey()` call.
  *
  * If there is no previously registered key with the same name, no action is performed.
@@ -388,158 +408,186 @@ otError otMdnsRegisterKey(otInstance            *aInstance,
  */
 otError otMdnsUnregisterKey(otInstance *aInstance, const otMdnsKey *aKey);
 
-typedef struct otMdnsBrowseResult  otMdnsBrowseResult;
-typedef struct otMdnsSrvResult     otMdnsSrvResult;
-typedef struct otMdnsTxtResult     otMdnsTxtResult;
-typedef struct otMdnsAddressResult otMdnsAddressResult;
-
 /**
- * Represents the callback function used to report a browse result.
+ * Allocates a new iterator.
+ *
+ * Requires `OPENTHREAD_CONFIG_MULTICAST_DNS_ENTRY_ITERATION_API_ENABLE`.
+ *
+ * An allocated iterator must be freed by the caller using `otMdnsFreeIterator()`.
  *
  * @param[in] aInstance    The OpenThread instance.
- * @param[in] aResult      The browse result.
+ *
+ * @returns A pointer to the allocated iterator, or `NULL` if it fails to allocate.
  *
  */
-typedef void (*otMdnsBrowseCallback)(otInstance *aInstance, const otMdnsBrowseResult *aResult);
+otMdnsIterator *otMdnsAllocateIterator(otInstance *aInstance);
 
 /**
- * Represents the callback function used to report an SRV resolve result.
+ * Frees a previously allocated iterator.
+ *
+ * Requires `OPENTHREAD_CONFIG_MULTICAST_DNS_ENTRY_ITERATION_API_ENABLE`.
  *
  * @param[in] aInstance    The OpenThread instance.
- * @param[in] aResult      The SRV resolve result.
+ * @param[in] aIterator    The iterator to free.
  *
  */
-typedef void (*otMdnsSrvCallback)(otInstance *aInstance, const otMdnsSrvResult *aResult);
+void otMdnsFreeIterator(otInstance *aInstance, otMdnsIterator *aIterator);
 
 /**
- * Represents the callback function used to report a TXT resolve result.
+ * Iterates over registered host entries.
  *
- * @param[in] aInstance    The OpenThread instance.
- * @param[in] aResult      The TXT resolve result.
+ * Requires `OPENTHREAD_CONFIG_MULTICAST_DNS_ENTRY_ITERATION_API_ENABLE`.
+ *
+ * On success, @p aHost is populated with information about the next host. Pointers within the `otMdnsHost` structure
+ * (like `mName`) remain valid until the next call to any OpenThread stack's public or platform API/callback.
+ *
+ * @param[in]  aInstance   The OpenThread instance.
+ * @param[in]  aIterator   Pointer to the iterator.
+ * @param[out] aHost       Pointer to an `otMdnsHost` to return the information about the next host entry.
+ * @param[out] aState      Pointer to an `otMdnsEntryState` to return the entry state.
+ *
+ * @retval OT_ERROR_NONE         @p aHost, @p aState, & @p aIterator are updated successfully.
+ * @retval OT_ERROR_NOT_FOUND    Reached the end of the list.
+ * @retval OT_ERROR_INVALID_ARG  @p aIterator is not valid.
  *
  */
-typedef void (*otMdnsTxtCallback)(otInstance *aInstance, const otMdnsTxtResult *aResult);
+otError otMdnsGetNextHost(otInstance       *aInstance,
+                          otMdnsIterator   *aIterator,
+                          otMdnsHost       *aHost,
+                          otMdnsEntryState *aState);
 
 /**
- * Represents the callback function use to report a IPv6/IPv4 address resolve result.
+ * Iterates over registered service entries.
  *
- * @param[in] aInstance    The OpenThread instance.
- * @param[in] aResult      The address resolve result.
+ * Requires `OPENTHREAD_CONFIG_MULTICAST_DNS_ENTRY_ITERATION_API_ENABLE`.
+ *
+ * On success, @p aService is populated with information about the next service . Pointers within the `otMdnsService`
+ * structure (like `mServiceType`, `mSubTypeLabels`) remain valid until the next call to any OpenThread stack's public
+ * or platform API/callback.
+ *
+ * @param[in]  aInstance    The OpenThread instance.
+ * @param[in]  aIterator    Pointer to the iterator to use.
+ * @param[out] aService     Pointer to an `otMdnsService` to return the information about the next service entry.
+ * @param[out] aState       Pointer to an `otMdnsEntryState` to return the entry state.
+ *
+ * @retval OT_ERROR_NONE         @p aService, @p aState, & @p aIterator are updated successfully.
+ * @retval OT_ERROR_NOT_FOUND    Reached the end of the list.
+ * @retval OT_ERROR_INVALID_ARG  @p aIterator is not valid.
  *
  */
-typedef void (*otMdnsAddressCallback)(otInstance *aInstance, const otMdnsAddressResult *aResult);
+otError otMdnsGetNextService(otInstance       *aInstance,
+                             otMdnsIterator   *aIterator,
+                             otMdnsService    *aService,
+                             otMdnsEntryState *aState);
+
+/**
+ * Iterates over registered key entries.
+ *
+ * Requires `OPENTHREAD_CONFIG_MULTICAST_DNS_ENTRY_ITERATION_API_ENABLE`.
+ *
+ * On success, @p aKey is populated with information about the next key.  Pointers within the `otMdnsKey` structure
+ * (like `mName`) remain valid until the next call to any OpenThread stack's public or platform API/callback.
+ *
+ * @param[in]  aInstance    The OpenThread instance.
+ * @param[in]  aIterator    Pointer to the iterator to use.
+ * @param[out] aKey         Pointer to an `otMdnsKey` to return the information about the next key entry.
+ * @param[out] aState       Pointer to an `otMdnsEntryState` to return the entry state.
+ *
+ * @retval OT_ERROR_NONE         @p aKey, @p aState, & @p aIterator are updated successfully.
+ * @retval OT_ERROR_NOT_FOUND    Reached the end of the list.
+ * @retval OT_ERROR_INVALID_ARG  Iterator is not valid.
+ *
+ */
+otError otMdnsGetNextKey(otInstance *aInstance, otMdnsIterator *aIterator, otMdnsKey *aKey, otMdnsEntryState *aState);
 
 /**
  * Represents a service browser.
  *
+ * Refer to `otPlatDnssdBrowser` for documentation of member fields and `otMdnsStartBrowser()` for how they are used.
+ *
  */
-typedef struct otMdnsBrowser
-{
-    const char          *mServiceType;  ///< The service type (e.g., "_mt._udp"). MUST NOT include domain name.
-    const char          *mSubTypeLabel; ///< The sub-type label if browsing for sub-type, NULL otherwise.
-    uint32_t             mInfraIfIndex; ///< The infrastructure network interface index.
-    otMdnsBrowseCallback mCallback;     ///< The callback to report result.
-} otMdnsBrowser;
+typedef otPlatDnssdBrowser otMdnsBrowser;
+
+/**
+ * Represents the callback function pointer type used to report a browse result.
+ *
+ */
+typedef otPlatDnssdBrowseCallback otMdnsBrowseCallback;
 
 /**
  * Represents a browse result.
  *
  */
-struct otMdnsBrowseResult
-{
-    const char *mServiceType;     ///< The service type (e.g., "_mt._udp").
-    const char *mSubTypeLabel;    ///< The sub-type label if browsing for sub-type, NULL otherwise.
-    const char *mServiceInstance; ///< Service instance label.
-    uint32_t    mTtl;             ///< TTL in seconds. Zero TTL indicates that service is removed.
-    uint32_t    mInfraIfIndex;    ///< The infrastructure network interface index.
-};
+typedef otPlatDnssdBrowseResult otMdnsBrowseResult;
 
 /**
  * Represents an SRV service resolver.
  *
+ * Refer to `otPlatDnssdSrvResolver` for documentation of member fields and `otMdnsStartSrvResolver()` for how they are
+ * used.
+ *
  */
-typedef struct otMdnsSrvResolver
-{
-    const char       *mServiceInstance; ///< The service instance label.
-    const char       *mServiceType;     ///< The service type.
-    uint32_t          mInfraIfIndex;    ///< The infrastructure network interface index.
-    otMdnsSrvCallback mCallback;        ///< The callback to report result.
-} otMdnsSrvResolver;
+typedef otPlatDnssdSrvResolver otMdnsSrvResolver;
+
+/**
+ * Represents the callback function pointer type used to report an SRV resolve result.
+ *
+ */
+typedef otPlatDnssdSrvCallback otMdnsSrvCallback;
 
 /**
  * Represents an SRV resolver result.
  *
  */
-struct otMdnsSrvResult
-{
-    const char *mServiceInstance; ///< The service instance name label.
-    const char *mServiceType;     ///< The service type.
-    const char *mHostName;        ///< The host name (e.g., "myhost"). Can be NULL when `mTtl` is zero.
-    uint16_t    mPort;            ///< The service port number.
-    uint16_t    mPriority;        ///< The service priority.
-    uint16_t    mWeight;          ///< The service weight.
-    uint32_t    mTtl;             ///< The service TTL in seconds. Zero TTL indicates SRV record is removed.
-    uint32_t    mInfraIfIndex;    ///< The infrastructure network interface index.
-};
+typedef otPlatDnssdSrvResult otMdnsSrvResult;
 
 /**
  * Represents a TXT service resolver.
  *
+ * Refer to `otPlatDnssdTxtResolver` for documentation of member fields and `otMdnsStartTxtResolver()` for how they are
+ * used.
+ *
  */
-typedef struct otMdnsTxtResolver
-{
-    const char       *mServiceInstance; ///< Service instance label.
-    const char       *mServiceType;     ///< Service type.
-    uint32_t          mInfraIfIndex;    ///< The infrastructure network interface index.
-    otMdnsTxtCallback mCallback;
-} otMdnsTxtResolver;
+typedef otPlatDnssdTxtResolver otMdnsTxtResolver;
+
+/**
+ * Represents the callback function pointer type used to report a TXT resolve result.
+ *
+ */
+typedef otPlatDnssdTxtCallback otMdnsTxtCallback;
 
 /**
  * Represents a TXT resolver result.
  *
  */
-struct otMdnsTxtResult
-{
-    const char    *mServiceInstance; ///< The service instance name label.
-    const char    *mServiceType;     ///< The service type.
-    const uint8_t *mTxtData;         ///< Encoded TXT data bytes. Can be NULL when `mTtl` is zero.
-    uint16_t       mTxtDataLength;   ///< Length of TXT data.
-    uint32_t       mTtl;             ///< The TXT data TTL in seconds. Zero TTL indicates record is removed.
-    uint32_t       mInfraIfIndex;    ///< The infrastructure network interface index.
-};
+typedef otPlatDnssdTxtResult otMdnsTxtResult;
 
 /**
  * Represents an address resolver.
  *
+ * Refer to `otPlatDnssdAddressResolver` for documentation of member fields and `otMdnsStartIp6AddressResolver()` or
+ * `otMdnsStartIp4AddressResolver()` for how they are used.
+ *
  */
-typedef struct otMdnsAddressResolver
-{
-    const char           *mHostName;     ///< The host name (e.g., "myhost"). MUST NOT contain domain name.
-    uint32_t              mInfraIfIndex; ///< The infrastructure network interface index.
-    otMdnsAddressCallback mCallback;     ///< The callback to report result.
-} otMdnsAddressResolver;
+typedef otPlatDnssdAddressResolver otMdnsAddressResolver;
+
+/**
+ * Represents the callback function pointer type use to report an IPv6/IPv4 address resolve result.
+ *
+ */
+typedef otPlatDnssdAddressCallback otMdnsAddressCallback;
 
 /**
  * Represents a discovered host address and its TTL.
  *
  */
-typedef struct otMdnsAddressAndTtl
-{
-    otIp6Address mAddress; ///< The IPv6 address. For IPv4 address the IPv4-mapped IPv6 address format is used.
-    uint32_t     mTtl;     ///< The TTL in seconds.
-} otMdnsAddressAndTtl;
+typedef otPlatDnssdAddressAndTtl otMdnsAddressAndTtl;
 
 /**
  * Represents address resolver result.
  *
  */
-struct otMdnsAddressResult
-{
-    const char                *mHostName;        ///< The host name.
-    const otMdnsAddressAndTtl *mAddresses;       ///< Array of host addresses and their TTL. Can be NULL if empty.
-    uint16_t                   mAddressesLength; ///< Number of entries in `mAddresses` array.
-    uint32_t                   mInfraIfIndex;    ///< The infrastructure network interface index.
-};
+typedef otPlatDnssdAddressResult otMdnsAddressResult;
 
 /**
  * Starts a service browser.
@@ -661,7 +709,7 @@ otError otMdnsStopTxtResolver(otInstance *aInstance, const otMdnsTxtResolver *aR
  *
  * Initiates a continuous IPv6 address resolver for the specified host name in @p aResolver.
  *
- * Discovered addresses are reported through the `mCallback` function in @ p aResolver. The callback is invoked
+ * Discovered addresses are reported through the `mCallback` function in @p aResolver. The callback is invoked
  * whenever addresses are added or removed, providing an updated list. If all addresses are removed, the callback is
  * invoked with an empty list (`mAddresses` will be NULL, and `mAddressesLength` will be zero).
  *
@@ -700,7 +748,7 @@ otError otMdnsStopIp6AddressResolver(otInstance *aInstance, const otMdnsAddressR
  *
  * Initiates a continuous IPv4 address resolver for the specified host name in @p aResolver.
  *
- * Discovered addresses are reported through the `mCallback` function in @ p aResolver. The IPv4 addresses are
+ * Discovered addresses are reported through the `mCallback` function in @p aResolver. The IPv4 addresses are
  * represented using the IPv4-mapped IPv6 address format in `mAddresses` array.  The callback is invoked  whenever
  * addresses are added or removed, providing an updated list. If all addresses are removed, the callback is invoked
  * with an empty list (`mAddresses` will be NULL, and `mAddressesLength` will be zero).
@@ -734,6 +782,140 @@ otError otMdnsStartIp4AddressResolver(otInstance *aInstance, const otMdnsAddress
  *
  */
 otError otMdnsStopIp4AddressResolver(otInstance *aInstance, const otMdnsAddressResolver *aResolver);
+
+/**
+ * Represents additional information about a browser/resolver and its cached results.
+ *
+ */
+typedef struct otMdnsCacheInfo
+{
+    bool mIsActive;         ///< Whether this is an active browser/resolver vs an opportunistic cached one.
+    bool mHasCachedResults; ///< Whether there is any cached results.
+} otMdnsCacheInfo;
+
+/**
+ * Iterates over browsers.
+ *
+ * Requires `OPENTHREAD_CONFIG_MULTICAST_DNS_ENTRY_ITERATION_API_ENABLE`.
+ *
+ * On success, @p aBrowser is populated with information about the next browser. The `mCallback` field is always
+ * set to `NULL` as there may be multiple active browsers with different callbacks. Other pointers within the
+ * `otMdnsBrowser` structure remain valid until the next call to any OpenThread stack's public or platform API/callback.
+ *
+ * @param[in]  aInstance   The OpenThread instance.
+ * @param[in]  aIterator   Pointer to the iterator.
+ * @param[out] aBrowser    Pointer to an `otMdnsBrowser` to return the information about the next browser.
+ * @param[out] aInfo       Pointer to an `otMdnsCacheInfo` to return additional information.
+ *
+ * @retval OT_ERROR_NONE         @p aBrowser, @p aInfo, & @p aIterator are updated successfully.
+ * @retval OT_ERROR_NOT_FOUND    Reached the end of the list.
+ * @retval OT_ERROR_INVALID_ARG  @p aIterator is not valid.
+ *
+ */
+otError otMdnsGetNextBrowser(otInstance      *aInstance,
+                             otMdnsIterator  *aIterator,
+                             otMdnsBrowser   *aBrowser,
+                             otMdnsCacheInfo *aInfo);
+
+/**
+ * Iterates over SRV resolvers.
+ *
+ * Requires `OPENTHREAD_CONFIG_MULTICAST_DNS_ENTRY_ITERATION_API_ENABLE`.
+ *
+ * On success, @p aResolver is populated with information about the next resolver. The `mCallback` field is always
+ * set to `NULL` as there may be multiple active resolvers with different callbacks. Other pointers within the
+ * `otMdnsSrvResolver` structure remain valid until the next call to any OpenThread stack's public or platform
+ * API/callback.
+ *
+ * @param[in]  aInstance   The OpenThread instance.
+ * @param[in]  aIterator   Pointer to the iterator.
+ * @param[out] aResolver   Pointer to an `otMdnsSrvResolver` to return the information about the next resolver.
+ * @param[out] aInfo       Pointer to an `otMdnsCacheInfo` to return additional information.
+ *
+ * @retval OT_ERROR_NONE         @p aResolver, @p aInfo, & @p aIterator are updated successfully.
+ * @retval OT_ERROR_NOT_FOUND    Reached the end of the list.
+ * @retval OT_ERROR_INVALID_ARG  @p aIterator is not valid.
+ *
+ */
+otError otMdnsGetNextSrvResolver(otInstance        *aInstance,
+                                 otMdnsIterator    *aIterator,
+                                 otMdnsSrvResolver *aResolver,
+                                 otMdnsCacheInfo   *aInfo);
+
+/**
+ * Iterates over TXT resolvers.
+ *
+ * Requires `OPENTHREAD_CONFIG_MULTICAST_DNS_ENTRY_ITERATION_API_ENABLE`.
+ *
+ * On success, @p aResolver is populated with information about the next resolver. The `mCallback` field is always
+ * set to `NULL` as there may be multiple active resolvers with different callbacks. Other pointers within the
+ * `otMdnsTxtResolver` structure remain valid until the next call to any OpenThread stack's public or platform
+ * API/callback.
+ *
+ * @param[in]  aInstance   The OpenThread instance.
+ * @param[in]  aIterator   Pointer to the iterator.
+ * @param[out] aResolver   Pointer to an `otMdnsTxtResolver` to return the information about the next resolver.
+ * @param[out] aInfo       Pointer to an `otMdnsCacheInfo` to return additional information.
+ *
+ * @retval OT_ERROR_NONE         @p aResolver, @p aInfo, & @p aIterator are updated successfully.
+ * @retval OT_ERROR_NOT_FOUND    Reached the end of the list.
+ * @retval OT_ERROR_INVALID_ARG  @p aIterator is not valid.
+ *
+ */
+otError otMdnsGetNextTxtResolver(otInstance        *aInstance,
+                                 otMdnsIterator    *aIterator,
+                                 otMdnsTxtResolver *aResolver,
+                                 otMdnsCacheInfo   *aInfo);
+
+/**
+ * Iterates over IPv6 address resolvers.
+ *
+ * Requires `OPENTHREAD_CONFIG_MULTICAST_DNS_ENTRY_ITERATION_API_ENABLE`.
+ *
+ * On success, @p aResolver is populated with information about the next resolver. The `mCallback` field is always
+ * set to `NULL` as there may be multiple active resolvers with different callbacks. Other pointers within the
+ * `otMdnsAddressResolver` structure remain valid until the next call to any OpenThread stack's public or platform
+ * API/callback.
+ *
+ * @param[in]  aInstance   The OpenThread instance.
+ * @param[in]  aIterator   Pointer to the iterator.
+ * @param[out] aResolver   Pointer to an `otMdnsAddressResolver` to return the information about the next resolver.
+ * @param[out] aInfo       Pointer to an `otMdnsCacheInfo` to return additional information.
+ *
+ * @retval OT_ERROR_NONE         @p aResolver, @p aInfo, & @p aIterator are updated successfully.
+ * @retval OT_ERROR_NOT_FOUND    Reached the end of the list.
+ * @retval OT_ERROR_INVALID_ARG  @p aIterator is not valid.
+ *
+ */
+otError otMdnsGetNextIp6AddressResolver(otInstance            *aInstance,
+                                        otMdnsIterator        *aIterator,
+                                        otMdnsAddressResolver *aResolver,
+                                        otMdnsCacheInfo       *aInfo);
+
+/**
+ * Iterates over IPv4 address resolvers.
+ *
+ * Requires `OPENTHREAD_CONFIG_MULTICAST_DNS_ENTRY_ITERATION_API_ENABLE`.
+ *
+ * On success, @p aResolver is populated with information about the next resolver. The `mCallback` field is always
+ * set to `NULL` as there may be multiple active resolvers with different callbacks. Other pointers within the
+ * `otMdnsAddressResolver` structure remain valid until the next call to any OpenThread stack's public or platform
+ * API/callback.
+ *
+ * @param[in]  aInstance   The OpenThread instance.
+ * @param[in]  aIterator   Pointer to the iterator.
+ * @param[out] aResolver   Pointer to an `otMdnsAddressResolver` to return the information about the next resolver.
+ * @param[out] aInfo       Pointer to an `otMdnsCacheInfo` to return additional information.
+ *
+ * @retval OT_ERROR_NONE         @p aResolver, @p aInfo, & @p aIterator are updated successfully.
+ * @retval OT_ERROR_NOT_FOUND    Reached the end of the list.
+ * @retval OT_ERROR_INVALID_ARG  @p aIterator is not valid.
+ *
+ */
+otError otMdnsGetNextIp4AddressResolver(otInstance            *aInstance,
+                                        otMdnsIterator        *aIterator,
+                                        otMdnsAddressResolver *aResolver,
+                                        otMdnsCacheInfo       *aInfo);
 
 /**
  * @}

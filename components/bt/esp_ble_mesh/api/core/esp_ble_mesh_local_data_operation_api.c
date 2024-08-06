@@ -17,7 +17,6 @@ int32_t esp_ble_mesh_get_model_publish_period(esp_ble_mesh_model_t *model)
     if (model == NULL) {
         return 0;
     }
-
     return btc_ble_mesh_model_pub_period_get(model);
 }
 
@@ -32,7 +31,6 @@ uint16_t *esp_ble_mesh_is_model_subscribed_to_group(esp_ble_mesh_model_t *model,
     if (model == NULL) {
         return NULL;
     }
-
     return btc_ble_mesh_model_find_group(model, group_addr);
 }
 
@@ -41,7 +39,6 @@ esp_ble_mesh_elem_t *esp_ble_mesh_find_element(uint16_t element_addr)
     if (!ESP_BLE_MESH_ADDR_IS_UNICAST(element_addr)) {
         return NULL;
     }
-
     return btc_ble_mesh_elem_find(element_addr);
 }
 
@@ -56,7 +53,6 @@ esp_ble_mesh_model_t *esp_ble_mesh_find_vendor_model(const esp_ble_mesh_elem_t *
     if (element == NULL) {
         return NULL;
     }
-
     return btc_ble_mesh_model_find_vnd(element, company_id, model_id);
 }
 
@@ -66,7 +62,6 @@ esp_ble_mesh_model_t *esp_ble_mesh_find_sig_model(const esp_ble_mesh_elem_t *ele
     if (element == NULL) {
         return NULL;
     }
-
     return btc_ble_mesh_model_find(element, model_id);
 }
 
@@ -126,15 +121,6 @@ esp_err_t esp_ble_mesh_model_unsubscribe_group_addr(uint16_t element_addr, uint1
     return (btc_transfer_context(&msg, &arg, sizeof(btc_ble_mesh_prov_args_t), NULL, NULL)
             == BT_STATUS_SUCCESS ? ESP_OK : ESP_FAIL);
 }
-
-#if CONFIG_BLE_MESH_DF_SRV
-esp_err_t esp_ble_mesh_enable_directed_forwarding(uint16_t net_idx, bool directed_forwarding,
-                                                  bool directed_forwarding_relay)
-{
-    return btc_ble_mesh_enable_directed_forwarding(net_idx, directed_forwarding,
-                                                   directed_forwarding_relay);
-}
-#endif /* CONFIG_BLE_MESH_DF_SRV */
 
 #if CONFIG_BLE_MESH_NODE
 

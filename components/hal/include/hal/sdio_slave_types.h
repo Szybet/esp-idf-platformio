@@ -8,10 +8,6 @@
 
 #include "esp_bit_defs.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 /// Mask of interrupts sending to the host.
 typedef enum {
     SDIO_SLAVE_HOSTINT_BIT0 = BIT(0),   ///< General purpose interrupt bit 0.
@@ -46,7 +42,3 @@ typedef enum {
     SDIO_SLAVE_SEND_STREAM = 0, ///< Stream mode, all packets to send will be combined as one if possible
     SDIO_SLAVE_SEND_PACKET = 1, ///< Packet mode, one packets will be sent one after another (only increase packet_len if last packet sent).
 } sdio_slave_sending_mode_t;
-
-#ifdef __cplusplus
-}
-#endif

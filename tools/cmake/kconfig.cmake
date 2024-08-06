@@ -55,32 +55,6 @@ endfunction()
 
 
 #
-# Find the initial IDF version used to generate the config.
-# This is needed to pass this variable back to confgen, so that the
-# value of CONFIG_IDF_INIT_VERSION option stays the same.
-#
-function(__get_init_config_version config version_out)
-    set(${version_out} NOTFOUND PARENT_SCOPE)
-
-    if(NOT EXISTS "${config}")
-        return()
-    endif()
-
-    file(STRINGS "${config}" lines)
-    foreach(line ${lines})
-        string(STRIP "${line}" line)
-        if(NOT "${line}" MATCHES "CONFIG_IDF_INIT_VERSION=\"([0-9]+\.[0-9]+\.[0-9]+)\"$")
-            continue()
-        endif()
-
-        string(REGEX REPLACE "CONFIG_IDF_INIT_VERSION=\"([0-9]+\.[0-9]+\.[0-9]+)\"$" "\\1" version "${line}")
-        set(${version_out} ${version} PARENT_SCOPE)
-        return()
-    endforeach()
-endfunction()
-
-
-#
 # Generate the config files and create config related targets and configure
 # dependencies.
 #
@@ -105,12 +79,6 @@ function(__kconfig_generate_config sdkconfig sdkconfig_defaults)
         endif()
     endforeach()
 
-    __get_init_config_version(${sdkconfig} idf_init_version)
-    if(NOT idf_init_version)
-        set(idf_init_version $ENV{IDF_VERSION})
-    endif()
-    set(ENV{IDF_INIT_VERSION} ${idf_init_version})
-
     # Take into account bootloader components configuration files
     idf_build_get_property(bootloader_kconfigs BOOTLOADER_KCONFIGS)
     idf_build_get_property(bootloader_kconfigs_proj BOOTLOADER_KCONFIGS_PROJ)
@@ -126,7 +94,6 @@ function(__kconfig_generate_config sdkconfig sdkconfig_defaults)
     idf_build_set_property(KCONFIG_PROJBUILDS "${kconfig_projbuilds}")
 
     idf_build_get_property(idf_target IDF_TARGET)
-    idf_build_get_property(idf_toolchain IDF_TOOLCHAIN)
     idf_build_get_property(idf_path IDF_PATH)
     idf_build_get_property(idf_env_fpga __IDF_ENV_FPGA)
 
@@ -232,7 +199,7 @@ function(__kconfig_generate_config sdkconfig sdkconfig_defaults)
     idf_build_set_property(SDKCONFIG_JSON_MENUS ${sdkconfig_json_menus})
     idf_build_set_property(CONFIG_DIR ${config_dir})
 
-    set(MENUCONFIG_CMD ${python} -m menuconfig)
+    set(MENUCONFIG_CMD ${python} ${idf_path}/tools/kconfig_new/menuconfig_wrapper.py)
     set(TERM_CHECK_CMD ${python} ${idf_path}/tools/check_term.py)
 
     # Generate the menuconfig target
@@ -242,9 +209,7 @@ function(__kconfig_generate_config sdkconfig sdkconfig_defaults)
         COMMAND ${prepare_kconfig_files_command}
         COMMAND ${kconfgen_basecommand}
         --env "IDF_TARGET=${idf_target}"
-        --env "IDF_TOOLCHAIN=${idf_toolchain}"
         --env "IDF_ENV_FPGA=${idf_env_fpga}"
-        --env "IDF_INIT_VERSION=${idf_init_version}"
         --dont-write-deprecated
         --output config ${sdkconfig}
         COMMAND ${TERM_CHECK_CMD}
@@ -253,18 +218,14 @@ function(__kconfig_generate_config sdkconfig sdkconfig_defaults)
         "COMPONENT_KCONFIGS_PROJBUILD_SOURCE_FILE=${kconfigs_projbuild_path}"
         "KCONFIG_CONFIG=${sdkconfig}"
         "IDF_TARGET=${idf_target}"
-        "IDF_TOOLCHAIN=${idf_toolchain}"
         "IDF_ENV_FPGA=${idf_env_fpga}"
-        "IDF_INIT_VERSION=${idf_init_version}"
         ${MENUCONFIG_CMD} ${root_kconfig}
         USES_TERMINAL
         # additional run of kconfgen esures that the deprecated options will be inserted into sdkconfig (for backward
         # compatibility)
         COMMAND ${kconfgen_basecommand}
         --env "IDF_TARGET=${idf_target}"
-        --env "IDF_TOOLCHAIN=${idf_toolchain}"
         --env "IDF_ENV_FPGA=${idf_env_fpga}"
-        --env "IDF_INIT_VERSION=${idf_init_version}"
         --output config ${sdkconfig}
         )
 

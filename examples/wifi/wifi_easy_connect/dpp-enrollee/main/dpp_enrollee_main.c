@@ -18,7 +18,7 @@
 #include "nvs_flash.h"
 #include "qrcode.h"
 
-#ifdef CONFIG_ESP_DPP_LISTEN_CHANNEL_LIST
+#ifdef CONFIG_ESP_DPP_LISTEN_CHANNEL
 #define EXAMPLE_DPP_LISTEN_CHANNEL_LIST     CONFIG_ESP_DPP_LISTEN_CHANNEL_LIST
 #else
 #define EXAMPLE_DPP_LISTEN_CHANNEL_LIST     "6"
@@ -49,7 +49,6 @@ static EventGroupHandle_t s_dpp_event_group;
 #define DPP_CONNECTED_BIT  BIT0
 #define DPP_CONNECT_FAIL_BIT     BIT1
 #define DPP_AUTH_FAIL_BIT           BIT2
-#define WIFI_MAX_RETRY_NUM 3
 
 static void event_handler(void *arg, esp_event_base_t event_base,
                           int32_t event_id, void *event_data)
@@ -58,7 +57,7 @@ static void event_handler(void *arg, esp_event_base_t event_base,
         ESP_ERROR_CHECK(esp_supp_dpp_start_listen());
         ESP_LOGI(TAG, "Started listening for DPP Authentication");
     } else if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_DISCONNECTED) {
-        if (s_retry_num < WIFI_MAX_RETRY_NUM) {
+        if (s_retry_num < 5) {
             esp_wifi_connect();
             s_retry_num++;
             ESP_LOGI(TAG, "retry to connect to the AP");
@@ -66,8 +65,6 @@ static void event_handler(void *arg, esp_event_base_t event_base,
             xEventGroupSetBits(s_dpp_event_group, DPP_CONNECT_FAIL_BIT);
         }
         ESP_LOGI(TAG, "connect to the AP fail");
-    } else if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_CONNECTED) {
-	    ESP_LOGI(TAG, "Successfully connected to the AP ssid : %s ", s_dpp_wifi_config.sta.ssid);
     } else if (event_base == IP_EVENT && event_id == IP_EVENT_STA_GOT_IP) {
         ip_event_got_ip_t *event = (ip_event_got_ip_t *) event_data;
         ESP_LOGI(TAG, "got ip:" IPSTR, IP2STR(&event->ip_info.ip));
@@ -83,14 +80,16 @@ void dpp_enrollee_event_cb(esp_supp_dpp_event_t event, void *data)
         if (data != NULL) {
             esp_qrcode_config_t cfg = ESP_QRCODE_CONFIG_DEFAULT();
 
-            ESP_LOGI(TAG, "Scan below QR Code to configure the enrollee:");
+            ESP_LOGI(TAG, "Scan below QR Code to configure the enrollee:\n");
             esp_qrcode_generate(&cfg, (const char *)data);
         }
         break;
     case ESP_SUPP_DPP_CFG_RECVD:
         memcpy(&s_dpp_wifi_config, data, sizeof(s_dpp_wifi_config));
-        s_retry_num = 0;
         esp_wifi_set_config(ESP_IF_WIFI_STA, &s_dpp_wifi_config);
+        ESP_LOGI(TAG, "DPP Authentication successful, connecting to AP : %s",
+                 s_dpp_wifi_config.sta.ssid);
+        s_retry_num = 0;
         esp_wifi_connect();
         break;
     case ESP_SUPP_DPP_FAIL:

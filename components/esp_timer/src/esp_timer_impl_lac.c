@@ -1,10 +1,9 @@
 /*
- * SPDX-FileCopyrightText: 2017-2024 Espressif Systems (Shanghai) CO LTD
+ * SPDX-FileCopyrightText: 2017-2023 Espressif Systems (Shanghai) CO LTD
  *
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#include "sdkconfig.h"
 #include "sys/param.h"
 #include "esp_timer_impl.h"
 #include "esp_timer.h"
@@ -19,7 +18,6 @@
 #include "soc/soc.h"
 #include "soc/timer_group_reg.h"
 #include "soc/rtc.h"
-#include "hal/timer_ll.h"
 #include "freertos/FreeRTOS.h"
 
 /**
@@ -89,7 +87,7 @@ static const char* TAG = "esp_timer_impl";
 
 /* Interrupt handle returned by the interrupt allocator */
 #ifdef CONFIG_ESP_TIMER_ISR_AFFINITY_NO_AFFINITY
-#define ISR_HANDLERS (CONFIG_FREERTOS_NUMBER_OF_CORES)
+#define ISR_HANDLERS (portNUM_PROCESSORS)
 #else
 #define ISR_HANDLERS (1)
 #endif
@@ -169,7 +167,7 @@ void IRAM_ATTR esp_timer_impl_set_alarm_id(uint64_t timestamp, unsigned alarm_id
                 // finish if either (alarm > counter) or the interrupt flag is already set.
                 break;
             }
-        } while (1);
+        } while(1);
     }
     portEXIT_CRITICAL_SAFE(&s_time_update_lock);
 }
@@ -203,10 +201,10 @@ static void IRAM_ATTR timer_alarm_isr(void *arg)
                 (*s_alarm_handler)(arg);
 
                 portENTER_CRITICAL_ISR(&s_time_update_lock);
-                // Another alarm could have occurred while were handling the previous alarm.
-                // Check if we need to call the s_alarm_handler again:
-                //   1) if the alarm has already been fired, it helps to handle it immediately without an additional ISR call.
-                //   2) handle pending alarm that was cleared by the other core in time when this core worked with the current alarm.
+               // Another alarm could have occurred while were handling the previous alarm.
+               // Check if we need to call the s_alarm_handler again:
+               //   1) if the alarm has already been fired, it helps to handle it immediately without an additional ISR call.
+               //   2) handle pending alarm that was cleared by the other core in time when this core worked with the current alarm.
             } while (REG_GET_FIELD(INT_ST_REG, TIMG_LACT_INT_ST) || pending_alarm);
             processed_by = NOT_USED;
         } else {
@@ -247,12 +245,7 @@ void esp_timer_impl_advance(int64_t time_diff_us)
 
 esp_err_t esp_timer_impl_early_init(void)
 {
-    PERIPH_RCC_ACQUIRE_ATOMIC(PERIPH_LACT, ref_count) {
-        if (ref_count == 0) {
-            timer_ll_enable_bus_clock(LACT_MODULE, true);
-            timer_ll_reset_register(LACT_MODULE);
-        }
-    }
+    periph_module_enable(PERIPH_LACT);
 
     REG_WRITE(CONFIG_REG, 0);
     REG_WRITE(LOAD_LO_REG, 0);
@@ -263,8 +256,8 @@ esp_err_t esp_timer_impl_early_init(void)
     REG_SET_BIT(INT_CLR_REG, TIMG_LACT_INT_CLR);
     REG_SET_FIELD(CONFIG_REG, TIMG_LACT_DIVIDER, APB_CLK_FREQ / 1000000 / TICKS_PER_US);
     REG_SET_BIT(CONFIG_REG, TIMG_LACT_INCREASE |
-                TIMG_LACT_LEVEL_INT_EN |
-                TIMG_LACT_EN);
+        TIMG_LACT_LEVEL_INT_EN |
+        TIMG_LACT_EN);
 
     return ESP_OK;
 }
@@ -326,11 +319,6 @@ void esp_timer_impl_deinit(void)
         }
     }
     s_alarm_handler = NULL;
-    PERIPH_RCC_RELEASE_ATOMIC(PERIPH_LACT, ref_count) {
-        if (ref_count == 0) {
-            timer_ll_enable_bus_clock(LACT_MODULE, false);
-        }
-    }
 }
 
 uint64_t esp_timer_impl_get_alarm_reg(void)

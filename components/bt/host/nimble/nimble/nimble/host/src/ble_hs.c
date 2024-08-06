@@ -36,8 +36,7 @@
 #include "hci_log/bt_hci_log.h"
 #endif // (BT_HCI_LOG_INCLUDED == TRUE)
 
-#define BLE_HS_HCI_EVT_COUNT    (MYNEWT_VAL(BLE_TRANSPORT_EVT_COUNT) + \
-                                 MYNEWT_VAL(BLE_TRANSPORT_EVT_DISCARDABLE_COUNT))
+#define BLE_HS_HCI_EVT_COUNT    MYNEWT_VAL(BLE_TRANSPORT_EVT_COUNT)
 
 static void ble_hs_event_rx_hci_ev(struct ble_npl_event *ev);
 #if NIMBLE_BLE_CONNECT
@@ -136,7 +135,7 @@ ble_hs_evq_set(struct ble_npl_eventq *evq)
 int
 ble_hs_locked_by_cur_task(void)
 {
-#ifdef MYNEWT
+#if MYNEWT
     struct os_task *owner;
 
     if (!ble_npl_os_started()) {
@@ -697,7 +696,7 @@ ble_hs_rx_data(struct os_mbuf *om, void *arg)
 {
     int rc;
 
-#if (BT_HCI_LOG_INCLUDED == TRUE)
+#if ((BT_HCI_LOG_INCLUDED == TRUE) && SOC_ESP_NIMBLE_CONTROLLER && CONFIG_BT_CONTROLLER_ENABLED)
     uint16_t len = OS_MBUF_PKTHDR(om)->omp_len + 1;
     uint8_t *data = (uint8_t *)malloc(len);
     assert(data != NULL);
@@ -733,7 +732,7 @@ ble_hs_rx_data(struct os_mbuf *om, void *arg)
 int
 ble_hs_tx_data(struct os_mbuf *om)
 {
-#if (BT_HCI_LOG_INCLUDED == TRUE)
+#if ((BT_HCI_LOG_INCLUDED == TRUE) && SOC_ESP_NIMBLE_CONTROLLER && CONFIG_BT_CONTROLLER_ENABLED)
     uint16_t len = 0;
     uint8_t data[MYNEWT_VAL(BLE_TRANSPORT_ACL_SIZE) + 1];
     data[0] = 0x02;
@@ -833,11 +832,6 @@ ble_hs_init(void)
     ble_hs_evq_set(nimble_port_get_dflt_eventq());
 #endif
 
-#if SOC_ESP_NIMBLE_CONTROLLER && CONFIG_BT_CONTROLLER_ENABLED
-    /* Configure the HCI transport to communicate with a host. */
-    ble_hci_trans_cfg_hs(ble_hs_hci_rx_evt, NULL, ble_hs_rx_data, NULL);
-#endif
-
     /* Enqueue the start event to the default event queue.  Using the default
      * queue ensures the event won't run until the end of main().  This allows
      * the application to configure this package in the meantime.
@@ -868,14 +862,6 @@ ble_transport_to_hs_acl_impl(struct os_mbuf *om)
     return ble_hs_rx_data(om, NULL);
 }
 
-int
-ble_transport_to_hs_iso_impl(struct os_mbuf *om)
-{
-    os_mbuf_free_chain(om);
-
-    return 0;
-}
-
 void
 ble_transport_hs_init(void)
 {
@@ -889,10 +875,6 @@ ble_hs_deinit(void)
 
 #if BLE_MONITOR
     ble_monitor_deinit();
-#endif
-
-#if SOC_ESP_NIMBLE_CONTROLLER && CONFIG_BT_CONTROLLER_ENABLED
-    ble_hci_trans_cfg_hs(NULL, NULL, NULL, NULL);
 #endif
 
     ble_npl_mutex_deinit(&ble_hs_mutex);

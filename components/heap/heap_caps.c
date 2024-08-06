@@ -305,65 +305,6 @@ size_t heap_caps_get_largest_free_block( uint32_t caps )
     return info.largest_free_block;
 }
 
-static struct {
-    size_t *values; // Array of minimum_free_bytes used to keep the different values when starting monitoring
-    size_t counter; // Keep count of registered heap when monitoring to prevent any added heap to create an out of bound access on values
-    multi_heap_lock_t mux; // protect access to min_free_bytes_monitoring fields in start/stop monitoring functions
-} min_free_bytes_monitoring = {NULL, 0, MULTI_HEAP_LOCK_STATIC_INITIALIZER};
-
-esp_err_t heap_caps_monitor_local_minimum_free_size_start(void)
-{
-    // update minimum_free_bytes on all affected heap, and store the "old value"
-    // as a snapshot of the heaps minimum_free_bytes state.
-    heap_t *heap = NULL;
-    MULTI_HEAP_LOCK(&min_free_bytes_monitoring.mux);
-    if (min_free_bytes_monitoring.values == NULL) {
-        SLIST_FOREACH(heap, &registered_heaps, next) {
-            min_free_bytes_monitoring.counter++;
-        }
-        min_free_bytes_monitoring.values = heap_caps_malloc(sizeof(size_t) * min_free_bytes_monitoring.counter, MALLOC_CAP_DEFAULT);
-        assert(min_free_bytes_monitoring.values != NULL && "not enough memory to store min_free_bytes value");
-        memset(min_free_bytes_monitoring.values, 0xFF, sizeof(size_t) * min_free_bytes_monitoring.counter);
-    }
-
-    heap = SLIST_FIRST(&registered_heaps);
-    for (size_t counter = 0; counter < min_free_bytes_monitoring.counter; counter++) {
-        size_t old_minimum = multi_heap_reset_minimum_free_bytes(heap->heap);
-
-        if (min_free_bytes_monitoring.values[counter] > old_minimum) {
-            min_free_bytes_monitoring.values[counter] = old_minimum;
-        }
-
-        heap = SLIST_NEXT(heap, next);
-    }
-    MULTI_HEAP_UNLOCK(&min_free_bytes_monitoring.mux);
-
-    return ESP_OK;
-}
-
-esp_err_t heap_caps_monitor_local_minimum_free_size_stop(void)
-{
-    if (min_free_bytes_monitoring.values == NULL) {
-        return ESP_FAIL;
-    }
-
-    MULTI_HEAP_LOCK(&min_free_bytes_monitoring.mux);
-    heap_t *heap = SLIST_FIRST(&registered_heaps);
-    for (size_t counter = 0; counter < min_free_bytes_monitoring.counter; counter++) {
-        multi_heap_restore_minimum_free_bytes(heap->heap, min_free_bytes_monitoring.values[counter]);
-
-        heap = SLIST_NEXT(heap, next);
-    }
-
-    heap_caps_free(min_free_bytes_monitoring.values);
-    min_free_bytes_monitoring.values = NULL;
-    min_free_bytes_monitoring.counter = 0;
-    MULTI_HEAP_UNLOCK(&min_free_bytes_monitoring.mux);
-
-    return ESP_OK;
-}
-
-
 void heap_caps_get_info( multi_heap_info_t *info, uint32_t caps )
 {
     memset(info, 0, sizeof(multi_heap_info_t));
@@ -374,13 +315,11 @@ void heap_caps_get_info( multi_heap_info_t *info, uint32_t caps )
             multi_heap_info_t hinfo;
             multi_heap_get_info(heap->heap, &hinfo);
 
-            info->total_free_bytes += hinfo.total_free_bytes - MULTI_HEAP_BLOCK_OWNER_SIZE();
-            info->total_allocated_bytes += (hinfo.total_allocated_bytes -
-                                           hinfo.allocated_blocks * MULTI_HEAP_BLOCK_OWNER_SIZE());
+            info->total_free_bytes += hinfo.total_free_bytes;
+            info->total_allocated_bytes += hinfo.total_allocated_bytes;
             info->largest_free_block = MAX(info->largest_free_block,
                                            hinfo.largest_free_block);
-            info->largest_free_block -= info->largest_free_block ? MULTI_HEAP_BLOCK_OWNER_SIZE() : 0;
-            info->minimum_free_bytes += hinfo.minimum_free_bytes - MULTI_HEAP_BLOCK_OWNER_SIZE();
+            info->minimum_free_bytes += hinfo.minimum_free_bytes;
             info->allocated_blocks += hinfo.allocated_blocks;
             info->free_blocks += hinfo.free_blocks;
             info->total_blocks += hinfo.total_blocks;
@@ -459,80 +398,36 @@ void heap_caps_dump_all(void)
 
 size_t heap_caps_get_allocated_size( void *ptr )
 {
-    // add the block owner bytes back to ptr before handing over
-    // to multi heap layer.
-    ptr = MULTI_HEAP_REMOVE_BLOCK_OWNER_OFFSET(ptr);
     heap_t *heap = find_containing_heap(ptr);
     assert(heap);
     size_t size = multi_heap_get_allocated_size(heap->heap, ptr);
-    return MULTI_HEAP_REMOVE_BLOCK_OWNER_SIZE(size);
-}
-
-static HEAP_IRAM_ATTR esp_err_t heap_caps_aligned_check_args(size_t alignment, size_t size, uint32_t caps, const char *funcname)
-{
-    if (!alignment) {
-        return ESP_FAIL;
-    }
-
-    // Alignment must be a power of two:
-    if ((alignment & (alignment - 1)) != 0) {
-        return ESP_FAIL;
-    }
-
-    if (size == 0) {
-        return ESP_FAIL;
-    }
-
-    if (MULTI_HEAP_ADD_BLOCK_OWNER_SIZE(size) > HEAP_SIZE_MAX) {
-        // Avoids int overflow when adding small numbers to size, or
-        // calculating 'end' from start+size, by limiting 'size' to the possible range
-        heap_caps_alloc_failed(size, caps, funcname);
-        return ESP_FAIL;
-    }
-
-    return ESP_OK;
-}
-
-HEAP_IRAM_ATTR void *heap_caps_aligned_alloc_default(size_t alignment, size_t size)
-{
-    void *ret = NULL;
-
-    if (malloc_alwaysinternal_limit == MALLOC_DISABLE_EXTERNAL_ALLOCS) {
-        return heap_caps_aligned_alloc(alignment, size, MALLOC_CAP_DEFAULT | MALLOC_CAP_INTERNAL);
-    }
-
-    if (heap_caps_aligned_check_args(alignment, size, MALLOC_CAP_DEFAULT, __func__) != ESP_OK) {
-        return NULL;
-    }
-
-    if (size <= (size_t)malloc_alwaysinternal_limit) {
-        ret = heap_caps_aligned_alloc_base(alignment, size, MALLOC_CAP_DEFAULT | MALLOC_CAP_INTERNAL);
-    } else {
-        ret = heap_caps_aligned_alloc_base(alignment, size, MALLOC_CAP_DEFAULT | MALLOC_CAP_SPIRAM);
-    }
-
-    if (ret != NULL) {
-        return ret;
-    }
-
-    ret = heap_caps_aligned_alloc_base(alignment, size, MALLOC_CAP_DEFAULT);
-
-    if (ret == NULL) {
-        heap_caps_alloc_failed(size, MALLOC_CAP_DEFAULT, __func__);
-    }
-
-    return ret;
+    return size;
 }
 
 HEAP_IRAM_ATTR void *heap_caps_aligned_alloc(size_t alignment, size_t size, uint32_t caps)
 {
-    void *ret = NULL;
-
-    if (heap_caps_aligned_check_args(alignment, size, caps, __func__) != ESP_OK) {
+    if(!alignment) {
         return NULL;
     }
 
-    ret = heap_caps_aligned_alloc_base(alignment, size, caps);
+    //Alignment must be a power of two:
+    if((alignment & (alignment - 1)) != 0) {
+        return NULL;
+    }
+
+    if (size == 0) {
+        return NULL;
+    }
+
+    if (size > HEAP_SIZE_MAX) {
+        // Avoids int overflow when adding small numbers to size, or
+        // calculating 'end' from start+size, by limiting 'size' to the possible range
+        heap_caps_alloc_failed(size, caps, __func__);
+
+        return NULL;
+    }
+
+    void *ret = heap_caps_aligned_alloc_base(alignment, size, caps);
 
     if (ret == NULL) {
         heap_caps_alloc_failed(size, caps, __func__);
@@ -559,47 +454,4 @@ void *heap_caps_aligned_calloc(size_t alignment, size_t n, size_t size, uint32_t
     }
 
     return ptr;
-}
-
-typedef struct walker_data {
-        void *opaque_ptr;
-        heap_caps_walker_cb_t cb_func;
-        heap_t *heap;
-} walker_data_t;
-
-__attribute__((noinline)) static bool heap_caps_walker(void* block_ptr, size_t block_size, int block_used, void *user_data)
-{
-    walker_data_t *walker_data = (walker_data_t*)user_data;
-
-    walker_heap_into_t heap_info = {
-        (intptr_t)walker_data->heap->start,
-        (intptr_t)walker_data->heap->end
-    };
-    walker_block_info_t block_info = {
-        block_ptr,
-        block_size,
-        (bool)block_used
-    };
-
-    return walker_data->cb_func(heap_info, block_info, walker_data->opaque_ptr);
-}
-
-void heap_caps_walk(uint32_t caps, heap_caps_walker_cb_t walker_func, void *user_data)
-{
-    assert(walker_func != NULL);
-
-    bool all_heaps = caps & MALLOC_CAP_INVALID;
-    heap_t *heap;
-    SLIST_FOREACH(heap, &registered_heaps, next) {
-        if (heap->heap != NULL
-            && (all_heaps || (get_all_caps(heap) & caps) == caps)) {
-            walker_data_t walker_data = {user_data, walker_func, heap};
-            multi_heap_walk(heap->heap, heap_caps_walker, &walker_data);
-        }
-    }
-}
-
-void heap_caps_walk_all(heap_caps_walker_cb_t walker_func, void *user_data)
-{
-    heap_caps_walk(MALLOC_CAP_INVALID, walker_func, user_data);
 }

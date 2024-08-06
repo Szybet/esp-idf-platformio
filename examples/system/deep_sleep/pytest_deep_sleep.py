@@ -1,5 +1,6 @@
 # SPDX-FileCopyrightText: 2022-2023 Espressif Systems (Shanghai) CO LTD
 # SPDX-License-Identifier: CC0-1.0
+
 import logging
 import time
 
@@ -20,7 +21,6 @@ CONFIGS = [
             pytest.mark.esp32c3,
             pytest.mark.esp32c6,
             pytest.mark.esp32h2,
-            pytest.mark.esp32p4,
             pytest.mark.esp32c2,
         ],
     ),
@@ -30,6 +30,7 @@ CONFIGS = [
 @pytest.mark.parametrize('config', CONFIGS, indirect=True)
 @pytest.mark.generic
 def test_deep_sleep(dut: Dut) -> None:
+
     def expect_enable_deep_sleep_touch() -> None:
         # different targets configure different wake pin(s)
         wake_pads = {

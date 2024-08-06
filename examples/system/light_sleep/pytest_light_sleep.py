@@ -15,7 +15,7 @@ def test_light_sleep(dut: Dut) -> None:
     EXIT_SLEEP_REGEX = r'Returned from light sleep, reason: (\w+), t=(\d+) ms, slept for (\d+) ms'
     EXIT_SLEEP_PIN_REGEX = r'Returned from light sleep, reason: (pin), t=(\d+) ms, slept for (\d+) ms'
     EXIT_SLEEP_UART_REGEX = r'Returned from light sleep, reason: (uart), t=(\d+) ms, slept for (\d+) ms'
-    WAITING_FOR_GPIO_STR = r'Waiting for GPIO\d+ to go high...'
+    WAITING_FOR_GPIO_STR = r'Waiting for GPIO\d to go high...'
 
     WAKEUP_INTERVAL_MS = 2000
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# SPDX-FileCopyrightText: 2018-2023 Espressif Systems (Shanghai) CO LTD
+# SPDX-FileCopyrightText: 2018-2022 Espressif Systems (Shanghai) CO LTD
 # SPDX-License-Identifier: Apache-2.0
 #
 
@@ -8,9 +8,16 @@ import argparse
 import csv
 import distutils.dir_util
 import os
+import sys
 from itertools import zip_longest
 
-import esp_idf_nvs_partition_gen.nvs_partition_gen as nvs_partition_gen
+try:
+    idf_path = os.environ['IDF_PATH']
+    sys.path.insert(0, idf_path + '/components/nvs_flash/nvs_partition_generator/')
+    import nvs_partition_gen
+except Exception as e:
+    print(e)
+    sys.exit('Please check IDF_PATH')
 
 
 def create_temp_files(args):
@@ -413,6 +420,7 @@ def main():
                                     \nDefault: Version 2 ''')
         parser_gen.add_argument('--keygen',
                                 action='store_true',
+                                default=False,
                                 help='Generates key for encrypting NVS partition')
         parser_gen.add_argument('--keyfile',
                                 default=None,
@@ -424,20 +432,6 @@ def main():
                                 default=os.getcwd(),
                                 help='Output directory to store files created\
                                     \n(Default: current directory)')
-        parser_gen.add_argument('--key_protect_hmac',
-                                action='store_true',
-                                help='''If set, the NVS encryption key protection scheme based on HMAC\
-                                \nperipheral is used; else the default scheme based on Flash Encryption\
-                                \nis used''')
-        parser_gen.add_argument('--kp_hmac_keygen',
-                                action='store_true',
-                                help='Generate the HMAC key for HMAC-based encryption scheme')
-        parser_gen.add_argument('--kp_hmac_keyfile',
-                                default=None,
-                                help='Path to output HMAC key file')
-        parser_gen.add_argument('--kp_hmac_inputkey',
-                                default=None,
-                                help='File having the HMAC key for generating the NVS encryption keys')
         parser_gen.add_argument('--input',
                                 default=None,
                                 help=argparse.SUPPRESS)
@@ -455,20 +449,6 @@ def main():
                                     default=os.getcwd(),
                                     help='Output directory to store files created.\
                                         \n(Default: current directory)')
-        parser_gen_key.add_argument('--key_protect_hmac',
-                                    action='store_true',
-                                    help='''If set, the NVS encryption key protection scheme based on HMAC\
-                                    \nperipheral is used; else the default scheme based on Flash Encryption\
-                                    \nis used''')
-        parser_gen_key.add_argument('--kp_hmac_keygen',
-                                    action='store_true',
-                                    help='Generate the HMAC key for HMAC-based encryption scheme')
-        parser_gen_key.add_argument('--kp_hmac_keyfile',
-                                    default=None,
-                                    help='Path to output HMAC key file')
-        parser_gen_key.add_argument('--kp_hmac_inputkey',
-                                    default=None,
-                                    help='File having the HMAC key for generating the NVS encryption keys')
 
         args = parser.parse_args()
         args.func(args)

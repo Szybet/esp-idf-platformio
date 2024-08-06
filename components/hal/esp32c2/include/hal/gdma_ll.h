@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2020-2024 Espressif Systems (Shanghai) CO LTD
+ * SPDX-FileCopyrightText: 2020-2022 Espressif Systems (Shanghai) CO LTD
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -11,7 +11,6 @@
 #include "hal/gdma_types.h"
 #include "soc/gdma_struct.h"
 #include "soc/gdma_reg.h"
-#include "soc/system_struct.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -42,47 +41,11 @@ extern "C" {
 #define GDMA_LL_EVENT_RX_SUC_EOF    (1<<1)
 #define GDMA_LL_EVENT_RX_DONE       (1<<0)
 
-#define GDMA_LL_AHB_GROUP_START_ID    0       // AHB GDMA group ID starts from 0
-#define GDMA_LL_AHB_NUM_GROUPS        1       // Number of AHB GDMA groups
-#define GDMA_LL_AHB_PAIRS_PER_GROUP   1       // Number of GDMA pairs in each AHB group
-#define GDMA_LL_AHB_TX_RX_SHARE_INTERRUPT  1  // TX and RX channel in the same pair will share the same interrupt source number
-
-#define GDMA_LL_AHB_DESC_ALIGNMENT    4
-#define GDMA_LL_AHB_RX_BURST_NEEDS_ALIGNMENT  1
-
 ///////////////////////////////////// Common /////////////////////////////////////////
-
 /**
- * @brief Enable the bus clock for the DMA module
+ * @brief Enable DMA clock gating
  */
-static inline void gdma_ll_enable_bus_clock(int group_id, bool enable)
-{
-    (void)group_id;
-    SYSTEM.perip_clk_en1.dma_clk_en = enable;
-}
-
-/// use a macro to wrap the function, force the caller to use it in a critical section
-/// the critical section needs to declare the __DECLARE_RCC_ATOMIC_ENV variable in advance
-#define gdma_ll_enable_bus_clock(...) (void)__DECLARE_RCC_ATOMIC_ENV; gdma_ll_enable_bus_clock(__VA_ARGS__)
-
-/**
- * @brief Reset the DMA module
- */
-static inline void gdma_ll_reset_register(int group_id)
-{
-    (void)group_id;
-    SYSTEM.perip_rst_en1.dma_rst = 1;
-    SYSTEM.perip_rst_en1.dma_rst = 0;
-}
-
-/// use a macro to wrap the function, force the caller to use it in a critical section
-/// the critical section needs to declare the __DECLARE_RCC_ATOMIC_ENV variable in advance
-#define gdma_ll_reset_register(...) (void)__DECLARE_RCC_ATOMIC_ENV; gdma_ll_reset_register(__VA_ARGS__)
-
-/**
- * @brief Force enable register clock
- */
-static inline void gdma_ll_force_enable_reg_clock(gdma_dev_t *dev, bool enable)
+static inline void gdma_ll_enable_clock(gdma_dev_t *dev, bool enable)
 {
     dev->misc_conf.clk_en = enable;
 }
@@ -92,13 +55,9 @@ static inline void gdma_ll_force_enable_reg_clock(gdma_dev_t *dev, bool enable)
  * @brief Get DMA RX channel interrupt status word
  */
 __attribute__((always_inline))
-static inline uint32_t gdma_ll_rx_get_interrupt_status(gdma_dev_t *dev, uint32_t channel, bool raw)
+static inline uint32_t gdma_ll_rx_get_interrupt_status(gdma_dev_t *dev, uint32_t channel)
 {
-    if (raw) {
-        return dev->intr[channel].raw.val & GDMA_LL_RX_EVENT_MASK;
-    } else {
-        return dev->intr[channel].st.val & GDMA_LL_RX_EVENT_MASK;
-    }
+    return dev->intr[channel].st.val & GDMA_LL_RX_EVENT_MASK;
 }
 
 /**
@@ -245,9 +204,9 @@ static inline void gdma_ll_rx_enable_auto_return(gdma_dev_t *dev, uint32_t chann
 }
 
 /**
- * @brief Check if DMA RX descriptor FSM is in IDLE state
+ * @brief Check if DMA RX FSM is in IDLE state
  */
-static inline bool gdma_ll_rx_is_desc_fsm_idle(gdma_dev_t *dev, uint32_t channel)
+static inline bool gdma_ll_rx_is_fsm_idle(gdma_dev_t *dev, uint32_t channel)
 {
     return dev->channel[channel].in.in_link.park;
 }
@@ -271,10 +230,10 @@ static inline uint32_t gdma_ll_rx_get_error_eof_desc_addr(gdma_dev_t *dev, uint3
 }
 
 /**
- * @brief Get the pre-fetched RX descriptor's address
+ * @brief Get current RX descriptor's address
  */
 __attribute__((always_inline))
-static inline uint32_t gdma_ll_rx_get_prefetched_desc_addr(gdma_dev_t *dev, uint32_t channel)
+static inline uint32_t gdma_ll_rx_get_current_desc_addr(gdma_dev_t *dev, uint32_t channel)
 {
     return dev->channel[channel].in.in_dscr;
 }
@@ -310,13 +269,9 @@ static inline void gdma_ll_rx_disconnect_from_periph(gdma_dev_t *dev, uint32_t c
  * @brief Get DMA TX channel interrupt status word
  */
 __attribute__((always_inline))
-static inline uint32_t gdma_ll_tx_get_interrupt_status(gdma_dev_t *dev, uint32_t channel, bool raw)
+static inline uint32_t gdma_ll_tx_get_interrupt_status(gdma_dev_t *dev, uint32_t channel)
 {
-    if (raw) {
-        return dev->intr[channel].raw.val & GDMA_LL_TX_EVENT_MASK;
-    } else {
-        return dev->intr[channel].st.val & GDMA_LL_TX_EVENT_MASK;
-    }
+    return dev->intr[channel].st.val & GDMA_LL_TX_EVENT_MASK;
 }
 
 /**
@@ -471,9 +426,9 @@ static inline void gdma_ll_tx_restart(gdma_dev_t *dev, uint32_t channel)
 }
 
 /**
- * @brief Check if DMA TX descriptor FSM is in IDLE state
+ * @brief Check if DMA TX FSM is in IDLE state
  */
-static inline bool gdma_ll_tx_is_desc_fsm_idle(gdma_dev_t *dev, uint32_t channel)
+static inline bool gdma_ll_tx_is_fsm_idle(gdma_dev_t *dev, uint32_t channel)
 {
     return dev->channel[channel].out.out_link.park;
 }
@@ -488,10 +443,10 @@ static inline uint32_t gdma_ll_tx_get_eof_desc_addr(gdma_dev_t *dev, uint32_t ch
 }
 
 /**
- * @brief Get the pre-fetched TX descriptor's address
+ * @brief Get current TX descriptor's address
  */
 __attribute__((always_inline))
-static inline uint32_t gdma_ll_tx_get_prefetched_desc_addr(gdma_dev_t *dev, uint32_t channel)
+static inline uint32_t gdma_ll_tx_get_current_desc_addr(gdma_dev_t *dev, uint32_t channel)
 {
     return dev->channel[channel].out.out_dscr;
 }

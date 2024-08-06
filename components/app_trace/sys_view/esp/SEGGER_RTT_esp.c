@@ -35,7 +35,7 @@ static uint8_t s_down_buf[SYSVIEW_DOWN_BUF_SIZE];
 #if CONFIG_APPTRACE_SV_DEST_UART
 
 #define ESP_APPTRACE_DEST_SYSVIEW ESP_APPTRACE_DEST_UART
-#if CONFIG_APPTRACE_SV_DEST_CPU_0 || CONFIG_ESP_SYSTEM_SINGLE_CORE_MODE
+#if CONFIG_APPTRACE_SV_DEST_CPU_0 || CONFIG_FREERTOS_UNICORE
 #define APPTRACE_SV_DEST_CPU 0
 #else
 #define APPTRACE_SV_DEST_CPU 1
@@ -72,13 +72,13 @@ void SEGGER_RTT_ESP_FlushNoLock(unsigned long min_sz, unsigned long tmo)
     if (s_events_buf_filled > 0) {
       res = esp_apptrace_write(ESP_APPTRACE_DEST_SYSVIEW, s_events_buf, s_events_buf_filled, tmo);
       if (res != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to flush buffered events (%d)!", res);
+        ESP_LOGE(TAG, "Failed to flush buffered events (%d)!\n", res);
       }
     }
     // flush even if we failed to write buffered events, because no new events will be sent after STOP
     res = esp_apptrace_flush_nolock(ESP_APPTRACE_DEST_SYSVIEW, min_sz, tmo);
     if (res != ESP_OK) {
-      ESP_LOGE(TAG, "Failed to flush apptrace data (%d)!", res);
+      ESP_LOGE(TAG, "Failed to flush apptrace data (%d)!\n", res);
     }
     s_events_buf_filled = 0;
 }
@@ -296,7 +296,7 @@ int SEGGER_RTT_ConfigDownBuffer(unsigned BufferIndex, const char* sName, void* p
  * linked whenever SystemView is used.
  */
 
-ESP_SYSTEM_INIT_FN(sysview_init, SECONDARY, BIT(0), 120)
+ESP_SYSTEM_INIT_FN(sysview_init, BIT(0), 120)
 {
     SEGGER_SYSVIEW_Conf();
     return ESP_OK;

@@ -95,8 +95,8 @@ Mle::Mle(Instance &aInstance)
 #if OPENTHREAD_FTD
     , mLinkRequestAttempts(0)
 #endif
-    , mRloc16(Mac::kShortAddrInvalid)
-    , mPreviousParentRloc(Mac::kShortAddrInvalid)
+    , mRloc16(kInvalidRloc16)
+    , mPreviousParentRloc(kInvalidRloc16)
     , mAttachCounter(0)
     , mAnnounceDelay(kAnnounceTimeout)
     , mAlternatePanId(Mac::kPanIdBroadcast)
@@ -106,7 +106,7 @@ Mle::Mle(Instance &aInstance)
 #endif
     , mAlternateTimestamp(0)
     , mNeighborTable(aInstance)
-    , mSocket(aInstance)
+    , mSocket(aInstance, *this)
 #if OPENTHREAD_CONFIG_PARENT_SEARCH_ENABLE
     , mParentSearch(aInstance)
 #endif
@@ -123,15 +123,15 @@ Mle::Mle(Instance &aInstance)
     mParentCandidate.Clear();
     ResetCounters();
 
-    mLinkLocal64.InitAsThreadOrigin();
-    mLinkLocal64.GetAddress().SetToLinkLocalAddress(Get<Mac::Mac>().GetExtAddress());
+    mLinkLocalAddress.InitAsThreadOrigin();
+    mLinkLocalAddress.GetAddress().SetToLinkLocalAddress(Get<Mac::Mac>().GetExtAddress());
 
-    mMeshLocal64.InitAsThreadOriginMeshLocal();
-    mMeshLocal64.GetAddress().GetIid().GenerateRandom();
+    mMeshLocalEid.InitAsThreadOriginMeshLocal();
+    mMeshLocalEid.GetAddress().GetIid().GenerateRandom();
 
-    mMeshLocal16.InitAsThreadOriginMeshLocal();
-    mMeshLocal16.GetAddress().GetIid().SetToLocator(0);
-    mMeshLocal16.mRloc = true;
+    mMeshLocalRloc.InitAsThreadOriginMeshLocal();
+    mMeshLocalRloc.GetAddress().GetIid().SetToLocator(0);
+    mMeshLocalRloc.mRloc = true;
 
     mLinkLocalAllThreadNodes.Clear();
     mLinkLocalAllThreadNodes.GetAddress().mFields.m16[0] = BigEndian::HostSwap16(0xff32);
@@ -150,7 +150,7 @@ Error Mle::Enable(void)
     Error error = kErrorNone;
 
     UpdateLinkLocalAddress();
-    SuccessOrExit(error = mSocket.Open(&Mle::HandleUdpReceive, this));
+    SuccessOrExit(error = mSocket.Open());
     SuccessOrExit(error = mSocket.Bind(kUdpPort));
 
 #if OPENTHREAD_CONFIG_PARENT_SEARCH_ENABLE
@@ -172,7 +172,7 @@ Error Mle::Disable(void)
 
     Stop(kKeepNetworkDatasets);
     SuccessOrExit(error = mSocket.Close());
-    Get<ThreadNetif>().RemoveUnicastAddress(mLinkLocal64);
+    Get<ThreadNetif>().RemoveUnicastAddress(mLinkLocalAddress);
 
 exit:
     return error;
@@ -193,7 +193,7 @@ Error Mle::Start(StartMode aMode)
 
     SetStateDetached();
 
-    Get<ThreadNetif>().AddUnicastAddress(mMeshLocal64);
+    Get<ThreadNetif>().AddUnicastAddress(mMeshLocalEid);
 
     Get<ThreadNetif>().SubscribeMulticast(mLinkLocalAllThreadNodes);
     Get<ThreadNetif>().SubscribeMulticast(mRealmLocalAllThreadNodes);
@@ -209,12 +209,12 @@ Error Mle::Start(StartMode aMode)
         mReattachState = kReattachStart;
     }
 
-    if ((aMode == kAnnounceAttach) || (GetRloc16() == Mac::kShortAddrInvalid))
+    if ((aMode == kAnnounceAttach) || (GetRloc16() == kInvalidRloc16))
     {
         Attach(kAnyPartition);
     }
 #if OPENTHREAD_FTD
-    else if (IsActiveRouter(GetRloc16()))
+    else if (IsRouterRloc16(GetRloc16()))
     {
         if (Get<MleRouter>().BecomeRouter(ThreadStatusTlv::kTooFewRouters) != kErrorNone)
         {
@@ -236,8 +236,8 @@ void Mle::Stop(StopMode aMode)
 {
     if (aMode == kUpdateNetworkDatasets)
     {
-        Get<MeshCoP::ActiveDatasetManager>().HandleDetach();
-        Get<MeshCoP::PendingDatasetManager>().HandleDetach();
+        IgnoreError(Get<MeshCoP::ActiveDatasetManager>().Restore());
+        IgnoreError(Get<MeshCoP::PendingDatasetManager>().Restore());
     }
 
     VerifyOrExit(!IsDisabled());
@@ -246,21 +246,14 @@ void Mle::Stop(StopMode aMode)
     SetStateDetached();
     Get<ThreadNetif>().UnsubscribeMulticast(mRealmLocalAllThreadNodes);
     Get<ThreadNetif>().UnsubscribeMulticast(mLinkLocalAllThreadNodes);
-    Get<ThreadNetif>().RemoveUnicastAddress(mMeshLocal16);
-    Get<ThreadNetif>().RemoveUnicastAddress(mMeshLocal64);
+    Get<ThreadNetif>().RemoveUnicastAddress(mMeshLocalRloc);
+    Get<ThreadNetif>().RemoveUnicastAddress(mMeshLocalEid);
 
     SetRole(kRoleDisabled);
 
 exit:
     mDetachGracefullyTimer.Stop();
-
-    if (mDetachGracefullyCallback.IsSet())
-    {
-        Callback<otDetachGracefullyCallback> callbackCopy = mDetachGracefullyCallback;
-
-        mDetachGracefullyCallback.Clear();
-        callbackCopy.Invoke();
-    }
+    mDetachGracefullyCallback.InvokeAndClearIfSet();
 }
 
 void Mle::ResetCounters(void)
@@ -378,7 +371,8 @@ void Mle::Restore(void)
 
     SuccessOrExit(Get<Settings>().Read(networkInfo));
 
-    Get<KeyManager>().SetCurrentKeySequence(networkInfo.GetKeySequence(), KeyManager::kForceUpdate);
+    Get<KeyManager>().SetCurrentKeySequence(networkInfo.GetKeySequence(),
+                                            KeyManager::kForceUpdate | KeyManager::kGuardTimerUnchanged);
     Get<KeyManager>().SetMleFrameCounter(networkInfo.GetMleFrameCounter());
     Get<KeyManager>().SetAllMacFrameCounters(networkInfo.GetMacFrameCounter(), /* aSetIfLarger */ false);
 
@@ -403,7 +397,7 @@ void Mle::Restore(void)
     }
 
 #if OPENTHREAD_MTD
-    if (!IsActiveRouter(networkInfo.GetRloc16()))
+    if (IsChildRloc16(networkInfo.GetRloc16()))
 #endif
     {
         Get<Mac::Mac>().SetShortAddress(networkInfo.GetRloc16());
@@ -411,14 +405,14 @@ void Mle::Restore(void)
     }
     Get<Mac::Mac>().SetExtAddress(networkInfo.GetExtAddress());
 
-    mMeshLocal64.GetAddress().SetIid(networkInfo.GetMeshLocalIid());
+    mMeshLocalEid.GetAddress().SetIid(networkInfo.GetMeshLocalIid());
 
-    if (networkInfo.GetRloc16() == Mac::kShortAddrInvalid)
+    if (networkInfo.GetRloc16() == kInvalidRloc16)
     {
         ExitNow();
     }
 
-    if (!IsActiveRouter(networkInfo.GetRloc16()))
+    if (IsChildRloc16(networkInfo.GetRloc16()))
     {
         if (Get<Settings>().Read(parentInfo) != kErrorNone)
         {
@@ -438,7 +432,7 @@ void Mle::Restore(void)
         mParent.SetVersion(parentInfo.GetVersion());
         mParent.SetDeviceMode(DeviceMode(DeviceMode::kModeFullThreadDevice | DeviceMode::kModeRxOnWhenIdle |
                                          DeviceMode::kModeFullNetworkData));
-        mParent.SetRloc16(Rloc16FromRouterId(RouterIdFromRloc16(networkInfo.GetRloc16())));
+        mParent.SetRloc16(ParentRloc16ForRloc16(networkInfo.GetRloc16()));
         mParent.SetState(Neighbor::kStateRestored);
 
         mPreviousParentRloc = mParent.GetRloc16();
@@ -479,7 +473,7 @@ Error Mle::Store(void)
         networkInfo.SetRloc16(GetRloc16());
         networkInfo.SetPreviousPartitionId(mLeaderData.GetPartitionId());
         networkInfo.SetExtAddress(Get<Mac::Mac>().GetExtAddress());
-        networkInfo.SetMeshLocalIid(mMeshLocal64.GetAddress().GetIid());
+        networkInfo.SetMeshLocalIid(mMeshLocalEid.GetAddress().GetIid());
         networkInfo.SetVersion(kThreadVersion);
 
         if (IsChild())
@@ -537,7 +531,7 @@ Error Mle::BecomeDetached(void)
     // Not in reattach stage after reset
     if (mReattachState == kReattachStop)
     {
-        Get<MeshCoP::PendingDatasetManager>().HandleDetach();
+        IgnoreError(Get<MeshCoP::PendingDatasetManager>().Restore());
     }
 
 #if OPENTHREAD_CONFIG_PARENT_SEARCH_ENABLE
@@ -546,7 +540,7 @@ Error Mle::BecomeDetached(void)
 
     SetStateDetached();
     mParent.SetState(Neighbor::kStateInvalid);
-    SetRloc16(Mac::kShortAddrInvalid);
+    SetRloc16(kInvalidRloc16);
     Attach(kAnyPartition);
 
 exit:
@@ -755,7 +749,7 @@ void Mle::SetStateChild(uint16_t aRloc16)
     mParentSearch.UpdateState();
 #endif
 
-    if ((mPreviousParentRloc != Mac::kShortAddrInvalid) && (mPreviousParentRloc != mParent.GetRloc16()))
+    if ((mPreviousParentRloc != kInvalidRloc16) && (mPreviousParentRloc != mParent.GetRloc16()))
     {
         mCounters.mParentChanges++;
 
@@ -886,9 +880,9 @@ exit:
 
 void Mle::UpdateLinkLocalAddress(void)
 {
-    Get<ThreadNetif>().RemoveUnicastAddress(mLinkLocal64);
-    mLinkLocal64.GetAddress().GetIid().SetFromExtAddress(Get<Mac::Mac>().GetExtAddress());
-    Get<ThreadNetif>().AddUnicastAddress(mLinkLocal64);
+    Get<ThreadNetif>().RemoveUnicastAddress(mLinkLocalAddress);
+    mLinkLocalAddress.GetAddress().GetIid().SetFromExtAddress(Get<Mac::Mac>().GetExtAddress());
+    Get<ThreadNetif>().AddUnicastAddress(mLinkLocalAddress);
 
     Get<Notifier>().Signal(kEventThreadLinkLocalAddrChanged);
 }
@@ -915,12 +909,12 @@ void Mle::SetMeshLocalPrefix(const Ip6::NetworkPrefix &aMeshLocalPrefix)
     // `ApplyNewMeshLocalPrefix()` call, but we apply the new prefix to
     // them in case they are not yet added to the `Netif`. This ensures
     // that addresses are always updated and other modules can retrieve
-    // them using methods such as `GetMeshLocal16()`, `GetMeshLocal64()`
+    // them using methods such as `GetMeshLocalRloc()`, `GetMeshLocalEid()`
     // or `GetLinkLocalAllThreadNodesAddress()`, even if they have not
     // yet been added to the `Netif`.
 
-    mMeshLocal64.GetAddress().SetPrefix(mMeshLocalPrefix);
-    mMeshLocal16.GetAddress().SetPrefix(mMeshLocalPrefix);
+    mMeshLocalEid.GetAddress().SetPrefix(mMeshLocalPrefix);
+    mMeshLocalRloc.GetAddress().SetPrefix(mMeshLocalPrefix);
     mLinkLocalAllThreadNodes.GetAddress().SetMulticastNetworkPrefix(mMeshLocalPrefix);
     mRealmLocalAllThreadNodes.GetAddress().SetMulticastNetworkPrefix(mMeshLocalPrefix);
 
@@ -939,9 +933,9 @@ Error Mle::SetMeshLocalIid(const Ip6::InterfaceIdentifier &aMlIid)
 {
     Error error = kErrorNone;
 
-    VerifyOrExit(!Get<ThreadNetif>().HasUnicastAddress(mMeshLocal64), error = kErrorInvalidState);
+    VerifyOrExit(!Get<ThreadNetif>().HasUnicastAddress(mMeshLocalEid), error = kErrorInvalidState);
 
-    mMeshLocal64.GetAddress().SetIid(aMlIid);
+    mMeshLocalEid.GetAddress().SetIid(aMlIid);
 exit:
     return error;
 }
@@ -956,27 +950,32 @@ void Mle::SetRloc16(uint16_t aRloc16)
         LogNote("RLOC16 %04x -> %04x", oldRloc16, aRloc16);
     }
 
-    if (Get<ThreadNetif>().HasUnicastAddress(mMeshLocal16) &&
-        (mMeshLocal16.GetAddress().GetIid().GetLocator() != aRloc16))
+    if (Get<ThreadNetif>().HasUnicastAddress(mMeshLocalRloc) &&
+        (mMeshLocalRloc.GetAddress().GetIid().GetLocator() != aRloc16))
     {
-        Get<ThreadNetif>().RemoveUnicastAddress(mMeshLocal16);
-        Get<Tmf::Agent>().ClearRequests(mMeshLocal16.GetAddress());
+        Get<ThreadNetif>().RemoveUnicastAddress(mMeshLocalRloc);
+        Get<Tmf::Agent>().ClearRequests(mMeshLocalRloc.GetAddress());
     }
 
     Get<Mac::Mac>().SetShortAddress(aRloc16);
     mRloc16 = aRloc16;
 
-    if (aRloc16 != Mac::kShortAddrInvalid)
+    if (aRloc16 != kInvalidRloc16)
     {
         // We can always call `AddUnicastAddress(mMeshLocat16)` and if
         // the address is already added, it will perform no action.
 
-        mMeshLocal16.GetAddress().GetIid().SetLocator(aRloc16);
-        Get<ThreadNetif>().AddUnicastAddress(mMeshLocal16);
+        mMeshLocalRloc.GetAddress().GetIid().SetLocator(aRloc16);
+        Get<ThreadNetif>().AddUnicastAddress(mMeshLocalRloc);
 #if OPENTHREAD_FTD
         Get<AddressResolver>().RestartAddressQueries();
 #endif
     }
+}
+
+void Mle::SetLeaderData(const LeaderData &aLeaderData)
+{
+    SetLeaderData(aLeaderData.GetPartitionId(), aLeaderData.GetWeighting(), aLeaderData.GetLeaderRouterId());
 }
 
 void Mle::SetLeaderData(uint32_t aPartitionId, uint8_t aWeighting, uint8_t aLeaderRouterId)
@@ -999,40 +998,21 @@ void Mle::SetLeaderData(uint32_t aPartitionId, uint8_t aWeighting, uint8_t aLead
     mLeaderData.SetLeaderRouterId(aLeaderRouterId);
 }
 
-Error Mle::GetLeaderAddress(Ip6::Address &aAddress) const
+void Mle::GetLeaderRloc(Ip6::Address &aAddress) const
 {
-    Error error = kErrorNone;
-
-    VerifyOrExit(GetRloc16() != Mac::kShortAddrInvalid, error = kErrorDetached);
-
-    aAddress.SetToRoutingLocator(mMeshLocalPrefix, Rloc16FromRouterId(mLeaderData.GetLeaderRouterId()));
-
-exit:
-    return error;
+    aAddress.SetToRoutingLocator(mMeshLocalPrefix, GetLeaderRloc16());
 }
 
-Error Mle::GetLocatorAddress(Ip6::Address &aAddress, uint16_t aLocator) const
+void Mle::GetLeaderAloc(Ip6::Address &aAddress) const { aAddress.SetToAnycastLocator(mMeshLocalPrefix, kAloc16Leader); }
+
+void Mle::GetCommissionerAloc(uint16_t aSessionId, Ip6::Address &aAddress) const
 {
-    Error error = kErrorNone;
-
-    VerifyOrExit(GetRloc16() != Mac::kShortAddrInvalid, error = kErrorDetached);
-
-    memcpy(&aAddress, &mMeshLocal16.GetAddress(), 14);
-    aAddress.GetIid().SetLocator(aLocator);
-
-exit:
-    return error;
+    aAddress.SetToAnycastLocator(mMeshLocalPrefix, CommissionerAloc16FromId(aSessionId));
 }
 
-Error Mle::GetServiceAloc(uint8_t aServiceId, Ip6::Address &aAddress) const
+void Mle::GetServiceAloc(uint8_t aServiceId, Ip6::Address &aAddress) const
 {
-    Error error = kErrorNone;
-
-    VerifyOrExit(GetRloc16() != Mac::kShortAddrInvalid, error = kErrorDetached);
     aAddress.SetToAnycastLocator(mMeshLocalPrefix, ServiceAlocFromId(aServiceId));
-
-exit:
-    return error;
 }
 
 const LeaderData &Mle::GetLeaderData(void)
@@ -1052,8 +1032,8 @@ bool Mle::HasUnregisteredAddress(void)
 
     for (const Ip6::Netif::UnicastAddress &addr : Get<ThreadNetif>().GetUnicastAddresses())
     {
-        if (!addr.GetAddress().IsLinkLocal() && !IsRoutingLocator(addr.GetAddress()) &&
-            !IsAnycastLocator(addr.GetAddress()) && addr.GetAddress() != GetMeshLocal64())
+        if (!addr.GetAddress().IsLinkLocalUnicast() && !IsRoutingLocator(addr.GetAddress()) &&
+            !IsAnycastLocator(addr.GetAddress()) && addr.GetAddress() != GetMeshLocalEid())
         {
             ExitNow(retval = true);
         }
@@ -1119,11 +1099,11 @@ void Mle::HandleNotifierEvents(Events aEvents)
 
     if (aEvents.ContainsAny(kEventIp6AddressAdded | kEventIp6AddressRemoved))
     {
-        if (!Get<ThreadNetif>().HasUnicastAddress(mMeshLocal64.GetAddress()))
+        if (!Get<ThreadNetif>().HasUnicastAddress(mMeshLocalEid.GetAddress()))
         {
-            mMeshLocal64.GetAddress().GetIid().GenerateRandom();
+            mMeshLocalEid.GetAddress().GetIid().GenerateRandom();
 
-            Get<ThreadNetif>().AddUnicastAddress(mMeshLocal64);
+            Get<ThreadNetif>().AddUnicastAddress(mMeshLocalEid);
             Get<Notifier>().Signal(kEventThreadMeshLocalAddrChanged);
         }
 
@@ -1602,8 +1582,7 @@ exit:
 
 void Mle::HandleDelayedResponseTimer(void)
 {
-    TimeMilli now          = TimerMilli::GetNow();
-    TimeMilli nextSendTime = now.GetDistantFuture();
+    NextFireTime nextSendTime;
 
     for (Message &message : mDelayedResponses)
     {
@@ -1611,9 +1590,9 @@ void Mle::HandleDelayedResponseTimer(void)
 
         metadata.ReadFrom(message);
 
-        if (now < metadata.mSendTime)
+        if (nextSendTime.GetNow() < metadata.mSendTime)
         {
-            nextSendTime = Min(nextSendTime, metadata.mSendTime);
+            nextSendTime.UpdateIfEarlier(metadata.mSendTime);
         }
         else
         {
@@ -1622,10 +1601,7 @@ void Mle::HandleDelayedResponseTimer(void)
         }
     }
 
-    if (nextSendTime < now.GetDistantFuture())
-    {
-        mDelayedResponseTimer.FireAt(nextSendTime);
-    }
+    mDelayedResponseTimer.FireAt(nextSendTime);
 }
 
 void Mle::SendDelayedResponse(TxMessage &aMessage, const DelayedResponseMetadata &aMetadata)
@@ -1636,8 +1612,7 @@ void Mle::SendDelayedResponse(TxMessage &aMessage, const DelayedResponseMetadata
 
     if (aMessage.GetSubType() == Message::kSubTypeMleDataRequest)
     {
-        SuccessOrExit(error = aMessage.AppendActiveTimestampTlv());
-        SuccessOrExit(error = aMessage.AppendPendingTimestampTlv());
+        SuccessOrExit(error = aMessage.AppendActiveAndPendingTimestampTlvs());
     }
 
     SuccessOrExit(error = aMessage.SendTo(aMetadata.mDestination));
@@ -1797,8 +1772,7 @@ Error Mle::SendChildIdRequest(void)
 
     VerifyOrExit((message = NewMleMessage(kCommandChildIdRequest)) != nullptr, error = kErrorNoBufs);
     SuccessOrExit(error = message->AppendResponseTlv(mParentCandidate.mRxChallenge));
-    SuccessOrExit(error = message->AppendLinkFrameCounterTlv());
-    SuccessOrExit(error = message->AppendMleFrameCounterTlv());
+    SuccessOrExit(error = message->AppendLinkAndMleFrameCounterTlvs());
     SuccessOrExit(error = message->AppendModeTlv(mDeviceMode));
     SuccessOrExit(error = message->AppendTimeoutTlv(mTimeout));
     SuccessOrExit(error = message->AppendVersionTlv());
@@ -1813,8 +1787,7 @@ Error Mle::SendChildIdRequest(void)
     }
 
     SuccessOrExit(error = message->AppendTlvRequestTlv(kTlvs, tlvsLen));
-    SuccessOrExit(error = message->AppendActiveTimestampTlv());
-    SuccessOrExit(error = message->AppendPendingTimestampTlv());
+    SuccessOrExit(error = message->AppendActiveAndPendingTimestampTlvs());
 
     mParentCandidate.SetState(Neighbor::kStateValid);
 
@@ -1884,8 +1857,7 @@ Error Mle::SendDataRequest(const Ip6::Address &aDestination, const uint8_t *aTlv
     }
     else
     {
-        SuccessOrExit(error = message->AppendActiveTimestampTlv());
-        SuccessOrExit(error = message->AppendPendingTimestampTlv());
+        SuccessOrExit(error = message->AppendActiveAndPendingTimestampTlvs());
 
         SuccessOrExit(error = message->SendTo(aDestination));
         Log(kMessageSend, kTypeDataRequest, aDestination);
@@ -2233,8 +2205,7 @@ void Mle::SendAnnounce(uint8_t aChannel, const Ip6::Address &aDestination, Annou
     switch (aMode)
     {
     case kOrphanAnnounce:
-        activeTimestamp.Clear();
-        activeTimestamp.SetAuthoritative(true);
+        activeTimestamp.SetToOrphanAnnounce();
         SuccessOrExit(error = Tlv::Append<ActiveTimestampTlv>(*message, activeTimestamp));
         break;
 
@@ -2417,11 +2388,6 @@ Error Mle::ProcessMessageSecurity(Crypto::AesCcm::Mode    aMode,
 
 exit:
     return error;
-}
-
-void Mle::HandleUdpReceive(void *aContext, otMessage *aMessage, const otMessageInfo *aMessageInfo)
-{
-    static_cast<Mle *>(aContext)->HandleUdpReceive(AsCoreType(aMessage), AsCoreType(aMessageInfo));
 }
 
 void Mle::HandleUdpReceive(Message &aMessage, const Ip6::MessageInfo &aMessageInfo)
@@ -2731,32 +2697,42 @@ void Mle::ProcessKeySequence(RxInfo &aRxInfo)
     //                    neighbor.
     //                 Otherwise larger key seq MUST NOT be adopted.
 
+    bool                          isNextKeySeq;
+    KeyManager::KeySeqUpdateFlags flags = 0;
+
     VerifyOrExit(aRxInfo.mKeySequence > Get<KeyManager>().GetCurrentKeySequence());
+
+    isNextKeySeq = (aRxInfo.mKeySequence - Get<KeyManager>().GetCurrentKeySequence() == 1);
 
     switch (aRxInfo.mClass)
     {
     case RxInfo::kAuthoritativeMessage:
-        Get<KeyManager>().SetCurrentKeySequence(aRxInfo.mKeySequence, KeyManager::kForceUpdate);
+        flags = KeyManager::kForceUpdate;
         break;
 
     case RxInfo::kPeerMessage:
-        if ((aRxInfo.mNeighbor != nullptr) && aRxInfo.mNeighbor->IsStateValid())
+        VerifyOrExit(aRxInfo.IsNeighborStateValid());
+
+        if (!isNextKeySeq)
         {
-            if (aRxInfo.mKeySequence - Get<KeyManager>().GetCurrentKeySequence() == 1)
-            {
-                Get<KeyManager>().SetCurrentKeySequence(aRxInfo.mKeySequence, KeyManager::kApplyKeySwitchGuard);
-            }
-            else
-            {
-                LogInfo("Large key seq jump in peer class msg from 0x%04x ", aRxInfo.mNeighbor->GetRloc16());
-                ReestablishLinkWithNeighbor(*aRxInfo.mNeighbor);
-            }
+            LogInfo("Large key seq jump in peer class msg from 0x%04x ", aRxInfo.mNeighbor->GetRloc16());
+            ReestablishLinkWithNeighbor(*aRxInfo.mNeighbor);
+            ExitNow();
         }
+
+        flags = KeyManager::kApplySwitchGuard;
         break;
 
     case RxInfo::kUnknown:
-        break;
+        ExitNow();
     }
+
+    if (isNextKeySeq)
+    {
+        flags |= KeyManager::kResetGuardTimer;
+    }
+
+    Get<KeyManager>().SetCurrentKeySequence(aRxInfo.mKeySequence, flags);
 
 exit:
     return;
@@ -2775,7 +2751,7 @@ void Mle::ReestablishLinkWithNeighbor(Neighbor &aNeighbor)
 #if OPENTHREAD_FTD
     VerifyOrExit(IsFullThreadDevice());
 
-    if (IsActiveRouter(aNeighbor.GetRloc16()))
+    if (IsRouterRloc16(aNeighbor.GetRloc16()))
     {
         IgnoreError(Get<MleRouter>().SendLinkRequest(&aNeighbor));
     }
@@ -2828,7 +2804,7 @@ void Mle::HandleAdvertisement(RxInfo &aRxInfo)
         if ((leaderData.GetPartitionId() != mLeaderData.GetPartitionId()) ||
             (leaderData.GetLeaderRouterId() != GetLeaderId()))
         {
-            SetLeaderData(leaderData.GetPartitionId(), leaderData.GetWeighting(), leaderData.GetLeaderRouterId());
+            SetLeaderData(leaderData);
 
 #if OPENTHREAD_FTD
             SuccessOrExit(error = Get<MleRouter>().ReadAndProcessRouteTlvOnFed(aRxInfo, mParent.GetRouterId()));
@@ -2866,12 +2842,11 @@ void Mle::HandleDataResponse(RxInfo &aRxInfo)
 
 #if OPENTHREAD_CONFIG_MLE_LINK_METRICS_INITIATOR_ENABLE
     {
-        uint16_t offset;
-        uint16_t length;
+        OffsetRange offsetRange;
 
-        if (Tlv::FindTlvValueOffset(aRxInfo.mMessage, Tlv::kLinkMetricsReport, offset, length) == kErrorNone)
+        if (Tlv::FindTlvValueOffsetRange(aRxInfo.mMessage, Tlv::kLinkMetricsReport, offsetRange) == kErrorNone)
         {
-            Get<LinkMetrics::Initiator>().HandleReport(aRxInfo.mMessage, offset, length,
+            Get<LinkMetrics::Initiator>().HandleReport(aRxInfo.mMessage, offsetRange,
                                                        aRxInfo.mMessageInfo.GetPeerAddr());
         }
     }
@@ -2905,20 +2880,13 @@ bool Mle::IsNetworkDataNewer(const LeaderData &aLeaderData)
 
 Error Mle::HandleLeaderData(RxInfo &aRxInfo)
 {
-    Error                     error = kErrorNone;
-    LeaderData                leaderData;
-    MeshCoP::Timestamp        activeTimestamp;
-    MeshCoP::Timestamp        pendingTimestamp;
-    const MeshCoP::Timestamp *timestamp;
-    bool                      hasActiveTimestamp  = false;
-    bool                      hasPendingTimestamp = false;
-    uint16_t                  networkDataOffset;
-    uint16_t                  networkDataLength;
-    uint16_t                  activeDatasetOffset  = 0;
-    uint16_t                  activeDatasetLength  = 0;
-    uint16_t                  pendingDatasetOffset = 0;
-    uint16_t                  pendingDatasetLength = 0;
-    bool                      dataRequest          = false;
+    Error              error = kErrorNone;
+    LeaderData         leaderData;
+    MeshCoP::Timestamp activeTimestamp;
+    MeshCoP::Timestamp pendingTimestamp;
+    bool               saveActiveDataset  = false;
+    bool               savePendingDataset = false;
+    bool               dataRequest        = false;
 
     SuccessOrExit(error = aRxInfo.mMessage.ReadLeaderDataTlv(leaderData));
 
@@ -2927,7 +2895,7 @@ Error Mle::HandleLeaderData(RxInfo &aRxInfo)
     {
         if (IsChild())
         {
-            SetLeaderData(leaderData.GetPartitionId(), leaderData.GetWeighting(), leaderData.GetLeaderRouterId());
+            SetLeaderData(leaderData);
             mRetrieveNewNetworkData = true;
         }
         else
@@ -2943,18 +2911,20 @@ Error Mle::HandleLeaderData(RxInfo &aRxInfo)
     switch (Tlv::Find<ActiveTimestampTlv>(aRxInfo.mMessage, activeTimestamp))
     {
     case kErrorNone:
-        hasActiveTimestamp = true;
-
-        timestamp = Get<MeshCoP::ActiveDatasetManager>().GetTimestamp();
-
-        // Send an MLE Data Request if the received timestamp
-        // mismatches the local value and the message does not
-        // include the dataset.
-        if (!IsLeader() && (MeshCoP::Timestamp::Compare(&activeTimestamp, timestamp) != 0) &&
-            (Tlv::FindTlvValueOffset(aRxInfo.mMessage, Tlv::kActiveDataset, activeDatasetOffset, activeDatasetLength) !=
-             kErrorNone))
+#if OPENTHREAD_FTD
+        if (IsLeader())
         {
-            ExitNow(dataRequest = true);
+            break;
+        }
+#endif
+        if (activeTimestamp != Get<MeshCoP::ActiveDatasetManager>().GetTimestamp())
+        {
+            // Send an MLE Data Request if the received timestamp
+            // mismatches the local value and the message does not
+            // include the dataset.
+
+            VerifyOrExit(aRxInfo.mMessage.ContainsTlv(Tlv::kActiveDataset), dataRequest = true);
+            saveActiveDataset = true;
         }
 
         break;
@@ -2969,15 +2939,16 @@ Error Mle::HandleLeaderData(RxInfo &aRxInfo)
     switch (Tlv::Find<PendingTimestampTlv>(aRxInfo.mMessage, pendingTimestamp))
     {
     case kErrorNone:
-        hasPendingTimestamp = true;
-
-        timestamp = Get<MeshCoP::PendingDatasetManager>().GetTimestamp();
-
-        if (!IsLeader() && (MeshCoP::Timestamp::Compare(&pendingTimestamp, timestamp) != 0) &&
-            (Tlv::FindTlvValueOffset(aRxInfo.mMessage, Tlv::kPendingDataset, pendingDatasetOffset,
-                                     pendingDatasetLength) != kErrorNone))
+#if OPENTHREAD_FTD
+        if (IsLeader())
         {
-            ExitNow(dataRequest = true);
+            break;
+        }
+#endif
+        if (pendingTimestamp != Get<MeshCoP::PendingDatasetManager>().GetTimestamp())
+        {
+            VerifyOrExit(aRxInfo.mMessage.ContainsTlv(Tlv::kPendingDataset), dataRequest = true);
+            savePendingDataset = true;
         }
 
         break;
@@ -2989,17 +2960,15 @@ Error Mle::HandleLeaderData(RxInfo &aRxInfo)
         ExitNow(error = kErrorParse);
     }
 
-    if (Tlv::FindTlvValueOffset(aRxInfo.mMessage, Tlv::kNetworkData, networkDataOffset, networkDataLength) ==
-        kErrorNone)
+    switch (error = aRxInfo.mMessage.ReadAndSetNetworkDataTlv(leaderData))
     {
-        error = Get<NetworkData::Leader>().SetNetworkData(
-            leaderData.GetDataVersion(NetworkData::kFullSet), leaderData.GetDataVersion(NetworkData::kStableSubset),
-            GetNetworkDataType(), aRxInfo.mMessage, networkDataOffset, networkDataLength);
-        SuccessOrExit(error);
-    }
-    else
-    {
-        ExitNow(dataRequest = true);
+    case kErrorNone:
+        break;
+    case kErrorNotFound:
+        dataRequest = true;
+        OT_FALL_THROUGH;
+    default:
+        ExitNow();
     }
 
 #if OPENTHREAD_FTD
@@ -3010,22 +2979,18 @@ Error Mle::HandleLeaderData(RxInfo &aRxInfo)
     else
 #endif
     {
-        if (hasActiveTimestamp)
+        // We previously confirmed the message contains an
+        // Active or a Pending Dataset TLV before setting the
+        // corresponding `saveDataset` flag.
+
+        if (saveActiveDataset)
         {
-            if (activeDatasetOffset > 0)
-            {
-                IgnoreError(Get<MeshCoP::ActiveDatasetManager>().Save(activeTimestamp, aRxInfo.mMessage,
-                                                                      activeDatasetOffset, activeDatasetLength));
-            }
+            IgnoreError(aRxInfo.mMessage.ReadAndSaveActiveDataset(activeTimestamp));
         }
 
-        if (hasPendingTimestamp)
+        if (savePendingDataset)
         {
-            if (pendingDatasetOffset > 0)
-            {
-                IgnoreError(Get<MeshCoP::PendingDatasetManager>().Save(pendingTimestamp, aRxInfo.mMessage,
-                                                                       pendingDatasetOffset, pendingDatasetLength));
-            }
+            IgnoreError(aRxInfo.mMessage.ReadAndSavePendingDataset(pendingTimestamp));
         }
     }
 
@@ -3068,20 +3033,18 @@ exit:
 }
 
 bool Mle::IsBetterParent(uint16_t                aRloc16,
-                         LinkQuality             aLinkQuality,
-                         uint8_t                 aLinkMargin,
+                         uint8_t                 aTwoWayLinkMargin,
                          const ConnectivityTlv  &aConnectivityTlv,
                          uint16_t                aVersion,
                          const Mac::CslAccuracy &aCslAccuracy)
 {
-    int         rval;
-    LinkQuality candidateTwoWayLinkQuality = mParentCandidate.GetTwoWayLinkQuality();
+    int rval;
 
     // Mesh Impacting Criteria
-    rval = ThreeWayCompare(aLinkQuality, candidateTwoWayLinkQuality);
+    rval = ThreeWayCompare(LinkQualityForLinkMargin(aTwoWayLinkMargin), mParentCandidate.GetTwoWayLinkQuality());
     VerifyOrExit(rval == 0);
 
-    rval = ThreeWayCompare(IsActiveRouter(aRloc16), IsActiveRouter(mParentCandidate.GetRloc16()));
+    rval = ThreeWayCompare(IsRouterRloc16(aRloc16), IsRouterRloc16(mParentCandidate.GetRloc16()));
     VerifyOrExit(rval == 0);
 
     rval = ThreeWayCompare(aConnectivityTlv.GetParentPriority(), mParentCandidate.mPriority);
@@ -3124,7 +3087,7 @@ bool Mle::IsBetterParent(uint16_t                aRloc16,
     OT_UNUSED_VARIABLE(aCslAccuracy);
 #endif
 
-    rval = ThreeWayCompare(aLinkMargin, mParentCandidate.mLinkMargin);
+    rval = ThreeWayCompare(aTwoWayLinkMargin, mParentCandidate.mLinkMargin);
 
 exit:
     return (rval > 0);
@@ -3134,13 +3097,11 @@ void Mle::HandleParentResponse(RxInfo &aRxInfo)
 {
     Error            error = kErrorNone;
     int8_t           rss   = aRxInfo.mMessage.GetAverageRss();
-    RxChallenge      response;
     uint16_t         version;
     uint16_t         sourceAddress;
     LeaderData       leaderData;
-    uint8_t          linkMarginFromTlv;
-    uint8_t          linkMargin;
-    LinkQuality      linkQuality;
+    uint8_t          linkMarginOut;
+    uint8_t          twoWayLinkMargin;
     ConnectivityTlv  connectivityTlv;
     uint32_t         linkFrameCounter;
     uint32_t         mleFrameCounter;
@@ -3154,11 +3115,9 @@ void Mle::HandleParentResponse(RxInfo &aRxInfo)
 
     Log(kMessageReceive, kTypeParentResponse, aRxInfo.mMessageInfo.GetPeerAddr(), sourceAddress);
 
-    SuccessOrExit(error = Tlv::Find<VersionTlv>(aRxInfo.mMessage, version));
-    VerifyOrExit(version >= kThreadVersion1p1, error = kErrorParse);
+    SuccessOrExit(error = aRxInfo.mMessage.ReadVersionTlv(version));
 
-    SuccessOrExit(error = aRxInfo.mMessage.ReadResponseTlv(response));
-    VerifyOrExit(response == mParentRequestChallenge, error = kErrorParse);
+    SuccessOrExit(error = aRxInfo.mMessage.ReadAndMatchResponseTlvWith(mParentRequestChallenge));
 
     aRxInfo.mMessageInfo.GetPeerAddr().GetIid().ConvertToExtAddress(extAddress);
 
@@ -3169,9 +3128,8 @@ void Mle::HandleParentResponse(RxInfo &aRxInfo)
 
     SuccessOrExit(error = aRxInfo.mMessage.ReadLeaderDataTlv(leaderData));
 
-    SuccessOrExit(error = Tlv::Find<LinkMarginTlv>(aRxInfo.mMessage, linkMarginFromTlv));
-    linkMargin  = Min(Get<Mac::Mac>().ComputeLinkMargin(rss), linkMarginFromTlv);
-    linkQuality = LinkQualityForLinkMargin(linkMargin);
+    SuccessOrExit(error = Tlv::Find<LinkMarginTlv>(aRxInfo.mMessage, linkMarginOut));
+    twoWayLinkMargin = Min(Get<Mac::Mac>().ComputeLinkMargin(rss), linkMarginOut);
 
     SuccessOrExit(error = Tlv::FindTlv(aRxInfo.mMessage, connectivityTlv));
     VerifyOrExit(connectivityTlv.IsValid(), error = kErrorParse);
@@ -3237,7 +3195,7 @@ void Mle::HandleParentResponse(RxInfo &aRxInfo)
         case kBetterPartition:
             VerifyOrExit(!isPartitionIdSame);
 
-            VerifyOrExit(MleRouter::ComparePartitions(connectivityTlv.GetActiveRouters() <= 1, leaderData,
+            VerifyOrExit(MleRouter::ComparePartitions(connectivityTlv.IsSingleton(), leaderData,
                                                       Get<MleRouter>().IsSingleton(), mLeaderData) > 0);
             break;
         }
@@ -3256,7 +3214,7 @@ void Mle::HandleParentResponse(RxInfo &aRxInfo)
 #if OPENTHREAD_FTD
         if (IsFullThreadDevice())
         {
-            compare = MleRouter::ComparePartitions(connectivityTlv.GetActiveRouters() <= 1, leaderData,
+            compare = MleRouter::ComparePartitions(connectivityTlv.IsSingleton(), leaderData,
                                                    mParentCandidate.mIsSingleton, mParentCandidate.mLeaderData);
         }
 
@@ -3267,7 +3225,7 @@ void Mle::HandleParentResponse(RxInfo &aRxInfo)
         // Only consider better parents if the partitions are the same
         if (compare == 0)
         {
-            VerifyOrExit(IsBetterParent(sourceAddress, linkQuality, linkMargin, connectivityTlv, version, cslAccuracy));
+            VerifyOrExit(IsBetterParent(sourceAddress, twoWayLinkMargin, connectivityTlv, version, cslAccuracy));
         }
     }
 
@@ -3303,7 +3261,7 @@ void Mle::HandleParentResponse(RxInfo &aRxInfo)
     mParentCandidate.SetVersion(version);
     mParentCandidate.SetDeviceMode(DeviceMode(DeviceMode::kModeFullThreadDevice | DeviceMode::kModeRxOnWhenIdle |
                                               DeviceMode::kModeFullNetworkData));
-    mParentCandidate.SetLinkQualityOut(LinkQualityForLinkMargin(linkMarginFromTlv));
+    mParentCandidate.SetLinkQualityOut(LinkQualityForLinkMargin(linkMarginOut));
     mParentCandidate.SetState(Neighbor::kStateParentResponse);
     mParentCandidate.SetKeySequence(aRxInfo.mKeySequence);
     mParentCandidate.SetLeaderCost(connectivityTlv.GetLeaderCost());
@@ -3318,8 +3276,8 @@ void Mle::HandleParentResponse(RxInfo &aRxInfo)
     mParentCandidate.mSedBufferSize    = connectivityTlv.GetSedBufferSize();
     mParentCandidate.mSedDatagramCount = connectivityTlv.GetSedDatagramCount();
     mParentCandidate.mLeaderData       = leaderData;
-    mParentCandidate.mIsSingleton      = connectivityTlv.GetActiveRouters() <= 1;
-    mParentCandidate.mLinkMargin       = linkMargin;
+    mParentCandidate.mIsSingleton      = connectivityTlv.IsSingleton();
+    mParentCandidate.mLinkMargin       = twoWayLinkMargin;
 
 exit:
     LogProcessError(kTypeParentResponse, error);
@@ -3332,10 +3290,6 @@ void Mle::HandleChildIdResponse(RxInfo &aRxInfo)
     uint16_t           sourceAddress;
     uint16_t           shortAddress;
     MeshCoP::Timestamp timestamp;
-    uint16_t           networkDataOffset;
-    uint16_t           networkDataLength;
-    uint16_t           offset;
-    uint16_t           length;
 
     SuccessOrExit(error = Tlv::Find<SourceAddressTlv>(aRxInfo.mMessage, sourceAddress));
 
@@ -3350,17 +3304,14 @@ void Mle::HandleChildIdResponse(RxInfo &aRxInfo)
 
     SuccessOrExit(error = aRxInfo.mMessage.ReadLeaderDataTlv(leaderData));
 
-    SuccessOrExit(
-        error = Tlv::FindTlvValueOffset(aRxInfo.mMessage, Tlv::kNetworkData, networkDataOffset, networkDataLength));
+    VerifyOrExit(aRxInfo.mMessage.ContainsTlv(Tlv::kNetworkData));
 
     switch (Tlv::Find<ActiveTimestampTlv>(aRxInfo.mMessage, timestamp))
     {
     case kErrorNone:
-        if (Tlv::FindTlvValueOffset(aRxInfo.mMessage, Tlv::kActiveDataset, offset, length) == kErrorNone)
-        {
-            SuccessOrExit(error =
-                              Get<MeshCoP::ActiveDatasetManager>().Save(timestamp, aRxInfo.mMessage, offset, length));
-        }
+        error = aRxInfo.mMessage.ReadAndSaveActiveDataset(timestamp);
+        error = (error == kErrorNotFound) ? kErrorNone : error;
+        SuccessOrExit(error);
         break;
 
     case kErrorNotFound:
@@ -3379,14 +3330,11 @@ void Mle::HandleChildIdResponse(RxInfo &aRxInfo)
     switch (Tlv::Find<PendingTimestampTlv>(aRxInfo.mMessage, timestamp))
     {
     case kErrorNone:
-        if (Tlv::FindTlvValueOffset(aRxInfo.mMessage, Tlv::kPendingDataset, offset, length) == kErrorNone)
-        {
-            IgnoreError(Get<MeshCoP::PendingDatasetManager>().Save(timestamp, aRxInfo.mMessage, offset, length));
-        }
+        IgnoreError(aRxInfo.mMessage.ReadAndSavePendingDataset(timestamp));
         break;
 
     case kErrorNotFound:
-        Get<MeshCoP::PendingDatasetManager>().ClearNetwork();
+        Get<MeshCoP::PendingDatasetManager>().Clear();
         break;
 
     default:
@@ -3404,7 +3352,7 @@ void Mle::HandleChildIdResponse(RxInfo &aRxInfo)
 
     SetStateDetached();
 
-    SetLeaderData(leaderData.GetPartitionId(), leaderData.GetWeighting(), leaderData.GetLeaderRouterId());
+    SetLeaderData(leaderData);
 
 #if OPENTHREAD_FTD
     SuccessOrExit(error = Get<MleRouter>().ReadAndProcessRouteTlvOnFed(aRxInfo, RouterIdFromRloc16(sourceAddress)));
@@ -3419,9 +3367,7 @@ void Mle::HandleChildIdResponse(RxInfo &aRxInfo)
 
     mParent.SetRloc16(sourceAddress);
 
-    IgnoreError(Get<NetworkData::Leader>().SetNetworkData(
-        leaderData.GetDataVersion(NetworkData::kFullSet), leaderData.GetDataVersion(NetworkData::kStableSubset),
-        GetNetworkDataType(), aRxInfo.mMessage, networkDataOffset, networkDataLength));
+    IgnoreError(aRxInfo.mMessage.ReadAndSetNetworkDataTlv(leaderData));
 
     SetStateChild(shortAddress);
 
@@ -3542,7 +3488,7 @@ void Mle::HandleChildUpdateResponse(RxInfo &aRxInfo)
 {
     Error       error = kErrorNone;
     uint8_t     status;
-    uint8_t     mode;
+    DeviceMode  mode;
     RxChallenge response;
     uint32_t    linkFrameCounter;
     uint32_t    mleFrameCounter;
@@ -3582,8 +3528,8 @@ void Mle::HandleChildUpdateResponse(RxInfo &aRxInfo)
         ExitNow();
     }
 
-    SuccessOrExit(error = Tlv::Find<ModeTlv>(aRxInfo.mMessage, mode));
-    VerifyOrExit(DeviceMode(mode) == mDeviceMode, error = kErrorDrop);
+    SuccessOrExit(error = aRxInfo.mMessage.ReadModeTlv(mode));
+    VerifyOrExit(mode == mDeviceMode, error = kErrorDrop);
 
     switch (mRole)
     {
@@ -3611,7 +3557,7 @@ void Mle::HandleChildUpdateResponse(RxInfo &aRxInfo)
     case kRoleChild:
         SuccessOrExit(error = Tlv::Find<SourceAddressTlv>(aRxInfo.mMessage, sourceAddress));
 
-        if (RouterIdFromRloc16(sourceAddress) != RouterIdFromRloc16(GetRloc16()))
+        if (!HasMatchingRouterIdWith(sourceAddress))
         {
             IgnoreError(BecomeDetached());
             ExitNow();
@@ -3689,15 +3635,14 @@ exit:
 
 void Mle::HandleAnnounce(RxInfo &aRxInfo)
 {
-    Error                     error = kErrorNone;
-    ChannelTlvValue           channelTlvValue;
-    MeshCoP::Timestamp        timestamp;
-    const MeshCoP::Timestamp *localTimestamp;
-    uint8_t                   channel;
-    uint16_t                  panId;
-    bool                      isFromOrphan;
-    bool                      channelAndPanIdMatch;
-    int                       timestampCompare;
+    Error              error = kErrorNone;
+    ChannelTlvValue    channelTlvValue;
+    MeshCoP::Timestamp timestamp;
+    uint8_t            channel;
+    uint16_t           panId;
+    bool               isFromOrphan;
+    bool               channelAndPanIdMatch;
+    int                timestampCompare;
 
     Log(kMessageReceive, kTypeAnnounce, aRxInfo.mMessageInfo.GetPeerAddr());
 
@@ -3709,10 +3654,8 @@ void Mle::HandleAnnounce(RxInfo &aRxInfo)
 
     aRxInfo.mClass = RxInfo::kPeerMessage;
 
-    localTimestamp = Get<MeshCoP::ActiveDatasetManager>().GetTimestamp();
-
-    isFromOrphan         = timestamp.IsOrphanTimestamp();
-    timestampCompare     = MeshCoP::Timestamp::Compare(&timestamp, localTimestamp);
+    isFromOrphan         = timestamp.IsOrphanAnnounce();
+    timestampCompare     = MeshCoP::Timestamp::Compare(timestamp, Get<MeshCoP::ActiveDatasetManager>().GetTimestamp());
     channelAndPanIdMatch = (channel == Get<Mac::Mac>().GetPanChannel()) && (panId == Get<Mac::Mac>().GetPanId());
 
     if (isFromOrphan || (timestampCompare < 0))
@@ -3869,11 +3812,7 @@ void Mle::ProcessAnnounce(void)
     IgnoreError(Start(kAnnounceAttach));
 }
 
-uint16_t Mle::GetNextHop(uint16_t aDestination) const
-{
-    OT_UNUSED_VARIABLE(aDestination);
-    return (mParent.IsStateValid()) ? mParent.GetRloc16() : static_cast<uint16_t>(Mac::kShortAddrInvalid);
-}
+uint16_t Mle::GetParentRloc16(void) const { return (mParent.IsStateValid() ? mParent.GetRloc16() : kInvalidRloc16); }
 
 Error Mle::GetParentInfo(Router::Info &aParentInfo) const
 {
@@ -3915,9 +3854,8 @@ void Mle::InformPreviousParent(void)
     VerifyOrExit((message = Get<Ip6::Ip6>().NewMessage(0)) != nullptr, error = kErrorNoBufs);
     SuccessOrExit(error = message->SetLength(0));
 
-    messageInfo.SetSockAddr(GetMeshLocal64());
-    messageInfo.SetPeerAddr(GetMeshLocal16());
-    messageInfo.GetPeerAddr().GetIid().SetLocator(mPreviousParentRloc);
+    messageInfo.SetSockAddr(GetMeshLocalEid());
+    messageInfo.GetPeerAddr().SetToRoutingLocator(mMeshLocalPrefix, mPreviousParentRloc);
 
     SuccessOrExit(error = Get<Ip6::Ip6>().SendDatagram(*message, messageInfo, Ip6::kProtoNone));
 
@@ -4009,7 +3947,7 @@ void Mle::ParentSearch::UpdateState(void)
 
     if (mIsInBackoff && !mBackoffWasCanceled && mRecentlyDetached)
     {
-        if ((Get<Mle>().mPreviousParentRloc != Mac::kShortAddrInvalid) &&
+        if ((Get<Mle>().mPreviousParentRloc != kInvalidRloc16) &&
             (Get<Mle>().mPreviousParentRloc != Get<Mle>().mParent.GetRloc16()))
         {
             mIsInBackoff        = false;
@@ -4033,7 +3971,7 @@ void Mle::ParentSearch::UpdateState(void)
 #if OT_SHOULD_LOG_AT(OT_LOG_LEVEL_INFO)
 void Mle::Log(MessageAction aAction, MessageType aType, const Ip6::Address &aAddress)
 {
-    Log(aAction, aType, aAddress, Mac::kShortAddrInvalid);
+    Log(aAction, aType, aAddress, kInvalidRloc16);
 }
 
 void Mle::Log(MessageAction aAction, MessageType aType, const Ip6::Address &aAddress, uint16_t aRloc)
@@ -4045,7 +3983,7 @@ void Mle::Log(MessageAction aAction, MessageType aType, const Ip6::Address &aAdd
 
     String<kRlocStringSize> rlocString;
 
-    if (aRloc != Mac::kShortAddrInvalid)
+    if (aRloc != kInvalidRloc16)
     {
         rlocString.Append(",0x%04x", aRloc);
     }
@@ -4544,6 +4482,17 @@ Error Mle::TxMessage::AppendMleFrameCounterTlv(void)
     return Tlv::Append<MleFrameCounterTlv>(*this, Get<KeyManager>().GetMleFrameCounter());
 }
 
+Error Mle::TxMessage::AppendLinkAndMleFrameCounterTlvs(void)
+{
+    Error error;
+
+    SuccessOrExit(error = AppendLinkFrameCounterTlv());
+    error = AppendMleFrameCounterTlv();
+
+exit:
+    return error;
+}
+
 Error Mle::TxMessage::AppendAddress16Tlv(uint16_t aRloc16) { return Tlv::Append<Address16Tlv>(*this, aRloc16); }
 
 Error Mle::TxMessage::AppendLeaderDataTlv(void)
@@ -4602,7 +4551,7 @@ Error Mle::TxMessage::AppendAddressRegistrationTlv(AddressRegistrationMode aMode
     SuccessOrExit(error = Append(tlv));
 
     // Prioritize ML-EID
-    SuccessOrExit(error = AppendCompressedAddressEntry(kMeshLocalPrefixContextId, Get<Mle>().GetMeshLocal64()));
+    SuccessOrExit(error = AppendCompressedAddressEntry(kMeshLocalPrefixContextId, Get<Mle>().GetMeshLocalEid()));
 
     // Continue to append the other addresses if not `kAppendMeshLocalOnly` mode
     VerifyOrExit(aMode != kAppendMeshLocalOnly);
@@ -4621,8 +4570,8 @@ Error Mle::TxMessage::AppendAddressRegistrationTlv(AddressRegistrationMode aMode
 
     for (const Ip6::Netif::UnicastAddress &addr : Get<ThreadNetif>().GetUnicastAddresses())
     {
-        if (addr.GetAddress().IsLinkLocal() || Get<Mle>().IsRoutingLocator(addr.GetAddress()) ||
-            Get<Mle>().IsAnycastLocator(addr.GetAddress()) || addr.GetAddress() == Get<Mle>().GetMeshLocal64())
+        if (addr.GetAddress().IsLinkLocalUnicast() || Get<Mle>().IsRoutingLocator(addr.GetAddress()) ||
+            Get<Mle>().IsAnycastLocator(addr.GetAddress()) || addr.GetAddress() == Get<Mle>().GetMeshLocalEid())
         {
             continue;
         }
@@ -4749,10 +4698,10 @@ Error Mle::TxMessage::AppendXtalAccuracyTlv(void)
 Error Mle::TxMessage::AppendActiveTimestampTlv(void)
 {
     Error                     error     = kErrorNone;
-    const MeshCoP::Timestamp *timestamp = Get<MeshCoP::ActiveDatasetManager>().GetTimestamp();
+    const MeshCoP::Timestamp &timestamp = Get<MeshCoP::ActiveDatasetManager>().GetTimestamp();
 
-    VerifyOrExit(timestamp != nullptr);
-    error = Tlv::Append<ActiveTimestampTlv>(*this, *timestamp);
+    VerifyOrExit(timestamp.IsValid());
+    error = Tlv::Append<ActiveTimestampTlv>(*this, timestamp);
 
 exit:
     return error;
@@ -4761,10 +4710,21 @@ exit:
 Error Mle::TxMessage::AppendPendingTimestampTlv(void)
 {
     Error                     error     = kErrorNone;
-    const MeshCoP::Timestamp *timestamp = Get<MeshCoP::PendingDatasetManager>().GetTimestamp();
+    const MeshCoP::Timestamp &timestamp = Get<MeshCoP::PendingDatasetManager>().GetTimestamp();
 
-    VerifyOrExit(timestamp != nullptr && timestamp->GetSeconds() != 0);
-    error = Tlv::Append<PendingTimestampTlv>(*this, *timestamp);
+    VerifyOrExit(timestamp.IsValid());
+    error = Tlv::Append<PendingTimestampTlv>(*this, timestamp);
+
+exit:
+    return error;
+}
+
+Error Mle::TxMessage::AppendActiveAndPendingTimestampTlvs(void)
+{
+    Error error;
+
+    SuccessOrExit(error = AppendActiveTimestampTlv());
+    error = AppendPendingTimestampTlv();
 
 exit:
     return error;
@@ -4813,7 +4773,7 @@ Error Mle::TxMessage::SendTo(const Ip6::Address &aDestination)
     Ip6::MessageInfo messageInfo;
 
     messageInfo.SetPeerAddr(aDestination);
-    messageInfo.SetSockAddr(Get<Mle>().mLinkLocal64.GetAddress());
+    messageInfo.SetSockAddr(Get<Mle>().mLinkLocalAddress.GetAddress());
     messageInfo.SetPeerPort(kUdpPort);
     messageInfo.SetHopLimit(kMleHopLimit);
 
@@ -4883,19 +4843,18 @@ Error Mle::TxMessage::AppendAddressRegistrationTlv(Child &aChild)
     tlv.SetType(Tlv::kAddressRegistration);
     SuccessOrExit(error = Append(tlv));
 
-    for (const Ip6::Address &address : aChild.IterateIp6Addresses())
+    // The parent must echo back all registered IPv6 addresses except
+    // for the ML-EID, which is excluded by `Child::GetIp6Addresses()`.
+
+    for (const Ip6::Address &address : aChild.GetIp6Addresses())
     {
         if (address.IsMulticast() || Get<NetworkData::Leader>().GetContext(address, context) != kErrorNone)
         {
             SuccessOrExit(error = AppendAddressEntry(address));
         }
-        else if (context.mContextId != kMeshLocalPrefixContextId)
-        {
-            SuccessOrExit(error = AppendCompressedAddressEntry(context.mContextId, address));
-        }
         else
         {
-            continue;
+            SuccessOrExit(error = AppendCompressedAddressEntry(context.mContextId, address));
         }
     }
 
@@ -4916,14 +4875,47 @@ Error Mle::TxMessage::AppendRouteTlv(Neighbor *aNeighbor)
     return tlv.AppendTo(*this);
 }
 
-Error Mle::TxMessage::AppendActiveDatasetTlv(void)
-{
-    return Get<MeshCoP::ActiveDatasetManager>().AppendMleDatasetTlv(*this);
-}
+Error Mle::TxMessage::AppendActiveDatasetTlv(void) { return AppendDatasetTlv(MeshCoP::Dataset::kActive); }
 
-Error Mle::TxMessage::AppendPendingDatasetTlv(void)
+Error Mle::TxMessage::AppendPendingDatasetTlv(void) { return AppendDatasetTlv(MeshCoP::Dataset::kPending); }
+
+Error Mle::TxMessage::AppendDatasetTlv(MeshCoP::Dataset::Type aDatasetType)
 {
-    return Get<MeshCoP::PendingDatasetManager>().AppendMleDatasetTlv(*this);
+    Error            error = kErrorNotFound;
+    Tlv::Type        tlvType;
+    MeshCoP::Dataset dataset;
+
+    switch (aDatasetType)
+    {
+    case MeshCoP::Dataset::kActive:
+        error   = Get<MeshCoP::ActiveDatasetManager>().Read(dataset);
+        tlvType = Tlv::kActiveDataset;
+        break;
+
+    case MeshCoP::Dataset::kPending:
+        error   = Get<MeshCoP::PendingDatasetManager>().Read(dataset);
+        tlvType = Tlv::kPendingDataset;
+        break;
+    }
+
+    if (error != kErrorNone)
+    {
+        // If there's no dataset, no need to append TLV. We'll treat it
+        // as success.
+
+        ExitNow(error = kErrorNone);
+    }
+
+    // Remove the Timestamp TLV from Dataset before appending to the
+    // message. The Timestamp is appended as its own MLE TLV to the
+    // message.
+
+    dataset.RemoveTimestamp(aDatasetType);
+
+    error = Tlv::AppendTlv(*this, tlvType, dataset.GetBytes(), dataset.GetLength());
+
+exit:
+    return error;
 }
 
 Error Mle::TxMessage::AppendSteeringDataTlv(void)
@@ -4953,14 +4945,43 @@ exit:
 //---------------------------------------------------------------------------------------------------------------------
 // RxMessage
 
+bool Mle::RxMessage::ContainsTlv(Tlv::Type aTlvType) const
+{
+    OffsetRange offsetRange;
+
+    return Tlv::FindTlvValueOffsetRange(*this, aTlvType, offsetRange) == kErrorNone;
+}
+
+Error Mle::RxMessage::ReadModeTlv(DeviceMode &aMode) const
+{
+    Error   error;
+    uint8_t modeBitmask;
+
+    SuccessOrExit(error = Tlv::Find<ModeTlv>(*this, modeBitmask));
+    aMode.Set(modeBitmask);
+
+exit:
+    return error;
+}
+
+Error Mle::RxMessage::ReadVersionTlv(uint16_t &aVersion) const
+{
+    Error error;
+
+    SuccessOrExit(error = Tlv::Find<VersionTlv>(*this, aVersion));
+    VerifyOrExit(aVersion >= kThreadVersion1p1, error = kErrorParse);
+
+exit:
+    return error;
+}
+
 Error Mle::RxMessage::ReadChallengeOrResponse(uint8_t aTlvType, RxChallenge &aRxChallenge) const
 {
-    Error    error;
-    uint16_t offset;
-    uint16_t length;
+    Error       error;
+    OffsetRange offsetRange;
 
-    SuccessOrExit(error = Tlv::FindTlvValueOffset(*this, aTlvType, offset, length));
-    error = aRxChallenge.ReadFrom(*this, offset, length);
+    SuccessOrExit(error = Tlv::FindTlvValueOffsetRange(*this, aTlvType, offsetRange));
+    error = aRxChallenge.ReadFrom(*this, offsetRange);
 
 exit:
     return error;
@@ -4974,6 +4995,18 @@ Error Mle::RxMessage::ReadChallengeTlv(RxChallenge &aChallenge) const
 Error Mle::RxMessage::ReadResponseTlv(RxChallenge &aResponse) const
 {
     return ReadChallengeOrResponse(Tlv::kResponse, aResponse);
+}
+
+Error Mle::RxMessage::ReadAndMatchResponseTlvWith(const TxChallenge &aChallenge) const
+{
+    Error       error;
+    RxChallenge response;
+
+    SuccessOrExit(error = ReadResponseTlv(response));
+    VerifyOrExit(response == aChallenge, error = kErrorSecurity);
+
+exit:
+    return error;
 }
 
 Error Mle::RxMessage::ReadFrameCounterTlvs(uint32_t &aLinkFrameCounter, uint32_t &aMleFrameCounter) const
@@ -5011,21 +5044,69 @@ exit:
     return error;
 }
 
-Error Mle::RxMessage::ReadTlvRequestTlv(TlvList &aTlvList) const
+Error Mle::RxMessage::ReadAndSetNetworkDataTlv(const LeaderData &aLeaderData) const
 {
-    Error    error;
-    uint16_t offset;
-    uint16_t length;
+    Error       error;
+    OffsetRange offsetRange;
 
-    SuccessOrExit(error = Tlv::FindTlvValueOffset(*this, Tlv::kTlvRequest, offset, length));
+    SuccessOrExit(error = Tlv::FindTlvValueOffsetRange(*this, Tlv::kNetworkData, offsetRange));
 
-    if (length > aTlvList.GetMaxSize())
+    error = Get<NetworkData::Leader>().SetNetworkData(aLeaderData.GetDataVersion(NetworkData::kFullSet),
+                                                      aLeaderData.GetDataVersion(NetworkData::kStableSubset),
+                                                      Get<Mle>().GetNetworkDataType(), *this, offsetRange);
+exit:
+    return error;
+}
+
+Error Mle::RxMessage::ReadAndSaveActiveDataset(const MeshCoP::Timestamp &aActiveTimestamp) const
+{
+    return ReadAndSaveDataset(MeshCoP::Dataset::kActive, aActiveTimestamp);
+}
+
+Error Mle::RxMessage::ReadAndSavePendingDataset(const MeshCoP::Timestamp &aPendingTimestamp) const
+{
+    return ReadAndSaveDataset(MeshCoP::Dataset::kPending, aPendingTimestamp);
+}
+
+Error Mle::RxMessage::ReadAndSaveDataset(MeshCoP::Dataset::Type    aDatasetType,
+                                         const MeshCoP::Timestamp &aTimestamp) const
+{
+    Error            error   = kErrorNone;
+    Tlv::Type        tlvType = (aDatasetType == MeshCoP::Dataset::kActive) ? Tlv::kActiveDataset : Tlv::kPendingDataset;
+    MeshCoP::Dataset dataset;
+    OffsetRange      offsetRange;
+
+    SuccessOrExit(error = Tlv::FindTlvValueOffsetRange(*this, tlvType, offsetRange));
+
+    SuccessOrExit(error = dataset.SetFrom(*this, offsetRange));
+    SuccessOrExit(error = dataset.ValidateTlvs());
+    SuccessOrExit(error = dataset.WriteTimestamp(aDatasetType, aTimestamp));
+
+    switch (aDatasetType)
     {
-        length = aTlvList.GetMaxSize();
+    case MeshCoP::Dataset::kActive:
+        error = Get<MeshCoP::ActiveDatasetManager>().Save(dataset);
+        break;
+    case MeshCoP::Dataset::kPending:
+        error = Get<MeshCoP::PendingDatasetManager>().Save(dataset);
+        break;
     }
 
-    ReadBytes(offset, aTlvList.GetArrayBuffer(), length);
-    aTlvList.SetLength(static_cast<uint8_t>(length));
+exit:
+    return error;
+}
+
+Error Mle::RxMessage::ReadTlvRequestTlv(TlvList &aTlvList) const
+{
+    Error       error;
+    OffsetRange offsetRange;
+
+    SuccessOrExit(error = Tlv::FindTlvValueOffsetRange(*this, Tlv::kTlvRequest, offsetRange));
+
+    offsetRange.ShrinkLength(aTlvList.GetMaxSize());
+
+    ReadBytes(offsetRange, aTlvList.GetArrayBuffer());
+    aTlvList.SetLength(static_cast<uint8_t>(offsetRange.GetLength()));
 
 exit:
     return error;

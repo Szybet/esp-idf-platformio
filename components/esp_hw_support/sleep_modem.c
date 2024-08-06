@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2015-2023 Espressif Systems (Shanghai) CO LTD
+ * SPDX-FileCopyrightText: 2015-2024 Espressif Systems (Shanghai) CO LTD
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -282,7 +282,7 @@ inline __attribute__((always_inline)) bool sleep_modem_wifi_modem_link_done(void
 
 #endif /* SOC_PM_SUPPORT_PMU_MODEM_STATE */
 
-bool modem_domain_pd_allowed(void)
+bool IRAM_ATTR modem_domain_pd_allowed(void)
 {
 #if SOC_PM_MODEM_RETENTION_BY_REGDMA
     const uint32_t inited_modules = sleep_retention_get_inited_modules();
@@ -298,7 +298,6 @@ bool modem_domain_pd_allowed(void)
 #if SOC_IEEE802154_SUPPORTED
     mask |= BIT(SLEEP_RETENTION_MODULE_802154_MAC) | BIT(SLEEP_RETENTION_MODULE_BT_BB);
 #endif
-
     return ((inited_modules & mask) == (created_modules & mask));
 #else
     return false; /* MODEM power domain is controlled by each module (WiFi, Bluetooth or 15.4) of modem */

@@ -46,6 +46,7 @@
 #include "common/heap_data.hpp"
 #include "common/heap_string.hpp"
 #include "common/linked_list.hpp"
+#include "common/locator.hpp"
 #include "common/owned_ptr.hpp"
 #include "common/owning_list.hpp"
 #include "common/retain_ptr.hpp"
@@ -53,11 +54,23 @@
 #include "crypto/sha256.hpp"
 #include "net/dns_types.hpp"
 
+#if OPENTHREAD_CONFIG_MULTICAST_DNS_AUTO_ENABLE_ON_INFRA_IF && !OPENTHREAD_CONFIG_BORDER_ROUTING_ENABLE
+#error "OPENTHREAD_CONFIG_MULTICAST_DNS_AUTO_ENABLE_ON_INFRA_IF requires OPENTHREAD_CONFIG_BORDER_ROUTING_ENABLE"
+#endif
+
 /**
  * @file
  *   This file includes definitions for the Multicast DNS per RFC 6762.
  *
  */
+
+/**
+ * Represents an opaque (and empty) type for an mDNS iterator.
+ *
+ */
+struct otMdnsIterator
+{
+};
 
 namespace ot {
 namespace Dns {
@@ -91,6 +104,7 @@ public:
     typedef otMdnsRequestId        RequestId;        ///< A request Identifier.
     typedef otMdnsRegisterCallback RegisterCallback; ///< Registration callback.
     typedef otMdnsConflictCallback ConflictCallback; ///< Conflict callback.
+    typedef otMdnsEntryState       EntryState;       ///< Host/Service/Key entry state.
     typedef otMdnsHost             Host;             ///< Host information.
     typedef otMdnsService          Service;          ///< Service information.
     typedef otMdnsKey              Key;              ///< Key information.
@@ -107,6 +121,8 @@ public:
     typedef otMdnsAddressCallback  AddressCallback;  ///< Address callback
     typedef otMdnsAddressResult    AddressResult;    ///< Address result.
     typedef otMdnsAddressAndTtl    AddressAndTtl;    ///< Address and TTL.
+    typedef otMdnsIterator         Iterator;         ///< An entry iterator.
+    typedef otMdnsCacheInfo        CacheInfo;        ///< Cache information.
 
     /**
      * Represents a socket address info.
@@ -156,6 +172,14 @@ public:
      *
      */
     bool IsEnabled(void) const { return mIsEnabled; }
+
+#if OPENTHREAD_CONFIG_MULTICAST_DNS_AUTO_ENABLE_ON_INFRA_IF
+    /**
+     * Notifies `AdvertisingProxy` that `InfraIf` state changed.
+     *
+     */
+    void HandleInfraIfStateChanged(void);
+#endif
 
     /**
      * Sets whether mDNS module is allowed to send questions requesting unicast responses referred to as "QU" questions.
@@ -311,10 +335,11 @@ public:
      *
      * The fields in @p aKey follow these rules:
      *
-     * - If the key is associated with a host entry, `mName` specifies the host name & `mServcieType` MUST be `nullptr`.
-     * - If the key is associated with a service entry, `mName` specifies the service instance label (always treated as
-     *   a single label) and `mServiceType` specifies the service type (e.g. "_tst._udp"). In this case the DNS name
-     *   for key record is `<mName>.<mServiceTye>`.
+     * - If the key is associated with a host entry, the `mName` field specifies the host name and the `mServiceType`
+     *    MUST be `nullptr`.
+     * - If the key is associated with a service entry, the `mName` filed specifies the service instance label (always
+     *   treated as a single label) and the `mServiceType` filed specifies the service type (e.g. "_tst._udp"). In this
+     *   case the DNS name for key record is `<mName>.<mServiceTye>`.
      * - The `mKeyData` field contains the key record's data with `mKeyDataLength` as its length in byes.
      * - The `mTtl` specifies the TTL if non-zero. If zero, the mDNS module will use default TTL for the key entry.
      *
@@ -339,10 +364,11 @@ public:
      *
      * The fields in @p aKey follow these rules:
      *
-     * - If the key is associated with a host entry, `mName` specifies the host name & `mServcieType` MUST be `nullptr`.
-     * - If the key is associated with a service entry, `mName` specifies the service instance label (always treated as
-     *   a single label) and `mServiceType` specifies the service type (e.g. "_tst._udp"). In this case the DNS name
-     *   for key record is `<mName>.<mServiceTye>`.
+     * - If the key is associated with a host entry, the `mName` field specifies the host name and the `mServiceType`
+     *    MUST be `nullptr`.
+     * - If the key is associated with a service entry, the `mName` filed specifies the service instance label (always
+     *   treated as a single label) and the `mServiceType` field specifies the service type (e.g. "_tst._udp"). In this
+     *   case the DNS name for key record is `<mName>.<mServiceTye>`.
      * - The rest of the fields in @p aKey structure are ignored in  a`otMdnsUnregisterKey()` call.
      *
      * If there is no previously registered key with the same name, no action is performed.
@@ -472,7 +498,7 @@ public:
      *
      * Initiates a continuous IPv6 address resolver for the specified host name in @p aResolver.
      *
-     * Discovered addresses are reported through the `mCallback` function in @ p aResolver. The callback is invoked
+     * Discovered addresses are reported through the `mCallback` function in @p aResolver. The callback is invoked
      * whenever addresses are added or removed, providing an updated list. If all addresses are removed, the callback
      * is invoked with an empty list (`mAddresses` will be NULL, and `mAddressesLength` will be zero).
      *
@@ -509,7 +535,7 @@ public:
      *
      * Initiates a continuous IPv4 address resolver for the specified host name in @p aResolver.
      *
-     * Discovered addresses are reported through the `mCallback` function in @ p aResolver. The IPv4 addresses are
+     * Discovered addresses are reported through the `mCallback` function in @p aResolver. The IPv4 addresses are
      * represented using the IPv4-mapped IPv6 address format in `mAddresses` array.  The callback is invoked  whenever
      * addresses are added or removed, providing an updated list. If all addresses are removed, the callback is invoked
      * with an empty list (`mAddresses` will be NULL, and `mAddressesLength` will be zero).
@@ -552,6 +578,163 @@ public:
      */
     void SetMaxMessageSize(uint16_t aMaxSize) { mMaxMessageSize = aMaxSize; }
 
+#if OPENTHREAD_CONFIG_MULTICAST_DNS_ENTRY_ITERATION_API_ENABLE
+
+    /**
+     * Allocates a new iterator.
+     *
+     * @returns   A pointer to the newly allocated iterator or `nullptr` if it fails to allocate.
+     *
+     */
+    Iterator *AllocateIterator(void);
+
+    /**
+     * Frees a previously allocated iterator.
+     *
+     * @param[in] aIterator  The iterator to free.
+     *
+     */
+    void FreeIterator(Iterator &aIterator);
+
+    /**
+     * Iterates over registered host entries.
+     *
+     * On success, @p aHost is populated with information about the next host. Pointers within the `Host` structure
+     * (like `mName`) remain valid until the next call to any OpenThread stack's public or platform API/callback.
+     *
+     * @param[in]  aIterator   The iterator to use.
+     * @param[out] aHost       A `Host` to return the information about the next host entry.
+     * @param[out] aState      An `EntryState` to return the entry state.
+     *
+     * @retval kErrorNone         @p aHost, @p aState, & @p aIterator are updated successfully.
+     * @retval kErrorNotFound     Reached the end of the list.
+     * @retval kErrorInvalidArg   @p aIterator is not valid.
+     *
+     */
+    Error GetNextHost(Iterator &aIterator, Host &aHost, EntryState &aState) const;
+
+    /**
+     * Iterates over registered service entries.
+     *
+     * On success, @p aService is populated with information about the next service. Pointers within the `Service`
+     * structure (like `mServiceType`) remain valid until the next call to any OpenThread stack's public or platform
+     * API/callback.
+     *
+     * @param[out] aService    A `Service` to return the information about the next service entry.
+     * @param[out] aState      An `EntryState` to return the entry state.
+     *
+     * @retval kErrorNone         @p aService, @p aState, & @p aIterator are updated successfully.
+     * @retval kErrorNotFound     Reached the end of the list.
+     * @retval kErrorInvalidArg   @p aIterator is not valid.
+     *
+     */
+    Error GetNextService(Iterator &aIterator, Service &aService, EntryState &aState) const;
+
+    /**
+     * Iterates over registered key entries.
+     *
+     * On success, @p aKey is populated with information about the next key. Pointers within the `Key` structure
+     * (like `mName`) remain valid until the next call to any OpenThread stack's public or platform API/callback.
+     *
+     * @param[out] aKey        A `Key` to return the information about the next key entry.
+     * @param[out] aState      An `EntryState` to return the entry state.
+     *
+     * @retval kErrorNone         @p aKey, @p aState, & @p aIterator are updated successfully.
+     * @retval kErrorNotFound     Reached the end of the list.
+     * @retval kErrorInvalidArg   @p aIterator is not valid.
+     *
+     */
+    Error GetNextKey(Iterator &aIterator, Key &aKey, EntryState &aState) const;
+
+    /**
+     * Iterates over browsers.
+     *
+     * On success, @p aBrowser is populated with information about the next browser. Pointers within the `Browser`
+     * structure  remain valid until the next call to any OpenThread stack's public or platform API/callback.
+     *
+     * @param[in]  aIterator   The iterator to use.
+     * @param[out] aBrowser    A `Browser` to return the information about the next browser.
+     * @param[out] aInfo       A `CacheInfo` to return additional information.
+     *
+     * @retval kErrorNone         @p aBrowser, @p aInfo, & @p aIterator are updated successfully.
+     * @retval kErrorNotFound     Reached the end of the list.
+     * @retval kErrorInvalidArg   @p aIterator is not valid.
+     *
+     */
+    Error GetNextBrowser(Iterator &aIterator, Browser &aBrowser, CacheInfo &aInfo) const;
+
+    /**
+     * Iterates over SRV resolvers.
+     *
+     * On success, @p aResolver is populated with information about the next resolver. Pointers within the `SrvResolver`
+     * structure  remain valid until the next call to any OpenThread stack's public or platform API/callback.
+     *
+     * @param[in]  aIterator   The iterator to use.
+     * @param[out] aResolver   An `SrvResolver` to return the information about the next resolver.
+     * @param[out] aInfo       A `CacheInfo` to return additional information.
+     *
+     * @retval kErrorNone         @p aResolver, @p aInfo, & @p aIterator are updated successfully.
+     * @retval kErrorNotFound     Reached the end of the list.
+     * @retval kErrorInvalidArg   @p aIterator is not valid.
+     *
+     */
+    Error GetNextSrvResolver(Iterator &aIterator, SrvResolver &aResolver, CacheInfo &aInfo) const;
+
+    /**
+     * Iterates over TXT resolvers.
+     *
+     * On success, @p aResolver is populated with information about the next resolver. Pointers within the `TxtResolver`
+     * structure  remain valid until the next call to any OpenThread stack's public or platform API/callback.
+     *
+     * @param[in]  aIterator   The iterator to use.
+     * @param[out] aResolver   A `TxtResolver` to return the information about the next resolver.
+     * @param[out] aInfo       A `CacheInfo` to return additional information.
+     *
+     * @retval kErrorNone         @p aResolver, @p aInfo, & @p aIterator are updated successfully.
+     * @retval kErrorNotFound     Reached the end of the list.
+     * @retval kErrorInvalidArg   @p aIterator is not valid.
+     *
+     */
+    Error GetNextTxtResolver(Iterator &aIterator, TxtResolver &aResolver, CacheInfo &aInfo) const;
+
+    /**
+     * Iterates over IPv6 address resolvers.
+     *
+     * On success, @p aResolver is populated with information about the next resolver. Pointers within the
+     * `AddressResolver` structure  remain valid until the next call to any OpenThread stack's public or platform
+     * API/callback.
+     *
+     * @param[in]  aIterator   The iterator to use.
+     * @param[out] aResolver   An `AddressResolver to return the information about the next resolver.
+     * @param[out] aInfo       A `CacheInfo` to return additional information.
+     *
+     * @retval kErrorNone         @p aResolver, @p aInfo, & @p aIterator are updated successfully.
+     * @retval kErrorNotFound     Reached the end of the list.
+     * @retval kErrorInvalidArg   @p aIterator is not valid.
+     *
+     */
+    Error GetNextIp6AddressResolver(Iterator &aIterator, AddressResolver &aResolver, CacheInfo &aInfo) const;
+
+    /**
+     * Iterates over IPv4 address resolvers.
+     *
+     * On success, @p aResolver is populated with information about the next resolver. Pointers within the
+     * `AddressResolver` structure  remain valid until the next call to any OpenThread stack's public or platform
+     * API/callback.
+     *
+     * @param[in]  aIterator   The iterator to use.
+     * @param[out] aResolver   An `AddressResolver to return the information about the next resolver.
+     * @param[out] aInfo       A `CacheInfo` to return additional information.
+     *
+     * @retval kErrorNone         @p aResolver, @p aInfo, & @p aIterator are updated successfully.
+     * @retval kErrorNotFound     Reached the end of the list.
+     * @retval kErrorInvalidArg   @p aIterator is not valid.
+     *
+     */
+    Error GetNextIp4AddressResolver(Iterator &aIterator, AddressResolver &aResolver, CacheInfo &aInfo) const;
+
+#endif // OPENTHREAD_CONFIG_MULTICAST_DNS_ENTRY_ITERATION_API_ENABLE
+
 private:
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
@@ -576,11 +759,12 @@ private:
     static constexpr uint32_t kMaxInitialQueryDelay     = 120; // msec
     static constexpr uint32_t kRandomDelayReuseInterval = 2;   // msec
 
-    static constexpr uint32_t kUnspecifiedTtl = 0;
-    static constexpr uint32_t kDefaultTtl     = 120;
-    static constexpr uint32_t kDefaultKeyTtl  = kDefaultTtl;
-    static constexpr uint32_t kNsecTtl        = 4500;
-    static constexpr uint32_t kServicesPtrTtl = 4500;
+    static constexpr uint32_t kUnspecifiedTtl       = 0;
+    static constexpr uint32_t kDefaultTtl           = 120;
+    static constexpr uint32_t kDefaultKeyTtl        = kDefaultTtl;
+    static constexpr uint32_t kLegacyUnicastNsecTtl = 10;
+    static constexpr uint32_t kNsecTtl              = 4500;
+    static constexpr uint32_t kServicesPtrTtl       = 4500;
 
     static constexpr uint16_t kClassQuestionUnicastFlag = (1U << 15);
     static constexpr uint16_t kClassCacheFlushFlag      = (1U << 15);
@@ -614,6 +798,7 @@ private:
     class RxMessage;
     class ServiceEntry;
     class ServiceType;
+    class EntryIterator;
 
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
@@ -674,6 +859,7 @@ private:
         TimeMilli mAnswerTime;
         bool      mIsProbe;
         bool      mUnicastResponse;
+        bool      mLegacyUnicastResponse;
     };
 
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -698,6 +884,7 @@ private:
 
     protected:
         void ScheduleFireTimeOn(TimerMilli &aTimer);
+        void UpdateNextFireTimeOn(NextFireTime &aNextFireTime) const;
 
     private:
         TimeMilli mFireTime;
@@ -711,16 +898,19 @@ private:
     public:
         // Keeps track of record state and timings.
 
+        static constexpr uint32_t kMaxLegacyUnicastTtl = 10; // seconds
+
         RecordInfo(void) { Clear(); }
 
-        bool     IsPresent(void) const { return mIsPresent; }
-        uint32_t GetTtl(void) const { return mTtl; }
+        bool IsPresent(void) const { return mIsPresent; }
 
         template <typename UintType> void UpdateProperty(UintType &aProperty, UintType aValue);
         void UpdateProperty(AddressArray &aAddrProperty, const Ip6::Address *aAddrs, uint16_t aNumAddrs);
         void UpdateProperty(Heap::String &aStringProperty, const char *aString);
         void UpdateProperty(Heap::Data &aDataProperty, const uint8_t *aData, uint16_t aLength);
-        void UpdateTtl(uint32_t aTtl);
+
+        uint32_t GetTtl(bool aIsLegacyUnicast = false) const;
+        void     UpdateTtl(uint32_t aTtl);
 
         void     StartAnnouncing(void);
         bool     ShouldAppendTo(TxMessage &aResponse, TimeMilli aNow) const;
@@ -780,17 +970,19 @@ private:
     public:
         enum State : uint8_t
         {
-            kProbing,
-            kRegistered,
-            kConflict,
-            kRemoving,
+            kProbing    = OT_MDNS_ENTRY_STATE_PROBING,
+            kRegistered = OT_MDNS_ENTRY_STATE_REGISTERED,
+            kConflict   = OT_MDNS_ENTRY_STATE_CONFLICT,
+            kRemoving   = OT_MDNS_ENTRY_STATE_REMOVING,
         };
 
         State GetState(void) const { return mState; }
+        bool  HasKeyRecord(void) const { return mKeyRecord.IsPresent(); }
         void  Register(const Key &aKey, const Callback &aCallback);
         void  Unregister(const Key &aKey);
         void  InvokeCallbacks(void);
         void  ClearAppendState(void);
+        Error CopyKeyInfoTo(Key &aKey, EntryState &aState) const;
 
     protected:
         static constexpr uint32_t kMinIntervalProbeResponse = 250; // msec
@@ -813,6 +1005,7 @@ private:
         void Init(Instance &aInstance);
         void SetCallback(const Callback &aCallback);
         void ClearCallback(void) { mCallback.Clear(); }
+        void MarkToInvokeCallbackUnconditionally(void);
         void StartProbing(void);
         void SetStateToConflict(void);
         void SetStateToRemoving(void);
@@ -845,6 +1038,7 @@ private:
         bool       mMulticastNsecPending : 1;
         bool       mUnicastNsecPending : 1;
         bool       mAppendedNsec : 1;
+        bool       mBypassCallbackStateCheck : 1;
         TimeMilli  mNsecAnswerTime;
         Heap::Data mKeyData;
         Callback   mCallback;
@@ -879,6 +1073,10 @@ private:
         void  ClearAppendState(void);
         void  PrepareResponse(TxMessage &aResponse, TimeMilli aNow);
         void  HandleConflict(void);
+#if OPENTHREAD_CONFIG_MULTICAST_DNS_ENTRY_ITERATION_API_ENABLE
+        Error CopyInfoTo(Host &aHost, EntryState &aState) const;
+        Error CopyInfoTo(Key &aKey, EntryState &aState) const;
+#endif
 
     private:
         Error Init(Instance &aInstance, const char *aName);
@@ -916,7 +1114,7 @@ private:
         Error Init(Instance &aInstance, const Service &aService);
         Error Init(Instance &aInstance, const Key &aKey);
         bool  IsEmpty(void) const;
-        bool  Matches(const Name &aName) const;
+        bool  Matches(const Name &aFullName) const;
         bool  Matches(const Service &aService) const;
         bool  Matches(const Key &aKey) const;
         bool  Matches(State aState) const { return GetState() == aState; }
@@ -934,6 +1132,10 @@ private:
         void  ClearAppendState(void);
         void  PrepareResponse(TxMessage &aResponse, TimeMilli aNow);
         void  HandleConflict(void);
+#if OPENTHREAD_CONFIG_MULTICAST_DNS_ENTRY_ITERATION_API_ENABLE
+        Error CopyInfoTo(Service &aService, EntryState &aState, EntryIterator &aIterator) const;
+        Error CopyInfoTo(Key &aKey, EntryState &aState) const;
+#endif
 
     private:
         class SubType : public LinkedListEntry<SubType>, public Heap::Allocatable<SubType>, private ot::NonCopyable
@@ -965,7 +1167,7 @@ private:
         void  AppendPtrRecordTo(TxMessage &aTxMessage, Section aSection, SubType *aSubType = nullptr);
         void  AppendKeyRecordTo(TxMessage &aTxMessage, Section aSection);
         void  AppendNsecRecordTo(TxMessage &aTxMessage, Section aSection);
-        void  AppendServiceNameTo(TxMessage &TxMessage, Section aSection);
+        void  AppendServiceNameTo(TxMessage &TxMessage, Section aSection, bool aPerformNameCompression = true);
         void  AppendServiceTypeTo(TxMessage &aTxMessage, Section aSection);
         void  AppendSubServiceTypeTo(TxMessage &aTxMessage, Section aSection);
         void  AppendSubServiceNameTo(TxMessage &aTxMessage, Section aSection, SubType &aSubType);
@@ -1009,7 +1211,7 @@ private:
 
     public:
         Error    Init(Instance &aInstance, const char *aServiceType);
-        bool     Matches(const Name &aServcieTypeName) const;
+        bool     Matches(const Name &aServiceTypeName) const;
         bool     Matches(const Heap::String &aServiceType) const;
         bool     Matches(const ServiceType &aServiceType) const { return (this == &aServiceType); }
         void     IncrementNumEntries(void) { mNumEntries++; }
@@ -1042,10 +1244,11 @@ private:
             kMulticastQuery,
             kMulticastResponse,
             kUnicastResponse,
+            kLegacyUnicastResponse,
         };
 
-        TxMessage(Instance &aInstance, Type aType);
-        TxMessage(Instance &aInstance, Type aType, const AddressInfo &aUnicastDest);
+        TxMessage(Instance &aInstance, Type aType, uint16_t aQueryId = 0);
+        TxMessage(Instance &aInstance, Type aType, const AddressInfo &aUnicastDest, uint16_t aQueryId = 0);
         Type          GetType(void) const { return mType; }
         Message      &SelectMessageFor(Section aSection);
         AppendOutcome AppendLabel(Section aSection, const char *aLabel, uint16_t &aCompressOffset);
@@ -1053,6 +1256,7 @@ private:
         void          AppendServiceType(Section aSection, const char *aServiceType, uint16_t &aCompressOffset);
         void          AppendDomainName(Section aSection);
         void          AppendServicesDnssdName(Section aSection);
+        void          AddQuestionFrom(const Message &aMessage);
         void          IncrementRecordCount(Section aSection) { mRecordCounts.Increment(aSection); }
         void          CheckSizeLimitToPrepareAgain(bool &aPrepareAgain);
         void          SaveCurrentState(void);
@@ -1062,7 +1266,7 @@ private:
     private:
         static constexpr bool kIsSingleLabel = true;
 
-        void          Init(Type aType);
+        void          Init(Type aType, uint16_t aMessageId = 0);
         void          Reinit(void);
         bool          IsOverSizeLimit(void) const;
         AppendOutcome AppendLabels(Section     aSection,
@@ -1089,32 +1293,19 @@ private:
 
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-    class TimerContext : public InstanceLocator
-    {
-    public:
-        TimerContext(Instance &aInstance);
-
-        TimeMilli GetNow(void) const { return mNow; }
-        TimeMilli GetNextTime(void) const { return mNextTime; }
-        void      UpdateNextTime(TimeMilli aTime);
-
-    private:
-        TimeMilli mNow;
-        TimeMilli mNextTime;
-    };
-
-    // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-
-    class EntryTimerContext : public TimerContext // Used by `HandleEntryTimer`.
+    class EntryTimerContext : public InstanceLocator // Used by `HandleEntryTimer`.
     {
     public:
         EntryTimerContext(Instance &aInstance);
-        TxMessage &GetProbeMessage(void) { return mProbeMessage; }
-        TxMessage &GetResponseMessage(void) { return mResponseMessage; }
+        TimeMilli     GetNow(void) const { return mNextFireTime.GetNow(); }
+        NextFireTime &GetNextFireTime(void) { return mNextFireTime; }
+        TxMessage    &GetProbeMessage(void) { return mProbeMessage; }
+        TxMessage    &GetResponseMessage(void) { return mResponseMessage; }
 
     private:
-        TxMessage mProbeMessage;
-        TxMessage mResponseMessage;
+        NextFireTime mNextFireTime;
+        TxMessage    mProbeMessage;
+        TxMessage    mResponseMessage;
     };
 
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -1198,8 +1389,10 @@ private:
         AddressInfo           mSenderAddress;
         RecordCounts          mRecordCounts;
         uint16_t              mStartOffset[kNumSections];
+        uint16_t              mQueryId;
         bool                  mIsQuery : 1;
         bool                  mIsUnicast : 1;
+        bool                  mIsLegacyUnicast : 1;
         bool                  mTruncated : 1;
         bool                  mIsSelfOriginating : 1;
     };
@@ -1340,14 +1533,17 @@ private:
 
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-    class CacheTimerContext : public TimerContext
+    class CacheTimerContext : public InstanceLocator
     {
     public:
         CacheTimerContext(Instance &aInstance);
-        TxMessage &GetQueryMessage(void) { return mQueryMessage; }
+        TimeMilli     GetNow(void) const { return mNextFireTime.GetNow(); }
+        NextFireTime &GetNextFireTime(void) { return mNextFireTime; }
+        TxMessage    &GetQueryMessage(void) { return mQueryMessage; }
 
     private:
-        TxMessage mQueryMessage;
+        NextFireTime mNextFireTime;
+        TxMessage    mQueryMessage;
     };
 
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -1463,6 +1659,9 @@ private:
         Error Add(const Browser &aBrowser);
         void  Remove(const Browser &aBrowser);
         void  ProcessResponseRecord(const Message &aMessage, uint16_t aRecordOffset);
+#if OPENTHREAD_CONFIG_MULTICAST_DNS_ENTRY_ITERATION_API_ENABLE
+        void CopyInfoTo(Browser &aBrowser, CacheInfo &aInfo) const;
+#endif
 
     private:
         struct PtrEntry : public LinkedListEntry<PtrEntry>, public Heap::Allocatable<PtrEntry>
@@ -1563,6 +1762,9 @@ private:
         Error Add(const SrvResolver &aResolver);
         void  Remove(const SrvResolver &aResolver);
         void  ProcessResponseRecord(const Message &aMessage, uint16_t aRecordOffset);
+#if OPENTHREAD_CONFIG_MULTICAST_DNS_ENTRY_ITERATION_API_ENABLE
+        void CopyInfoTo(SrvResolver &aResolver, CacheInfo &aInfo) const;
+#endif
 
     private:
         Error Init(Instance &aInstance, const char *aServiceInstance, const char *aServiceType);
@@ -1598,6 +1800,9 @@ private:
         Error Add(const TxtResolver &aResolver);
         void  Remove(const TxtResolver &aResolver);
         void  ProcessResponseRecord(const Message &aMessage, uint16_t aRecordOffset);
+#if OPENTHREAD_CONFIG_MULTICAST_DNS_ENTRY_ITERATION_API_ENABLE
+        void CopyInfoTo(TxtResolver &aResolver, CacheInfo &aInfo) const;
+#endif
 
     private:
         Error Init(Instance &aInstance, const char *aServiceInstance, const char *aServiceType);
@@ -1625,11 +1830,14 @@ private:
     public:
         bool  Matches(const Name &aFullName) const;
         bool  Matches(const char *aName) const;
-        bool  Matches(const AddressResolver &aBrowser) const;
+        bool  Matches(const AddressResolver &aResolver) const;
         bool  Matches(const ExpireChecker &aExpireChecker) const;
         Error Add(const AddressResolver &aResolver);
         void  Remove(const AddressResolver &aResolver);
         void  CommitNewResponseEntries(void);
+#if OPENTHREAD_CONFIG_MULTICAST_DNS_ENTRY_ITERATION_API_ENABLE
+        void CopyInfoTo(AddressResolver &aResolver, CacheInfo &aInfo) const;
+#endif
 
     protected:
         struct AddrEntry : public LinkedListEntry<AddrEntry>, public Heap::Allocatable<AddrEntry>
@@ -1702,6 +1910,62 @@ private:
 
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
+#if OPENTHREAD_CONFIG_MULTICAST_DNS_ENTRY_ITERATION_API_ENABLE
+
+    class EntryIterator : public Iterator, public InstanceLocator, public Heap::Allocatable<EntryIterator>
+    {
+        friend class Heap::Allocatable<EntryIterator>;
+        friend class ServiceEntry;
+
+    public:
+        Error GetNextHost(Host &aHost, EntryState &aState);
+        Error GetNextService(Service &aService, EntryState &aState);
+        Error GetNextKey(Key &aKey, EntryState &aState);
+        Error GetNextBrowser(Browser &aBrowser, CacheInfo &aInfo);
+        Error GetNextSrvResolver(SrvResolver &aResolver, CacheInfo &aInfo);
+        Error GetNextTxtResolver(TxtResolver &aResolver, CacheInfo &aInfo);
+        Error GetNextIp6AddressResolver(AddressResolver &aResolver, CacheInfo &aInfo);
+        Error GetNextIp4AddressResolver(AddressResolver &aResolver, CacheInfo &aInfo);
+
+    private:
+        static constexpr uint16_t kArrayCapacityIncrement = 32;
+
+        enum Type : uint8_t
+        {
+            kUnspecified,
+            kHost,
+            kService,
+            kHostKey,
+            kServiceKey,
+            kBrowser,
+            kSrvResolver,
+            kTxtResolver,
+            kIp6AddrResolver,
+            kIp4AddrResolver,
+        };
+
+        explicit EntryIterator(Instance &aInstance);
+
+        Type mType;
+
+        union
+        {
+            const HostEntry    *mHostEntry;
+            const ServiceEntry *mServiceEntry;
+            const BrowseCache  *mBrowseCache;
+            const SrvCache     *mSrvCache;
+            const TxtCache     *mTxtCache;
+            const Ip6AddrCache *mIp6AddrCache;
+            const Ip4AddrCache *mIp4AddrCache;
+        };
+
+        Heap::Array<const char *, kArrayCapacityIncrement> mSubTypeArray;
+    };
+
+#endif // OPENTHREAD_CONFIG_MULTICAST_DNS_ENTRY_ITERATION_API_ENABLE
+
+    // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
     template <typename EntryType> OwningList<EntryType> &GetEntryList(void);
     template <typename EntryType, typename ItemInfo>
     Error Register(const ItemInfo &aItemInfo, RequestId aRequestId, RegisterCallback aCallback);
@@ -1715,7 +1979,7 @@ private:
 
     void      InvokeConflictCallback(const char *aName, const char *aServiceType);
     void      HandleMessage(Message &aMessage, bool aIsUnicast, const AddressInfo &aSenderAddress);
-    void      AddPassiveSrvTxtCache(const char *aServiceInstance, const char *aServcieType);
+    void      AddPassiveSrvTxtCache(const char *aServiceInstance, const char *aServiceType);
     void      AddPassiveIp6AddrCache(const char *aHostName);
     TimeMilli RandomizeFirstProbeTxTime(void);
     TimeMilli RandomizeInitialQueryTxTime(void);
@@ -1729,7 +1993,9 @@ private:
     static uint32_t DetermineTtl(uint32_t aTtl, uint32_t aDefaultTtl);
     static bool     NameMatch(const Heap::String &aHeapString, const char *aName);
     static bool     NameMatch(const Heap::String &aFirst, const Heap::String &aSecond);
-    static void     UpdateCacheFlushFlagIn(ResourceRecord &aResourceRecord, Section aSection);
+    static void     UpdateCacheFlushFlagIn(ResourceRecord &aResourceRecord,
+                                           Section         aSection,
+                                           bool            aIsLegacyUnicast = false);
     static void     UpdateRecordLengthInMessage(ResourceRecord &aRecord, Message &aMessage, uint16_t aOffset);
     static void     UpdateCompressOffset(uint16_t &aOffset, uint16_t aNewOffse);
     static bool     QuestionMatches(uint16_t aQuestionRrType, uint16_t aRrType);
@@ -1770,7 +2036,7 @@ private:
     CacheTask                mCacheTask;
 };
 
-// Specializations of `Core::GetEntryList()` for `HostEntry` and `ServcieEntry`:
+// Specializations of `Core::GetEntryList()` for `HostEntry` and `ServiceEntry`:
 
 template <> inline OwningList<Core::HostEntry> &Core::GetEntryList<Core::HostEntry>(void) { return mHostEntries; }
 

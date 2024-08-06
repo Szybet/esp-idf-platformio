@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2023-2024 Espressif Systems (Shanghai) CO LTD
+ * SPDX-FileCopyrightText: 2023 Espressif Systems (Shanghai) CO LTD
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -10,13 +10,6 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-/**
- * @brief Get the number of cycle count for the LP timer
- *
- * @return current timer cycle count
- */
-uint64_t ulp_lp_core_lp_timer_get_cycle_count(void);
 
 /**
  * @brief Sets the next wakeup alarm
@@ -30,6 +23,7 @@ uint64_t ulp_lp_core_lp_timer_get_cycle_count(void);
  * @param sleep_duration_us Time to next wakeup in microseconds
  */
 void ulp_lp_core_lp_timer_set_wakeup_time(uint64_t sleep_duration_us);
+
 
 /**
  * @brief Disables the lp timer alarm and clears any pending alarm interrupts

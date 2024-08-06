@@ -7,10 +7,6 @@
 
 #include <string.h>
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 #define HAL_SWAP16(d) __builtin_bswap16((d))
 #define HAL_SWAP32(d) __builtin_bswap32((d))
 #define HAL_SWAP64(d) __builtin_bswap64((d))
@@ -79,7 +75,3 @@ extern "C" {
  * @return a pointer to the memory area
  */
 #define hal_memset(dst_mem, value, len) (__extension__({memset(dst_mem, value, len);}))
-
-#ifdef __cplusplus
-}
-#endif

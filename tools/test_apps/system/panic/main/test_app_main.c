@@ -31,7 +31,9 @@
 static const char* get_test_name(void)
 {
     static char test_name_str[BOOT_CMD_MAX_LEN] = {0};
-    bool print_prompt = true;
+
+    printf("Enter test name: ");
+    fflush(stdout);
 
     /* Not using blocking fgets(stdin) here, as QEMU doesn't yet implement RX timeout interrupt,
      * which is required for the UART driver and blocking stdio to work.
@@ -40,24 +42,16 @@ static const char* get_test_name(void)
     char *p = test_name_str;
     const char *end = test_name_str + sizeof(test_name_str) - 1;
     while (p < end) {
-        if (print_prompt) {
-            printf("Enter test name: ");
-            fflush(stdout);
-            print_prompt = false;
-        }
         c = getchar();
         if (c == EOF) {
             vTaskDelay(pdMS_TO_TICKS(10));
-        } else if (c == '\r' || c == '\n') {
+        } else if ((c == '\r' || c == '\n') && p != test_name_str) {
             /* terminate the line */
             puts("\n\r");
             fflush(stdout);
-            print_prompt = true;
-            if (p != test_name_str) {
-                *p = '\0';
-                break;
-            }
-        } else if (c >= '0' && c <= 'z') {
+            *p = '\0';
+            break;
+        } else {
             /* echo the received character */
             putchar(c);
             fflush(stdout);
@@ -89,19 +83,13 @@ void app_main(void)
     HANDLE_TEST(test_name, test_abort_cache_disabled);
     HANDLE_TEST(test_name, test_int_wdt);
     HANDLE_TEST(test_name, test_task_wdt_cpu0);
-#if CONFIG_ESP_SYSTEM_HW_STACK_GUARD
-    HANDLE_TEST(test_name, test_hw_stack_guard_cpu0);
-#if !CONFIG_FREERTOS_UNICORE
-    HANDLE_TEST(test_name, test_hw_stack_guard_cpu1);
-#endif // CONFIG_FREERTOS_UNICORE
-#endif // CONFIG_ESP_SYSTEM_HW_STACK_GUARD
 #if CONFIG_ESP_COREDUMP_ENABLE_TO_FLASH && CONFIG_SPIRAM_ALLOW_STACK_EXTERNAL_MEMORY
     HANDLE_TEST(test_name, test_panic_extram_stack);
 #endif
 #if !CONFIG_FREERTOS_UNICORE
     HANDLE_TEST(test_name, test_task_wdt_cpu1);
+    HANDLE_TEST(test_name, test_task_wdt_both_cpus);
 #endif
-    HANDLE_TEST(test_name, test_loadprohibited);
     HANDLE_TEST(test_name, test_storeprohibited);
     HANDLE_TEST(test_name, test_cache_error);
     HANDLE_TEST(test_name, test_int_wdt_cache_disabled);
@@ -111,9 +99,6 @@ void app_main(void)
     HANDLE_TEST(test_name, test_ub);
     HANDLE_TEST(test_name, test_assert);
     HANDLE_TEST(test_name, test_assert_cache_disabled);
-#if CONFIG_IDF_TARGET_ESP32
-    HANDLE_TEST(test_name, test_illegal_access);
-#endif
 
 #if CONFIG_TEST_MEMPROT
 
@@ -155,10 +140,6 @@ void app_main(void)
     HANDLE_TEST(test_name, test_drom_reg_execute_violation);
 #endif
 
-#ifdef CONFIG_SOC_CPU_HAS_PMA
-    HANDLE_TEST(test_name, test_invalid_memory_region_write_violation);
-    HANDLE_TEST(test_name, test_invalid_memory_region_execute_violation);
-#endif
 #endif
 
     die("Unknown test name");

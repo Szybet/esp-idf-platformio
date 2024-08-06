@@ -24,14 +24,6 @@ GPATH
 # cache dir
 .cache/
 
-# Doc build artifacts
-docs/_build/
-docs/doxygen_sqlite3.db
-
-# Downloaded font files
-docs/_static/DejaVuSans.ttf
-docs/_static/NotoSansSC-Regular.otf
-
 # Components Unit Test Apps files
 components/**/build/
 components/**/build_*_*/
@@ -40,15 +32,28 @@ components/**/sdkconfig.old
 
 # Example project files
 examples/**/build/
-examples/**/build_*_*/
+examples/**/build_esp*_*/
 examples/**/sdkconfig
 examples/**/sdkconfig.old
 
+# Doc build artifacts
+docs/_build/
+docs/doxygen_sqlite3.db
+
+# Downloaded font files
+docs/_static/DejaVuSans.ttf
+docs/_static/NotoSansSC-Regular.otf
+
 # Unit test app files
-tools/unit-test-app/build
-tools/unit-test-app/build_*_*/
 tools/unit-test-app/sdkconfig
 tools/unit-test-app/sdkconfig.old
+tools/unit-test-app/build
+tools/unit-test-app/build_*_*/
+tools/unit-test-app/output
+tools/unit-test-app/test_configs
+
+# Unit Test CMake compile log folder
+log_ut_cmake
 
 # test application build files
 tools/test_apps/**/build/
@@ -56,8 +61,7 @@ tools/test_apps/**/build_*_*/
 tools/test_apps/**/sdkconfig
 tools/test_apps/**/sdkconfig.old
 
-TEST_LOGS/
-build_summary_*.xml
+TEST_LOGS
 
 # gcov coverage reports
 *.gcda
@@ -73,10 +77,6 @@ test_multi_heap_host
 # VIM files
 *.swp
 *.swo
-
-# Sublime Text files
-*.sublime-project
-*.sublime-workspace
 
 # Clion IDE CMake build & config
 .idea/
@@ -99,12 +99,3 @@ managed_components
 pytest-embedded/
 # legacy one
 pytest_embedded_log/
-list_job*.txt
-size_info*.txt
-XUNIT_RESULT*.xml
-
-# clang config (for LSP)
-.clangd
-
-# Vale
-.vale/styles/*
