@@ -1,18 +1,19 @@
 {
-  "name": "framework-espidf",
-  "version": "3.50300.0",
-  "title": "Espressif IoT Development Framework",
-  "description": "Espressif IoT Development Framework. Official development framework for ESP32 chip",
-  "keywords": [
-    "framework",
-    "esp32",
-    "esp32s2",
-    "espressif"
-  ],
-  "homepage": "https://docs.espressif.com/projects/esp-idf/en/latest/esp32/",
-  "license": "Apache-2.0",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/espressif/esp-idf"
+    "name": "framework-espidf",
+    "version": "3.50104.240122",
+    "title": "Espressif IoT Development Framework",
+    "description": "Espressif IoT Development Framework. Official development framework for ESP32 chip",
+    "keywords": [
+      "framework",
+      "esp32",
+      "esp32s2",
+      "espressif"
+    ],
+    "homepage": "https://docs.espressif.com/projects/esp-idf/en/latest/esp32/",
+    "license": "Apache-2.0",
+    "repository": {
+      "type": "git",
+      "url": "https://github.com/espressif/esp-idf"
+    }
   }
-}
+  

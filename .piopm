@@ -1,1 +1,1 @@
-{"type": "tool", "name": "framework-espidf", "version": "3.50300.0", "spec": {"owner": "platformio", "id": 8103, "name": "framework-espidf", "requirements": null, "uri": null}}
+{"type": "tool", "name": "framework-espidf", "version": "3.50104.240122", "spec": {"owner": "platformio", "id": 8103, "name": "framework-espidf", "requirements": null, "uri": null}}
